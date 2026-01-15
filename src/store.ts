@@ -1,7 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import { Epic, Story, StoryContent, StoryStatus } from './types'
-import type { ProjectType } from './utils/projectTypes'
+import { Epic, Story, StoryContent, StoryStatus, Agent, ProjectType, AgentHistoryEntry } from './types'
 
 export interface RecentProject {
   path: string
@@ -9,7 +8,32 @@ export interface RecentProject {
   name: string
 }
 
+const MAX_HISTORY_ENTRIES = 50
 const MAX_RECENT_PROJECTS = 10
+
+// Debounce settings saves to prevent rapid writes that corrupt the file
+let saveTimeout: NodeJS.Timeout | null = null
+let pendingSettings: Record<string, unknown> | null = null
+
+async function debouncedSave(settings: Record<string, unknown>) {
+  pendingSettings = settings
+
+  if (saveTimeout) {
+    clearTimeout(saveTimeout)
+  }
+
+  saveTimeout = setTimeout(async () => {
+    if (pendingSettings) {
+      try {
+        await window.fileAPI.saveSettings(pendingSettings)
+      } catch (error) {
+        console.error('Failed to save settings:', error)
+      }
+      pendingSettings = null
+    }
+    saveTimeout = null
+  }, 1000) // Wait 1 second before saving
+}
 
 // Custom storage using Electron IPC
 const electronStorage = {
@@ -26,8 +50,25 @@ const electronStorage = {
       const parsed = JSON.parse(value)
       if (parsed.state) {
         // Only save the settings we care about
-        const { themeMode, projectPath, projectType, selectedEpicId, collapsedColumnsByEpic, recentProjects } = parsed.state
-        await window.fileAPI.saveSettings({ themeMode, projectPath, projectType, selectedEpicId, collapsedColumnsByEpic, recentProjects })
+        const { themeMode, projectPath, projectType, selectedEpicId, collapsedColumnsByEpic, agentHistory, recentProjects } = parsed.state
+
+        // Don't persist full output - it can contain characters that break JSON
+        // Just save metadata and a small summary
+        const sanitizedHistory = (agentHistory || []).map((entry: AgentHistoryEntry) => ({
+          ...entry,
+          output: [] // Don't persist output - it's only useful in current session
+        }))
+
+        // Use debounced save to prevent rapid writes
+        debouncedSave({
+          themeMode,
+          projectPath,
+          projectType,
+          selectedEpicId,
+          collapsedColumnsByEpic,
+          agentHistory: sanitizedHistory,
+          recentProjects: recentProjects || []
+        })
       }
     } catch (error) {
       console.error('Failed to save settings:', error)
@@ -40,6 +81,7 @@ const electronStorage = {
       projectType: null,
       selectedEpicId: null,
       collapsedColumnsByEpic: {},
+      agentHistory: [],
       recentProjects: []
     })
   }
@@ -96,6 +138,26 @@ interface AppState {
   storyContent: StoryContent | null
   setSelectedStory: (story: Story | null) => void
   setStoryContent: (content: StoryContent | null) => void
+
+  // Agents
+  agents: Record<string, Agent>
+  activeAgentId: string | null
+  agentPanelOpen: boolean
+  addAgent: (agent: Agent) => void
+  updateAgent: (agentId: string, updates: Partial<Agent>) => void
+  appendAgentOutput: (agentId: string, output: string) => void
+  removeAgent: (agentId: string) => void
+  setActiveAgent: (agentId: string | null) => void
+  toggleAgentPanel: () => void
+  setAgentPanelOpen: (open: boolean) => void
+  getAgentForStory: (storyId: string) => Agent | null
+
+  // Agent History (persisted)
+  agentHistory: AgentHistoryEntry[]
+  addToHistory: (entry: AgentHistoryEntry) => void
+  updateHistoryEntry: (id: string, updates: Partial<AgentHistoryEntry>) => void
+  clearHistory: () => void
+  getHistoryForStory: (storyId: string) => AgentHistoryEntry[]
 
   // Computed - filtered stories
   getFilteredStories: () => Story[]
@@ -181,6 +243,82 @@ export const useStore = create<AppState>()(
       setSelectedStory: (story) => set({ selectedStory: story }),
       setStoryContent: (content) => set({ storyContent: content }),
 
+      // Agents
+      agents: {},
+      activeAgentId: null,
+      agentPanelOpen: false,
+      addAgent: (agent) => set((state) => ({
+        agents: { ...state.agents, [agent.id]: agent }
+      })),
+      updateAgent: (agentId, updates) => set((state) => {
+        const agent = state.agents[agentId]
+        if (!agent) return state
+        return {
+          agents: {
+            ...state.agents,
+            [agentId]: { ...agent, ...updates }
+          }
+        }
+      }),
+      appendAgentOutput: (agentId, output) => set((state) => {
+        const agent = state.agents[agentId]
+        if (!agent) return state
+        return {
+          agents: {
+            ...state.agents,
+            [agentId]: {
+              ...agent,
+              output: [...agent.output, output]
+            }
+          }
+        }
+      }),
+      removeAgent: (agentId) => set((state) => {
+        const { [agentId]: _, ...rest } = state.agents
+        return {
+          agents: rest,
+          activeAgentId: state.activeAgentId === agentId ? null : state.activeAgentId
+        }
+      }),
+      setActiveAgent: (agentId) => set({ activeAgentId: agentId }),
+      toggleAgentPanel: () => set((state) => ({ agentPanelOpen: !state.agentPanelOpen })),
+      setAgentPanelOpen: (open) => set({ agentPanelOpen: open }),
+      getAgentForStory: (storyId) => {
+        const { agents } = get()
+        return Object.values(agents).find((a) => a.storyId === storyId) || null
+      },
+
+      // Agent History
+      agentHistory: [],
+      addToHistory: (entry) => set((state) => {
+        // Check if entry already exists (prevent duplicates)
+        if (state.agentHistory.some(h => h.id === entry.id)) {
+          return state
+        }
+        // Don't store output in history - it's saved to files
+        const trimmedEntry = {
+          ...entry,
+          output: [] // Output is stored in separate files
+        }
+        // Add to front, limit total entries
+        const newHistory = [trimmedEntry, ...state.agentHistory].slice(0, MAX_HISTORY_ENTRIES)
+        return { agentHistory: newHistory }
+      }),
+      updateHistoryEntry: (id, updates) => set((state) => {
+        const index = state.agentHistory.findIndex((h) => h.id === id)
+        if (index === -1) return state
+        const updated = [...state.agentHistory]
+        // Don't update output - it's stored in files
+        const { output: _output, ...safeUpdates } = updates
+        updated[index] = { ...updated[index], ...safeUpdates }
+        return { agentHistory: updated }
+      }),
+      clearHistory: () => set({ agentHistory: [] }),
+      getHistoryForStory: (storyId) => {
+        const { agentHistory } = get()
+        return agentHistory.filter((h) => h.storyId === storyId)
+      },
+
       // Computed
       getFilteredStories: () => {
         const { stories, selectedEpicId, searchQuery } = get()
@@ -207,7 +345,19 @@ export const useStore = create<AppState>()(
       name: 'bmadboard-storage',
       storage: createJSONStorage(() => electronStorage),
       onRehydrateStorage: () => (state) => {
-        state?.setHasHydrated(true)
+        if (state) {
+          // Mark any "running" agents in history as "interrupted" since the app restarted
+          const updatedHistory = state.agentHistory.map((entry) => {
+            if (entry.status === 'running') {
+              return { ...entry, status: 'interrupted' as const, endTime: Date.now() }
+            }
+            return entry
+          })
+          if (updatedHistory.some((h, i) => h !== state.agentHistory[i])) {
+            state.agentHistory = updatedHistory
+          }
+          state.setHasHydrated(true)
+        }
       }
     }
   )

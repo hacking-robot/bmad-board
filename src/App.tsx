@@ -6,14 +6,18 @@ import Header from './components/Header/Header'
 import Board from './components/Board/Board'
 import StoryDialog from './components/StoryDialog/StoryDialog'
 import WelcomeDialog from './components/WelcomeDialog/WelcomeDialog'
+import AgentPanel from './components/AgentPanel/AgentPanel'
 import CommandPalette from './components/CommandPalette'
 import KeyboardShortcuts from './components/KeyboardShortcuts'
 import StatusBar from './components/StatusBar'
+
+const AGENT_PANEL_WIDTH = 500
 
 export default function App() {
   const hasHydrated = useStore((state) => state._hasHydrated)
   const themeMode = useStore((state) => state.themeMode)
   const projectPath = useStore((state) => state.projectPath)
+  const agentPanelOpen = useStore((state) => state.agentPanelOpen)
 
   const theme = useMemo(
     () => (themeMode === 'dark' ? darkTheme : lightTheme),
@@ -58,9 +62,21 @@ export default function App() {
           <WelcomeDialog />
         ) : (
           <>
-            <Header />
-            <Board />
-            <StatusBar />
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                flex: 1,
+                overflow: 'hidden',
+                transition: 'margin-right 225ms cubic-bezier(0, 0, 0.2, 1)',
+                marginRight: agentPanelOpen ? `${AGENT_PANEL_WIDTH}px` : 0
+              }}
+            >
+              <Header />
+              <Board />
+              <StatusBar />
+            </Box>
+            <AgentPanel />
             <StoryDialog />
           </>
         )}
