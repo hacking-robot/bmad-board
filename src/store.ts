@@ -2,7 +2,42 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { Epic, Story, StoryContent } from './types'
 
+// Custom storage using Electron IPC
+const electronStorage = {
+  getItem: async (_name: string): Promise<string | null> => {
+    try {
+      const settings = await window.fileAPI.getSettings()
+      return JSON.stringify({ state: settings, version: 0 })
+    } catch {
+      return null
+    }
+  },
+  setItem: async (_name: string, value: string): Promise<void> => {
+    try {
+      const parsed = JSON.parse(value)
+      if (parsed.state) {
+        // Only save the settings we care about
+        const { themeMode, projectPath, selectedEpicId } = parsed.state
+        await window.fileAPI.saveSettings({ themeMode, projectPath, selectedEpicId })
+      }
+    } catch (error) {
+      console.error('Failed to save settings:', error)
+    }
+  },
+  removeItem: async (_name: string): Promise<void> => {
+    await window.fileAPI.saveSettings({
+      themeMode: 'light',
+      projectPath: null,
+      selectedEpicId: null
+    })
+  }
+}
+
 interface AppState {
+  // Hydration
+  _hasHydrated: boolean
+  setHasHydrated: (state: boolean) => void
+
   // Theme
   themeMode: 'light' | 'dark'
   setThemeMode: (mode: 'light' | 'dark') => void
@@ -41,6 +76,10 @@ interface AppState {
 export const useStore = create<AppState>()(
   persist(
     (set, get) => ({
+      // Hydration
+      _hasHydrated: false,
+      setHasHydrated: (state) => set({ _hasHydrated: state }),
+
       // Theme
       themeMode: 'light',
       setThemeMode: (mode) => set({ themeMode: mode }),
@@ -98,11 +137,10 @@ export const useStore = create<AppState>()(
     }),
     {
       name: 'bmadboard-storage',
-      partialize: (state) => ({
-        themeMode: state.themeMode,
-        projectPath: state.projectPath,
-        selectedEpicId: state.selectedEpicId
-      })
+      storage: createJSONStorage(() => electronStorage),
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true)
+      }
     }
   )
 )

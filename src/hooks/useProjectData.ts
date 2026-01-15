@@ -6,6 +6,7 @@ import { parseStoryContent } from '../utils/parseStory'
 
 export function useProjectData() {
   const {
+    _hasHydrated,
     projectPath,
     setProjectPath,
     setEpics,
@@ -121,12 +122,12 @@ export function useProjectData() {
     }
   }, [setStoryContent])
 
-  // Load project data when path changes
+  // Load project data when path changes or after hydration
   useEffect(() => {
-    if (projectPath) {
+    if (_hasHydrated && projectPath) {
       loadProjectData()
     }
-  }, [projectPath, loadProjectData])
+  }, [_hasHydrated, projectPath, loadProjectData])
 
   // Load story content when selected story changes
   useEffect(() => {

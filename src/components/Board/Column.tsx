@@ -17,9 +17,9 @@ export default function Column({ status: _status, label, color, stories }: Colum
     <Paper
       elevation={0}
       sx={{
-        minWidth: 300,
-        maxWidth: 350,
-        flex: '0 0 300px',
+        width: 300,
+        flexShrink: 0,
+        height: '100%',
         display: 'flex',
         flexDirection: 'column',
         bgcolor: 'background.default',
@@ -75,10 +75,8 @@ export default function Column({ status: _status, label, color, stories }: Colum
         sx={{
           flex: 1,
           overflowY: 'auto',
+          overflowX: 'hidden',
           p: 1.5,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 1.5,
           '&::-webkit-scrollbar': {
             width: 6
           },
@@ -86,30 +84,42 @@ export default function Column({ status: _status, label, color, stories }: Colum
             bgcolor: 'transparent'
           },
           '&::-webkit-scrollbar-thumb': {
-            bgcolor: 'action.disabled',
+            bgcolor: 'transparent',
             borderRadius: 3,
-            '&:hover': {
-              bgcolor: 'action.active'
-            }
+            transition: 'background-color 0.2s'
+          },
+          '&:hover::-webkit-scrollbar-thumb': {
+            bgcolor: 'action.disabled'
+          },
+          '&:hover::-webkit-scrollbar-thumb:hover': {
+            bgcolor: 'action.active'
           }
         }}
       >
-        {stories.length === 0 ? (
-          <Box
-            sx={{
-              py: 4,
-              textAlign: 'center'
-            }}
-          >
-            <Typography variant="body2" color="text.secondary">
-              No stories
-            </Typography>
-          </Box>
-        ) : (
-          stories.map((story) => (
-            <StoryCard key={story.id} story={story} />
-          ))
-        )}
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 1.5
+          }}
+        >
+          {stories.length === 0 ? (
+            <Box
+              sx={{
+                py: 4,
+                textAlign: 'center'
+              }}
+            >
+              <Typography variant="body2" color="text.secondary">
+                No stories
+              </Typography>
+            </Box>
+          ) : (
+            stories.map((story) => (
+              <StoryCard key={story.id} story={story} />
+            ))
+          )}
+        </Box>
       </Box>
     </Paper>
   )

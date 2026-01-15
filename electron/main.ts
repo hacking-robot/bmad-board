@@ -1,9 +1,62 @@
 import { app, BrowserWindow, ipcMain, dialog } from 'electron'
 import { join } from 'path'
-import { readFile, readdir, stat } from 'fs/promises'
+import { readFile, readdir, stat, writeFile, mkdir } from 'fs/promises'
 import { existsSync } from 'fs'
 
+// Set app name (shows in menu bar on macOS)
+app.setName('BMad Board')
+
 let mainWindow: BrowserWindow | null = null
+
+// Settings file path in user data directory
+const getSettingsPath = () => join(app.getPath('userData'), 'settings.json')
+
+interface AppSettings {
+  themeMode: 'light' | 'dark'
+  projectPath: string | null
+  selectedEpicId: number | null
+}
+
+const defaultSettings: AppSettings = {
+  themeMode: 'light',
+  projectPath: null,
+  selectedEpicId: null
+}
+
+async function loadSettings(): Promise<AppSettings> {
+  try {
+    const settingsPath = getSettingsPath()
+    if (existsSync(settingsPath)) {
+      const content = await readFile(settingsPath, 'utf-8')
+      return { ...defaultSettings, ...JSON.parse(content) }
+    }
+  } catch (error) {
+    console.error('Failed to load settings:', error)
+  }
+  return defaultSettings
+}
+
+async function saveSettings(settings: Partial<AppSettings>): Promise<boolean> {
+  try {
+    const settingsPath = getSettingsPath()
+    const dir = app.getPath('userData')
+
+    // Ensure directory exists
+    if (!existsSync(dir)) {
+      await mkdir(dir, { recursive: true })
+    }
+
+    // Load existing settings and merge
+    const existing = await loadSettings()
+    const merged = { ...existing, ...settings }
+
+    await writeFile(settingsPath, JSON.stringify(merged, null, 2))
+    return true
+  } catch (error) {
+    console.error('Failed to save settings:', error)
+    return false
+  }
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -97,13 +150,11 @@ ipcMain.handle('list-directory', async (_, dirPath: string) => {
   }
 })
 
-ipcMain.handle('get-stored-project-path', async () => {
-  // For now, return null - we could use electron-store for persistence
-  return null
+// Settings IPC handlers
+ipcMain.handle('get-settings', async () => {
+  return await loadSettings()
 })
 
-ipcMain.handle('store-project-path', async (_, path: string) => {
-  // For now, just log - we could use electron-store for persistence
-  console.log('Storing project path:', path)
-  return true
+ipcMain.handle('save-settings', async (_, settings: Partial<AppSettings>) => {
+  return await saveSettings(settings)
 })

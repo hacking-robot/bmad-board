@@ -36,8 +36,13 @@ jobs:
           NEW_VERSION=$(echo $CURRENT_VERSION | awk -F. '{$NF = $NF + 1;} 1' | sed 's/ /./g')
           echo "New version: $NEW_VERSION"
 
-          # Update package.json
-          bun pkg set version=$NEW_VERSION
+          # Update package.json using node
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            pkg.version = '$NEW_VERSION';
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
 
           # Commit and push
           git add package.json

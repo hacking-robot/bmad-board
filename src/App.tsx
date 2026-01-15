@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { ThemeProvider, CssBaseline, Box } from '@mui/material'
+import { ThemeProvider, CssBaseline, Box, CircularProgress } from '@mui/material'
 import { useStore } from './store'
 import { lightTheme, darkTheme } from './theme'
 import Header from './components/Header/Header'
@@ -8,6 +8,7 @@ import StoryDialog from './components/StoryDialog/StoryDialog'
 import WelcomeDialog from './components/WelcomeDialog/WelcomeDialog'
 
 export default function App() {
+  const hasHydrated = useStore((state) => state._hasHydrated)
   const themeMode = useStore((state) => state.themeMode)
   const projectPath = useStore((state) => state.projectPath)
 
@@ -16,15 +17,36 @@ export default function App() {
     [themeMode]
   )
 
+  // Show loading while hydrating persisted state
+  if (!hasHydrated) {
+    return (
+      <ThemeProvider theme={lightTheme}>
+        <CssBaseline />
+        <Box
+          sx={{
+            minHeight: '100vh',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            bgcolor: 'background.default'
+          }}
+        >
+          <CircularProgress />
+        </Box>
+      </ThemeProvider>
+    )
+  }
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <Box
         sx={{
-          minHeight: '100vh',
+          height: '100vh',
           display: 'flex',
           flexDirection: 'column',
-          bgcolor: 'background.default'
+          bgcolor: 'background.default',
+          overflow: 'hidden'
         }}
       >
         {!projectPath ? (

@@ -64,17 +64,22 @@ export default function Board() {
     <Box
       sx={{
         flex: 1,
-        display: 'flex',
-        overflow: 'hidden'
+        overflow: 'hidden',
+        position: 'relative'
       }}
     >
       <Box
         sx={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
           display: 'flex',
           gap: 2,
           p: 2,
           overflowX: 'auto',
-          flex: 1,
+          overflowY: 'hidden',
           '&::-webkit-scrollbar': {
             height: 8
           },
