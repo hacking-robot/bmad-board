@@ -49,7 +49,7 @@
       "dist-electron/**/*"
     ],
     "mac": {
-      "target": "dmg",
+      "target": "zip",
       "icon": "build/icon.icns",
       "identity": null
     },
