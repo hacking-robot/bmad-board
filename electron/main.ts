@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, dialog } from 'electron'
 import { join } from 'path'
 import { readFile, readdir, stat, writeFile, mkdir } from 'fs/promises'
 import { existsSync, watch, FSWatcher } from 'fs'
+import { agentManager } from './agentManager'
 
 // Set app name (shows in menu bar on macOS)
 app.setName('BMad Board')
@@ -13,29 +14,56 @@ let watchDebounceTimer: NodeJS.Timeout | null = null
 // Settings file path in user data directory
 const getSettingsPath = () => join(app.getPath('userData'), 'settings.json')
 
+interface AgentHistoryEntry {
+  id: string
+  storyId: string
+  storyTitle: string
+  command: string
+  status: 'running' | 'completed' | 'error' | 'interrupted'
+  output: string[]
+  startTime: number
+  endTime?: number
+  exitCode?: number
+}
+
 interface AppSettings {
   themeMode: 'light' | 'dark'
   projectPath: string | null
   selectedEpicId: number | null
   collapsedColumnsByEpic: Record<string, string[]>
+  agentHistory?: AgentHistoryEntry[]
 }
 
 const defaultSettings: AppSettings = {
   themeMode: 'light',
   projectPath: null,
   selectedEpicId: null,
-  collapsedColumnsByEpic: {}
+  collapsedColumnsByEpic: {},
+  agentHistory: []
 }
 
 async function loadSettings(): Promise<AppSettings> {
+  const settingsPath = getSettingsPath()
   try {
-    const settingsPath = getSettingsPath()
     if (existsSync(settingsPath)) {
       const content = await readFile(settingsPath, 'utf-8')
-      return { ...defaultSettings, ...JSON.parse(content) }
+      if (content.trim()) {
+        const parsed = JSON.parse(content)
+        return { ...defaultSettings, ...parsed }
+      }
     }
   } catch (error) {
     console.error('Failed to load settings:', error)
+    // If settings are corrupted, delete the file and return defaults
+    try {
+      if (existsSync(settingsPath)) {
+        const { unlink } = await import('fs/promises')
+        await unlink(settingsPath)
+        console.log('Deleted corrupted settings file')
+      }
+    } catch {
+      // Ignore deletion errors
+    }
   }
   return defaultSettings
 }
@@ -77,6 +105,9 @@ function createWindow() {
     trafficLightPosition: { x: 15, y: 15 }
   })
 
+  // Set main window for agent manager
+  agentManager.setMainWindow(mainWindow)
+
   if (process.env.VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL)
     mainWindow.webContents.openDevTools()
@@ -85,6 +116,7 @@ function createWindow() {
   }
 
   mainWindow.on('closed', () => {
+    agentManager.setMainWindow(null)
     mainWindow = null
   })
 }
@@ -224,7 +256,146 @@ ipcMain.handle('stop-watching', async () => {
   return true
 })
 
-// Clean up watcher when app closes
+// Clean up watcher and agents when app closes
 app.on('before-quit', () => {
   stopWatching()
+  agentManager.killAll()
+})
+
+// Agent IPC handlers
+ipcMain.handle('spawn-agent', async (_, options: {
+  storyId: string
+  storyTitle: string
+  projectPath: string
+  initialPrompt: string
+}) => {
+  console.log('spawn-agent IPC called:', options)
+  try {
+    const agentId = agentManager.spawn(options)
+    console.log('Agent spawned successfully:', agentId)
+    return { success: true, agentId }
+  } catch (error) {
+    console.error('Agent spawn failed:', error)
+    return { success: false, error: error instanceof Error ? error.message : 'Failed to spawn agent' }
+  }
+})
+
+ipcMain.handle('send-agent-input', async (_, agentId: string, input: string) => {
+  return agentManager.sendInput(agentId, input)
+})
+
+ipcMain.handle('kill-agent', async (_, agentId: string) => {
+  return agentManager.kill(agentId)
+})
+
+ipcMain.handle('get-agents', async () => {
+  return agentManager.getAgents()
+})
+
+ipcMain.handle('get-agent', async (_, agentId: string) => {
+  return agentManager.getAgent(agentId)
+})
+
+ipcMain.handle('get-agent-for-story', async (_, storyId: string) => {
+  return agentManager.hasAgentForStory(storyId)
+})
+
+// Detect project type (bmad vs bmad-game)
+ipcMain.handle('detect-project-type', async (_, projectPath: string) => {
+  // Check for bmad-game markers
+  const gameMarkers = [
+    join(projectPath, '_bmad', 'bmad-game.md'),
+    join(projectPath, '_bmad', 'game-design-doc.md'),
+    join(projectPath, '.bmad-game')
+  ]
+
+  for (const marker of gameMarkers) {
+    if (existsSync(marker)) {
+      return 'bmad-game'
+    }
+  }
+
+  return 'bmad'
+})
+
+// Agent output file management
+const getAgentOutputDir = () => join(app.getPath('userData'), 'agent-outputs')
+const getAgentOutputPath = (agentId: string) => join(getAgentOutputDir(), `${agentId}.jsonl`)
+
+// Ensure agent output directory exists
+async function ensureAgentOutputDir() {
+  const dir = getAgentOutputDir()
+  if (!existsSync(dir)) {
+    await mkdir(dir, { recursive: true })
+  }
+}
+
+// Append output lines to agent's file (JSON Lines format)
+ipcMain.handle('append-agent-output', async (_, agentId: string, lines: string[]) => {
+  try {
+    await ensureAgentOutputDir()
+    const filePath = getAgentOutputPath(agentId)
+    // Each line is a JSON string, write one per line
+    const content = lines.map(line => JSON.stringify(line)).join('\n') + '\n'
+    await writeFile(filePath, content, { flag: 'a' }) // Append mode
+    return true
+  } catch (error) {
+    console.error('Failed to append agent output:', error)
+    return false
+  }
+})
+
+// Load all output for an agent
+ipcMain.handle('load-agent-output', async (_, agentId: string) => {
+  try {
+    const filePath = getAgentOutputPath(agentId)
+    if (!existsSync(filePath)) {
+      return []
+    }
+    const content = await readFile(filePath, 'utf-8')
+    // Parse JSON Lines format
+    const lines = content.trim().split('\n').filter(Boolean)
+    return lines.map(line => {
+      try {
+        return JSON.parse(line)
+      } catch {
+        return line // Return as-is if not valid JSON
+      }
+    })
+  } catch (error) {
+    console.error('Failed to load agent output:', error)
+    return []
+  }
+})
+
+// Delete output file for an agent
+ipcMain.handle('delete-agent-output', async (_, agentId: string) => {
+  try {
+    const filePath = getAgentOutputPath(agentId)
+    if (existsSync(filePath)) {
+      const { unlink } = await import('fs/promises')
+      await unlink(filePath)
+    }
+    return true
+  } catch (error) {
+    console.error('Failed to delete agent output:', error)
+    return false
+  }
+})
+
+// List all agent output files (for cleanup)
+ipcMain.handle('list-agent-outputs', async () => {
+  try {
+    const dir = getAgentOutputDir()
+    if (!existsSync(dir)) {
+      return []
+    }
+    const files = await readdir(dir)
+    return files
+      .filter(f => f.endsWith('.jsonl'))
+      .map(f => f.replace('.jsonl', ''))
+  } catch (error) {
+    console.error('Failed to list agent outputs:', error)
+    return []
+  }
 })

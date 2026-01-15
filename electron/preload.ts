@@ -1,10 +1,23 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
+export interface AgentHistoryEntry {
+  id: string
+  storyId: string
+  storyTitle: string
+  command: string
+  status: 'running' | 'completed' | 'error' | 'interrupted'
+  output: string[]
+  startTime: number
+  endTime?: number
+  exitCode?: number
+}
+
 export interface AppSettings {
   themeMode: 'light' | 'dark'
   projectPath: string | null
   selectedEpicId: number | null
   collapsedColumnsByEpic: Record<string, string[]>
+  agentHistory?: AgentHistoryEntry[]
 }
 
 export interface FileAPI {
@@ -36,8 +49,112 @@ const fileAPI: FileAPI = {
 
 contextBridge.exposeInMainWorld('fileAPI', fileAPI)
 
+// Agent API types
+export interface AgentInfo {
+  id: string
+  storyId: string
+  storyTitle: string
+  command: string
+  status: 'running' | 'completed' | 'error'
+  startTime: number
+  pid: number | undefined
+}
+
+export interface AgentOutputEvent {
+  agentId: string
+  type: 'stdout' | 'stderr'
+  chunk: string
+  timestamp: number
+}
+
+export interface AgentExitEvent {
+  agentId: string
+  code: number | null
+  signal: string | null
+  timestamp: number
+}
+
+export interface AgentErrorEvent {
+  agentId: string
+  error: string
+  timestamp: number
+}
+
+export interface AgentSpawnedEvent {
+  agentId: string
+  storyId: string
+  storyTitle: string
+  command: string
+  pid: number | undefined
+  timestamp: number
+}
+
+export interface AgentAPI {
+  spawnAgent: (options: {
+    storyId: string
+    storyTitle: string
+    projectPath: string
+    initialPrompt: string
+  }) => Promise<{ success: boolean; agentId?: string; error?: string }>
+  sendInput: (agentId: string, input: string) => Promise<boolean>
+  killAgent: (agentId: string) => Promise<boolean>
+  getAgents: () => Promise<AgentInfo[]>
+  getAgent: (agentId: string) => Promise<AgentInfo | null>
+  getAgentForStory: (storyId: string) => Promise<string | null>
+  detectProjectType: (projectPath: string) => Promise<'bmad' | 'bmad-game'>
+  // Agent output file management
+  appendOutput: (agentId: string, lines: string[]) => Promise<boolean>
+  loadOutput: (agentId: string) => Promise<string[]>
+  deleteOutput: (agentId: string) => Promise<boolean>
+  listOutputs: () => Promise<string[]>
+  // Event listeners
+  onAgentOutput: (callback: (event: AgentOutputEvent) => void) => () => void
+  onAgentExit: (callback: (event: AgentExitEvent) => void) => () => void
+  onAgentError: (callback: (event: AgentErrorEvent) => void) => () => void
+  onAgentSpawned: (callback: (event: AgentSpawnedEvent) => void) => () => void
+}
+
+const agentAPI: AgentAPI = {
+  spawnAgent: (options) => ipcRenderer.invoke('spawn-agent', options),
+  sendInput: (agentId, input) => ipcRenderer.invoke('send-agent-input', agentId, input),
+  killAgent: (agentId) => ipcRenderer.invoke('kill-agent', agentId),
+  getAgents: () => ipcRenderer.invoke('get-agents'),
+  getAgent: (agentId) => ipcRenderer.invoke('get-agent', agentId),
+  getAgentForStory: (storyId) => ipcRenderer.invoke('get-agent-for-story', storyId),
+  detectProjectType: (projectPath) => ipcRenderer.invoke('detect-project-type', projectPath),
+  // Agent output file management
+  appendOutput: (agentId, lines) => ipcRenderer.invoke('append-agent-output', agentId, lines),
+  loadOutput: (agentId) => ipcRenderer.invoke('load-agent-output', agentId),
+  deleteOutput: (agentId) => ipcRenderer.invoke('delete-agent-output', agentId),
+  listOutputs: () => ipcRenderer.invoke('list-agent-outputs'),
+  // Event listeners
+  onAgentOutput: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: AgentOutputEvent) => callback(data)
+    ipcRenderer.on('agent:output', listener)
+    return () => ipcRenderer.removeListener('agent:output', listener)
+  },
+  onAgentExit: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: AgentExitEvent) => callback(data)
+    ipcRenderer.on('agent:exit', listener)
+    return () => ipcRenderer.removeListener('agent:exit', listener)
+  },
+  onAgentError: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: AgentErrorEvent) => callback(data)
+    ipcRenderer.on('agent:error', listener)
+    return () => ipcRenderer.removeListener('agent:error', listener)
+  },
+  onAgentSpawned: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: AgentSpawnedEvent) => callback(data)
+    ipcRenderer.on('agent:spawned', listener)
+    return () => ipcRenderer.removeListener('agent:spawned', listener)
+  }
+}
+
+contextBridge.exposeInMainWorld('agentAPI', agentAPI)
+
 declare global {
   interface Window {
     fileAPI: FileAPI
+    agentAPI: AgentAPI
   }
 }

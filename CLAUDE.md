@@ -1,3 +1,64 @@
+# BMadBoard
+
+Electron desktop application for visualizing and managing BMAD sprint projects as a Kanban board.
+
+## Tech Stack
+
+- **Frontend**: React 18, TypeScript, MUI 6, Zustand
+- **Desktop**: Electron 33
+- **Build**: Vite, electron-builder
+- **Styling**: Emotion (CSS-in-JS)
+
+## Key Commands
+
+```bash
+npm run dev              # Start Vite dev server only
+npm run electron:dev     # Start full Electron app in dev mode
+npm run build            # Production build + package
+npm run typecheck        # TypeScript type checking
+```
+
+## Project Structure
+
+```
+src/
+├── components/
+│   ├── Board/           # Kanban board and columns
+│   ├── StoryCard/       # Story card display
+│   ├── StoryDialog/     # Story detail modal
+│   ├── AgentPanel/      # Claude Code agent sidebar
+│   ├── AgentsTab/       # Agent management tab
+│   ├── Header/          # App header with controls
+│   ├── SearchBar/       # Story search
+│   ├── EpicFilter/      # Filter by epic
+│   ├── ThemeToggle/     # Light/dark mode
+│   └── WelcomeDialog/   # Project folder selection
+├── store.ts             # Zustand state management
+├── theme.ts             # MUI theme configuration
+├── types/               # TypeScript type definitions
+└── App.tsx              # Root component
+
+electron/
+├── main.ts              # Electron main process
+├── preload.ts           # IPC bridge to renderer
+└── agentManager.ts      # Claude Code agent spawning
+```
+
+## BMAD Project Structure
+
+The app reads BMAD projects with this structure:
+- `docs/epics/*.md` - Epic definition files
+- `docs/stories/epic-N/*.md` - Story files per epic
+
+Stories have statuses: `backlog`, `ready-for-dev`, `in-progress`, `review`, `done`, `optional`
+
+## Agent Integration
+
+Story cards can launch Claude Code agents based on status:
+- **Ready for Dev**: Runs `*dev-story` command
+- **In Progress**: Opens agent for continuation
+- **Review**: Runs `*code-review` command
+
 <claude-mem-context>
 # Recent Activity
 

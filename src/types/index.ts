@@ -75,3 +75,56 @@ export const EPIC_COLORS: string[] = [
   '#455a64', // Blue Grey
   '#ad1457'  // Pink
 ]
+
+// Agent types
+export type AgentStatus = 'running' | 'completed' | 'error' | 'interrupted'
+export type ProjectType = 'bmad' | 'bmad-game'
+
+export interface Agent {
+  id: string
+  storyId: string
+  storyTitle: string
+  command: string
+  status: AgentStatus
+  output: string[]
+  startTime: number
+  pid?: number
+}
+
+// Agent history for persistence across app restarts
+export interface AgentHistoryEntry {
+  id: string
+  storyId: string
+  storyTitle: string
+  command: string
+  status: AgentStatus
+  output: string[] // Last N lines of output
+  startTime: number
+  endTime?: number
+  exitCode?: number
+}
+
+export interface AgentAction {
+  label: string
+  command: string
+  icon: 'play' | 'continue' | 'review'
+}
+
+// Agent actions available per story status
+export const AGENT_ACTIONS: Partial<Record<StoryStatus, AgentAction>> = {
+  'ready-for-dev': {
+    label: 'Start Dev',
+    command: '*dev-story',
+    icon: 'play'
+  },
+  'in-progress': {
+    label: 'Continue',
+    command: '', // No initial command, just opens agent
+    icon: 'continue'
+  },
+  'review': {
+    label: 'Code Review',
+    command: '*code-review',
+    icon: 'review'
+  }
+}

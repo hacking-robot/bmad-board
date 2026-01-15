@@ -4,11 +4,13 @@ import {
   Typography,
   Box,
   IconButton,
-  Tooltip
+  Tooltip,
+  Badge
 } from '@mui/material'
 import DashboardIcon from '@mui/icons-material/Dashboard'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import RefreshIcon from '@mui/icons-material/Refresh'
+import TerminalIcon from '@mui/icons-material/Terminal'
 import SearchBar from '../SearchBar/SearchBar'
 import EpicFilter from '../EpicFilter/EpicFilter'
 import ThemeToggle from '../ThemeToggle/ThemeToggle'
@@ -17,7 +19,12 @@ import { useProjectData } from '../../hooks/useProjectData'
 
 export default function Header() {
   const projectPath = useStore((state) => state.projectPath)
+  const agents = useStore((state) => state.agents)
+  const agentPanelOpen = useStore((state) => state.agentPanelOpen)
+  const toggleAgentPanel = useStore((state) => state.toggleAgentPanel)
   const { selectProject, loadProjectData } = useProjectData()
+
+  const runningAgentsCount = Object.values(agents).filter((a) => a.status === 'running').length
 
   // Extract project name from path
   const projectName = projectPath?.split('/').pop() || 'BMad Board'
@@ -93,6 +100,23 @@ export default function Header() {
           <SearchBar />
           <EpicFilter />
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Tooltip title={agentPanelOpen ? 'Hide Agents' : 'Show Agents'}>
+              <IconButton
+                onClick={toggleAgentPanel}
+                size="small"
+                sx={{
+                  color: agentPanelOpen ? 'primary.main' : 'text.secondary'
+                }}
+              >
+                <Badge
+                  badgeContent={runningAgentsCount}
+                  color="success"
+                  invisible={runningAgentsCount === 0}
+                >
+                  <TerminalIcon />
+                </Badge>
+              </IconButton>
+            </Tooltip>
             <Tooltip title="Refresh">
               <IconButton
                 onClick={loadProjectData}
