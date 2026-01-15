@@ -12,17 +12,14 @@ import KeyboardShortcuts from './components/KeyboardShortcuts'
 import StatusBar from './components/StatusBar'
 
 const AGENT_PANEL_WIDTH = 500
-const ENV_ENABLE_AGENTS = import.meta.env.VITE_ENABLE_AGENTS !== 'false'
 
 export default function App() {
   const hasHydrated = useStore((state) => state._hasHydrated)
   const themeMode = useStore((state) => state.themeMode)
   const projectPath = useStore((state) => state.projectPath)
-  const storeEnableAgents = useStore((state) => state.enableAgents)
+  const enableAgents = useStore((state) => state.enableAgents)
   const agentPanelOpen = useStore((state) => state.agentPanelOpen)
 
-  // Agents are enabled if env flag is true OR hidden setting is enabled
-  const enableAgents = ENV_ENABLE_AGENTS || storeEnableAgents
   const showAgentPanel = agentPanelOpen && enableAgents
 
   const theme = useMemo(

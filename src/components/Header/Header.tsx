@@ -18,8 +18,6 @@ import ProjectSwitcher from '../ProjectSwitcher'
 import { useStore } from '../../store'
 import { useProjectData } from '../../hooks/useProjectData'
 
-const ENV_ENABLE_AGENTS = import.meta.env.VITE_ENABLE_AGENTS !== 'false'
-
 export default function Header() {
   const agents = useStore((state) => state.agents)
   const agentPanelOpen = useStore((state) => state.agentPanelOpen)
@@ -28,10 +26,7 @@ export default function Header() {
   const toggleEnableAgents = useStore((state) => state.toggleEnableAgents)
   const { loadProjectData } = useProjectData()
 
-  // Agents are enabled if env flag is true OR hidden setting is enabled
-  const ENABLE_AGENTS = ENV_ENABLE_AGENTS || enableAgents
-
-  const runningAgentsCount = ENABLE_AGENTS
+  const runningAgentsCount = enableAgents
     ? Object.values(agents).filter((a) => a.status === 'running').length
     : 0
 
@@ -104,7 +99,7 @@ export default function Header() {
           <SearchBar />
           <EpicFilter />
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            {ENABLE_AGENTS && (
+            {enableAgents && (
               <Tooltip title={agentPanelOpen ? 'Hide Agents' : 'Show Agents'}>
                 <IconButton
                   onClick={toggleAgentPanel}
