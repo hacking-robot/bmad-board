@@ -1,6 +1,6 @@
 # BMad Board
 
-A desktop sprint board application for managing BMAD methodology projects. Visualize your epics and stories in a Kanban-style interface with integrated Claude Code agent support.
+A desktop sprint board application for managing BMAD methodology projects. Visualize your epics and stories in a Kanban-style interface.
 
 ## Features
 
@@ -9,9 +9,9 @@ A desktop sprint board application for managing BMAD methodology projects. Visua
 - **Story Details**: View acceptance criteria, tasks, subtasks, and file changes
 - **Search & Filter**: Find stories by text or filter by epic
 - **Dark/Light Mode**: Toggle between themes
-- **Claude Code Integration**: Launch development agents directly from story cards
 - **Auto-Refresh**: File watching detects changes to story files
 - **Collapsible Columns**: Minimize columns to focus on active work
+- **Command Palette**: Quick access to actions with keyboard shortcuts
 
 ## Installation
 
@@ -45,7 +45,7 @@ npm run build
 2. Select your BMAD project folder (must contain `docs/epics/` and `docs/stories/`)
 3. View your stories organized by status
 4. Click a story card to view full details
-5. Use agent buttons to launch Claude Code for development tasks
+5. Use `Cmd+K` to open the command palette for quick actions
 
 ### Project Structure Requirements
 

@@ -26,12 +26,12 @@ src/
 │   ├── Board/           # Kanban board and columns
 │   ├── StoryCard/       # Story card display
 │   ├── StoryDialog/     # Story detail modal
-│   ├── AgentPanel/      # Claude Code agent sidebar
-│   ├── AgentsTab/       # Agent management tab
 │   ├── Header/          # App header with controls
 │   ├── SearchBar/       # Story search
 │   ├── EpicFilter/      # Filter by epic
 │   ├── ThemeToggle/     # Light/dark mode
+│   ├── CommandPalette/  # Keyboard-driven command palette
+│   ├── StatusBar/       # Bottom status bar
 │   └── WelcomeDialog/   # Project folder selection
 ├── store.ts             # Zustand state management
 ├── theme.ts             # MUI theme configuration
@@ -40,8 +40,7 @@ src/
 
 electron/
 ├── main.ts              # Electron main process
-├── preload.ts           # IPC bridge to renderer
-└── agentManager.ts      # Claude Code agent spawning
+└── preload.ts           # IPC bridge to renderer
 ```
 
 ## BMAD Project Structure
@@ -51,13 +50,6 @@ The app reads BMAD projects with this structure:
 - `docs/stories/epic-N/*.md` - Story files per epic
 
 Stories have statuses: `backlog`, `ready-for-dev`, `in-progress`, `review`, `done`, `optional`
-
-## Agent Integration
-
-Story cards can launch Claude Code agents based on status:
-- **Ready for Dev**: Runs `*dev-story` command
-- **In Progress**: Opens agent for continuation
-- **Review**: Runs `*code-review` command
 
 <claude-mem-context>
 # Recent Activity
