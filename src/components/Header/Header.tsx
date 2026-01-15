@@ -4,19 +4,27 @@ import {
   Typography,
   Box,
   IconButton,
-  Tooltip
+  Tooltip,
+  Badge
 } from '@mui/material'
 import DashboardIcon from '@mui/icons-material/Dashboard'
 import RefreshIcon from '@mui/icons-material/Refresh'
+import TerminalIcon from '@mui/icons-material/Terminal'
 import SearchBar from '../SearchBar/SearchBar'
 import EpicFilter from '../EpicFilter/EpicFilter'
 import ThemeToggle from '../ThemeToggle/ThemeToggle'
 import SettingsMenu from '../SettingsMenu'
 import ProjectSwitcher from '../ProjectSwitcher'
+import { useStore } from '../../store'
 import { useProjectData } from '../../hooks/useProjectData'
 
 export default function Header() {
+  const agents = useStore((state) => state.agents)
+  const agentPanelOpen = useStore((state) => state.agentPanelOpen)
+  const toggleAgentPanel = useStore((state) => state.toggleAgentPanel)
   const { loadProjectData } = useProjectData()
+
+  const runningAgentsCount = Object.values(agents).filter((a) => a.status === 'running').length
 
   return (
     <AppBar
@@ -77,6 +85,23 @@ export default function Header() {
           <SearchBar />
           <EpicFilter />
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Tooltip title={agentPanelOpen ? 'Hide Agents' : 'Show Agents'}>
+              <IconButton
+                onClick={toggleAgentPanel}
+                size="small"
+                sx={{
+                  color: agentPanelOpen ? 'primary.main' : 'text.secondary'
+                }}
+              >
+                <Badge
+                  badgeContent={runningAgentsCount}
+                  color="success"
+                  invisible={runningAgentsCount === 0}
+                >
+                  <TerminalIcon />
+                </Badge>
+              </IconButton>
+            </Tooltip>
             <Tooltip title="Refresh">
               <IconButton
                 onClick={loadProjectData}
