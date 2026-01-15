@@ -22,9 +22,20 @@ export default function Header() {
   const agents = useStore((state) => state.agents)
   const agentPanelOpen = useStore((state) => state.agentPanelOpen)
   const toggleAgentPanel = useStore((state) => state.toggleAgentPanel)
+  const enableAgents = useStore((state) => state.enableAgents)
+  const toggleEnableAgents = useStore((state) => state.toggleEnableAgents)
   const { loadProjectData } = useProjectData()
 
-  const runningAgentsCount = Object.values(agents).filter((a) => a.status === 'running').length
+  const runningAgentsCount = enableAgents
+    ? Object.values(agents).filter((a) => a.status === 'running').length
+    : 0
+
+  const handleLogoClick = (e: React.MouseEvent) => {
+    // Triple-click to toggle hidden agents feature
+    if (e.detail === 3) {
+      toggleEnableAgents()
+    }
+  }
 
   return (
     <AppBar
@@ -50,7 +61,10 @@ export default function Header() {
         }}
       >
         {/* Left section - Logo and App Name */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+        <Box
+          onClick={handleLogoClick}
+          sx={{ display: 'flex', alignItems: 'center', gap: 1.5, cursor: 'default', userSelect: 'none', WebkitAppRegion: 'no-drag' }}
+        >
           <Box
             sx={{
               width: 36,
@@ -85,23 +99,25 @@ export default function Header() {
           <SearchBar />
           <EpicFilter />
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <Tooltip title={agentPanelOpen ? 'Hide Agents' : 'Show Agents'}>
-              <IconButton
-                onClick={toggleAgentPanel}
-                size="small"
-                sx={{
-                  color: agentPanelOpen ? 'primary.main' : 'text.secondary'
-                }}
-              >
-                <Badge
-                  badgeContent={runningAgentsCount}
-                  color="success"
-                  invisible={runningAgentsCount === 0}
+            {enableAgents && (
+              <Tooltip title={agentPanelOpen ? 'Hide Agents' : 'Show Agents'}>
+                <IconButton
+                  onClick={toggleAgentPanel}
+                  size="small"
+                  sx={{
+                    color: agentPanelOpen ? 'primary.main' : 'text.secondary'
+                  }}
                 >
-                  <TerminalIcon />
-                </Badge>
-              </IconButton>
-            </Tooltip>
+                  <Badge
+                    badgeContent={runningAgentsCount}
+                    color="success"
+                    invisible={runningAgentsCount === 0}
+                  >
+                    <TerminalIcon />
+                  </Badge>
+                </IconButton>
+              </Tooltip>
+            )}
             <Tooltip title="Refresh">
               <IconButton
                 onClick={loadProjectData}

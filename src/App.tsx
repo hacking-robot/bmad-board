@@ -17,7 +17,10 @@ export default function App() {
   const hasHydrated = useStore((state) => state._hasHydrated)
   const themeMode = useStore((state) => state.themeMode)
   const projectPath = useStore((state) => state.projectPath)
+  const enableAgents = useStore((state) => state.enableAgents)
   const agentPanelOpen = useStore((state) => state.agentPanelOpen)
+
+  const showAgentPanel = agentPanelOpen && enableAgents
 
   const theme = useMemo(
     () => (themeMode === 'dark' ? darkTheme : lightTheme),
@@ -69,14 +72,14 @@ export default function App() {
                 flex: 1,
                 overflow: 'hidden',
                 transition: 'margin-right 225ms cubic-bezier(0, 0, 0.2, 1)',
-                marginRight: agentPanelOpen ? `${AGENT_PANEL_WIDTH}px` : 0
+                marginRight: showAgentPanel ? `${AGENT_PANEL_WIDTH}px` : 0
               }}
             >
               <Header />
               <Board />
               <StatusBar />
             </Box>
-            <AgentPanel />
+            {enableAgents && <AgentPanel />}
             <StoryDialog />
           </>
         )}

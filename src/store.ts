@@ -60,6 +60,7 @@ const electronStorage = {
         }))
 
         // Use debounced save to prevent rapid writes
+        // Note: enableAgents is intentionally NOT persisted - must re-enable each session
         debouncedSave({
           themeMode,
           projectPath,
@@ -91,6 +92,10 @@ interface AppState {
   // Hydration
   _hasHydrated: boolean
   setHasHydrated: (state: boolean) => void
+
+  // Hidden features
+  enableAgents: boolean
+  toggleEnableAgents: () => void
 
   // Theme
   themeMode: 'light' | 'dark'
@@ -169,6 +174,10 @@ export const useStore = create<AppState>()(
       // Hydration
       _hasHydrated: false,
       setHasHydrated: (state) => set({ _hasHydrated: state }),
+
+      // Hidden features
+      enableAgents: false,
+      toggleEnableAgents: () => set((state) => ({ enableAgents: !state.enableAgents })),
 
       // Theme
       themeMode: 'light',
