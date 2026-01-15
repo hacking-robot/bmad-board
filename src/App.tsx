@@ -12,12 +12,13 @@ import KeyboardShortcuts from './components/KeyboardShortcuts'
 import StatusBar from './components/StatusBar'
 
 const AGENT_PANEL_WIDTH = 500
+const ENABLE_AGENTS = import.meta.env.VITE_ENABLE_AGENTS !== 'false'
 
 export default function App() {
   const hasHydrated = useStore((state) => state._hasHydrated)
   const themeMode = useStore((state) => state.themeMode)
   const projectPath = useStore((state) => state.projectPath)
-  const agentPanelOpen = useStore((state) => state.agentPanelOpen)
+  const agentPanelOpen = useStore((state) => state.agentPanelOpen) && ENABLE_AGENTS
 
   const theme = useMemo(
     () => (themeMode === 'dark' ? darkTheme : lightTheme),
@@ -76,7 +77,7 @@ export default function App() {
               <Board />
               <StatusBar />
             </Box>
-            <AgentPanel />
+            {ENABLE_AGENTS && <AgentPanel />}
             <StoryDialog />
           </>
         )}

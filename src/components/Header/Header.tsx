@@ -18,13 +18,17 @@ import ProjectSwitcher from '../ProjectSwitcher'
 import { useStore } from '../../store'
 import { useProjectData } from '../../hooks/useProjectData'
 
+const ENABLE_AGENTS = import.meta.env.VITE_ENABLE_AGENTS !== 'false'
+
 export default function Header() {
   const agents = useStore((state) => state.agents)
   const agentPanelOpen = useStore((state) => state.agentPanelOpen)
   const toggleAgentPanel = useStore((state) => state.toggleAgentPanel)
   const { loadProjectData } = useProjectData()
 
-  const runningAgentsCount = Object.values(agents).filter((a) => a.status === 'running').length
+  const runningAgentsCount = ENABLE_AGENTS
+    ? Object.values(agents).filter((a) => a.status === 'running').length
+    : 0
 
   return (
     <AppBar
@@ -85,23 +89,25 @@ export default function Header() {
           <SearchBar />
           <EpicFilter />
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <Tooltip title={agentPanelOpen ? 'Hide Agents' : 'Show Agents'}>
-              <IconButton
-                onClick={toggleAgentPanel}
-                size="small"
-                sx={{
-                  color: agentPanelOpen ? 'primary.main' : 'text.secondary'
-                }}
-              >
-                <Badge
-                  badgeContent={runningAgentsCount}
-                  color="success"
-                  invisible={runningAgentsCount === 0}
+            {ENABLE_AGENTS && (
+              <Tooltip title={agentPanelOpen ? 'Hide Agents' : 'Show Agents'}>
+                <IconButton
+                  onClick={toggleAgentPanel}
+                  size="small"
+                  sx={{
+                    color: agentPanelOpen ? 'primary.main' : 'text.secondary'
+                  }}
                 >
-                  <TerminalIcon />
-                </Badge>
-              </IconButton>
-            </Tooltip>
+                  <Badge
+                    badgeContent={runningAgentsCount}
+                    color="success"
+                    invisible={runningAgentsCount === 0}
+                  >
+                    <TerminalIcon />
+                  </Badge>
+                </IconButton>
+              </Tooltip>
+            )}
             <Tooltip title="Refresh">
               <IconButton
                 onClick={loadProjectData}
