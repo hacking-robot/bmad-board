@@ -176,7 +176,7 @@ function startWatching(projectPath: string) {
   }
 
   try {
-    fileWatcher = watch(watchPath, { recursive: true }, (eventType, filename) => {
+    fileWatcher = watch(watchPath, { recursive: true }, (_eventType, filename) => {
       // Only care about .yaml and .md files
       if (!filename || (!filename.endsWith('.yaml') && !filename.endsWith('.md'))) {
         return
