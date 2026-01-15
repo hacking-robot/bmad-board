@@ -8,6 +8,7 @@ import {
 } from '@mui/material'
 import DashboardIcon from '@mui/icons-material/Dashboard'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
+import RefreshIcon from '@mui/icons-material/Refresh'
 import SearchBar from '../SearchBar/SearchBar'
 import EpicFilter from '../EpicFilter/EpicFilter'
 import ThemeToggle from '../ThemeToggle/ThemeToggle'
@@ -16,7 +17,7 @@ import { useProjectData } from '../../hooks/useProjectData'
 
 export default function Header() {
   const projectPath = useStore((state) => state.projectPath)
-  const { selectProject } = useProjectData()
+  const { selectProject, loadProjectData } = useProjectData()
 
   // Extract project name from path
   const projectName = projectPath?.split('/').pop() || 'BMad Board'
@@ -92,6 +93,15 @@ export default function Header() {
           <SearchBar />
           <EpicFilter />
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Tooltip title="Refresh">
+              <IconButton
+                onClick={loadProjectData}
+                size="small"
+                sx={{ color: 'text.secondary' }}
+              >
+                <RefreshIcon />
+              </IconButton>
+            </Tooltip>
             <Tooltip title="Change Project">
               <IconButton
                 onClick={selectProject}

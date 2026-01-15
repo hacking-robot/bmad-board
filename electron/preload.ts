@@ -12,6 +12,9 @@ export interface FileAPI {
   listDirectory: (dirPath: string) => Promise<{ files?: string[]; error?: string }>
   getSettings: () => Promise<AppSettings>
   saveSettings: (settings: Partial<AppSettings>) => Promise<boolean>
+  startWatching: (projectPath: string) => Promise<boolean>
+  stopWatching: () => Promise<boolean>
+  onFilesChanged: (callback: () => void) => () => void
 }
 
 const fileAPI: FileAPI = {
@@ -19,7 +22,15 @@ const fileAPI: FileAPI = {
   readFile: (filePath: string) => ipcRenderer.invoke('read-file', filePath),
   listDirectory: (dirPath: string) => ipcRenderer.invoke('list-directory', dirPath),
   getSettings: () => ipcRenderer.invoke('get-settings'),
-  saveSettings: (settings: Partial<AppSettings>) => ipcRenderer.invoke('save-settings', settings)
+  saveSettings: (settings: Partial<AppSettings>) => ipcRenderer.invoke('save-settings', settings),
+  startWatching: (projectPath: string) => ipcRenderer.invoke('start-watching', projectPath),
+  stopWatching: () => ipcRenderer.invoke('stop-watching'),
+  onFilesChanged: (callback: () => void) => {
+    const listener = () => callback()
+    ipcRenderer.on('files-changed', listener)
+    // Return cleanup function
+    return () => ipcRenderer.removeListener('files-changed', listener)
+  }
 }
 
 contextBridge.exposeInMainWorld('fileAPI', fileAPI)

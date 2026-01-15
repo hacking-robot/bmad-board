@@ -126,6 +126,21 @@ export function useProjectData() {
   useEffect(() => {
     if (_hasHydrated && projectPath) {
       loadProjectData()
+
+      // Start watching for file changes
+      window.fileAPI.startWatching(projectPath)
+
+      // Listen for file changes
+      const cleanup = window.fileAPI.onFilesChanged(() => {
+        console.log('Files changed, reloading project data...')
+        loadProjectData()
+      })
+
+      // Cleanup watcher and listener on unmount or path change
+      return () => {
+        cleanup()
+        window.fileAPI.stopWatching()
+      }
     }
   }, [_hasHydrated, projectPath, loadProjectData])
 

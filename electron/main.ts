@@ -1,12 +1,14 @@
 import { app, BrowserWindow, ipcMain, dialog } from 'electron'
 import { join } from 'path'
 import { readFile, readdir, stat, writeFile, mkdir } from 'fs/promises'
-import { existsSync } from 'fs'
+import { existsSync, watch, FSWatcher } from 'fs'
 
 // Set app name (shows in menu bar on macOS)
 app.setName('BMad Board')
 
 let mainWindow: BrowserWindow | null = null
+let fileWatcher: FSWatcher | null = null
+let watchDebounceTimer: NodeJS.Timeout | null = null
 
 // Settings file path in user data directory
 const getSettingsPath = () => join(app.getPath('userData'), 'settings.json')
@@ -157,4 +159,70 @@ ipcMain.handle('get-settings', async () => {
 
 ipcMain.handle('save-settings', async (_, settings: Partial<AppSettings>) => {
   return await saveSettings(settings)
+})
+
+// File watching for auto-refresh
+function startWatching(projectPath: string) {
+  // Stop any existing watcher
+  stopWatching()
+
+  const watchPath = join(projectPath, '_bmad-output', 'implementation-artifacts')
+
+  if (!existsSync(watchPath)) {
+    console.log('Watch path does not exist:', watchPath)
+    return
+  }
+
+  try {
+    fileWatcher = watch(watchPath, { recursive: true }, (eventType, filename) => {
+      // Only care about .yaml and .md files
+      if (!filename || (!filename.endsWith('.yaml') && !filename.endsWith('.md'))) {
+        return
+      }
+
+      // Debounce to avoid multiple rapid refreshes
+      if (watchDebounceTimer) {
+        clearTimeout(watchDebounceTimer)
+      }
+
+      watchDebounceTimer = setTimeout(() => {
+        console.log('File changed:', filename)
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('files-changed')
+        }
+      }, 500)
+    })
+
+    console.log('Started watching:', watchPath)
+  } catch (error) {
+    console.error('Failed to start file watcher:', error)
+  }
+}
+
+function stopWatching() {
+  if (watchDebounceTimer) {
+    clearTimeout(watchDebounceTimer)
+    watchDebounceTimer = null
+  }
+
+  if (fileWatcher) {
+    fileWatcher.close()
+    fileWatcher = null
+    console.log('Stopped file watcher')
+  }
+}
+
+ipcMain.handle('start-watching', async (_, projectPath: string) => {
+  startWatching(projectPath)
+  return true
+})
+
+ipcMain.handle('stop-watching', async () => {
+  stopWatching()
+  return true
+})
+
+// Clean up watcher when app closes
+app.on('before-quit', () => {
+  stopWatching()
 })
