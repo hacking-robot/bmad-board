@@ -6,7 +6,7 @@ import RateReviewIcon from '@mui/icons-material/RateReview'
 import { Story, EPIC_COLORS, AGENT_ACTIONS } from '../../types'
 import { useStore } from '../../store'
 
-const ENABLE_AGENTS = import.meta.env.VITE_ENABLE_AGENTS !== 'false'
+const ENV_ENABLE_AGENTS = import.meta.env.VITE_ENABLE_AGENTS !== 'false'
 
 interface StoryCardProps {
   story: Story
@@ -19,6 +19,10 @@ export default function StoryCard({ story }: StoryCardProps) {
   const setActiveAgent = useStore((state) => state.setActiveAgent)
   const setAgentPanelOpen = useStore((state) => state.setAgentPanelOpen)
   const agents = useStore((state) => state.agents)
+  const storeEnableAgents = useStore((state) => state.enableAgents)
+
+  // Agents are enabled if env flag is true OR hidden setting is enabled
+  const enableAgents = ENV_ENABLE_AGENTS || storeEnableAgents
 
   const epicColor = EPIC_COLORS[(story.epicId - 1) % EPIC_COLORS.length]
   const agentAction = AGENT_ACTIONS[story.status]
@@ -165,7 +169,7 @@ export default function StoryCard({ story }: StoryCardProps) {
         )}
 
         {/* Agent Action Button */}
-        {ENABLE_AGENTS && agentAction && (
+        {enableAgents && agentAction && (
           <Box sx={{ mt: 1.5 }}>
             <Button
               size="small"

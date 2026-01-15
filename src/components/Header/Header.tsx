@@ -18,17 +18,29 @@ import ProjectSwitcher from '../ProjectSwitcher'
 import { useStore } from '../../store'
 import { useProjectData } from '../../hooks/useProjectData'
 
-const ENABLE_AGENTS = import.meta.env.VITE_ENABLE_AGENTS !== 'false'
+const ENV_ENABLE_AGENTS = import.meta.env.VITE_ENABLE_AGENTS !== 'false'
 
 export default function Header() {
   const agents = useStore((state) => state.agents)
   const agentPanelOpen = useStore((state) => state.agentPanelOpen)
   const toggleAgentPanel = useStore((state) => state.toggleAgentPanel)
+  const enableAgents = useStore((state) => state.enableAgents)
+  const toggleEnableAgents = useStore((state) => state.toggleEnableAgents)
   const { loadProjectData } = useProjectData()
+
+  // Agents are enabled if env flag is true OR hidden setting is enabled
+  const ENABLE_AGENTS = ENV_ENABLE_AGENTS || enableAgents
 
   const runningAgentsCount = ENABLE_AGENTS
     ? Object.values(agents).filter((a) => a.status === 'running').length
     : 0
+
+  const handleLogoClick = (e: React.MouseEvent) => {
+    // Triple-click to toggle hidden agents feature
+    if (e.detail === 3) {
+      toggleEnableAgents()
+    }
+  }
 
   return (
     <AppBar
@@ -54,7 +66,10 @@ export default function Header() {
         }}
       >
         {/* Left section - Logo and App Name */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+        <Box
+          onClick={handleLogoClick}
+          sx={{ display: 'flex', alignItems: 'center', gap: 1.5, cursor: 'default', userSelect: 'none' }}
+        >
           <Box
             sx={{
               width: 36,

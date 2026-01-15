@@ -12,13 +12,18 @@ import KeyboardShortcuts from './components/KeyboardShortcuts'
 import StatusBar from './components/StatusBar'
 
 const AGENT_PANEL_WIDTH = 500
-const ENABLE_AGENTS = import.meta.env.VITE_ENABLE_AGENTS !== 'false'
+const ENV_ENABLE_AGENTS = import.meta.env.VITE_ENABLE_AGENTS !== 'false'
 
 export default function App() {
   const hasHydrated = useStore((state) => state._hasHydrated)
   const themeMode = useStore((state) => state.themeMode)
   const projectPath = useStore((state) => state.projectPath)
-  const agentPanelOpen = useStore((state) => state.agentPanelOpen) && ENABLE_AGENTS
+  const storeEnableAgents = useStore((state) => state.enableAgents)
+  const agentPanelOpen = useStore((state) => state.agentPanelOpen)
+
+  // Agents are enabled if env flag is true OR hidden setting is enabled
+  const enableAgents = ENV_ENABLE_AGENTS || storeEnableAgents
+  const showAgentPanel = agentPanelOpen && enableAgents
 
   const theme = useMemo(
     () => (themeMode === 'dark' ? darkTheme : lightTheme),
@@ -70,14 +75,14 @@ export default function App() {
                 flex: 1,
                 overflow: 'hidden',
                 transition: 'margin-right 225ms cubic-bezier(0, 0, 0.2, 1)',
-                marginRight: agentPanelOpen ? `${AGENT_PANEL_WIDTH}px` : 0
+                marginRight: showAgentPanel ? `${AGENT_PANEL_WIDTH}px` : 0
               }}
             >
               <Header />
               <Board />
               <StatusBar />
             </Box>
-            {ENABLE_AGENTS && <AgentPanel />}
+            {enableAgents && <AgentPanel />}
             <StoryDialog />
           </>
         )}

@@ -50,7 +50,7 @@ const electronStorage = {
       const parsed = JSON.parse(value)
       if (parsed.state) {
         // Only save the settings we care about
-        const { themeMode, projectPath, projectType, selectedEpicId, collapsedColumnsByEpic, agentHistory, recentProjects } = parsed.state
+        const { themeMode, projectPath, projectType, selectedEpicId, collapsedColumnsByEpic, agentHistory, recentProjects, enableAgents } = parsed.state
 
         // Don't persist full output - it can contain characters that break JSON
         // Just save metadata and a small summary
@@ -67,7 +67,8 @@ const electronStorage = {
           selectedEpicId,
           collapsedColumnsByEpic,
           agentHistory: sanitizedHistory,
-          recentProjects: recentProjects || []
+          recentProjects: recentProjects || [],
+          enableAgents: enableAgents || false
         })
       }
     } catch (error) {
@@ -91,6 +92,10 @@ interface AppState {
   // Hydration
   _hasHydrated: boolean
   setHasHydrated: (state: boolean) => void
+
+  // Hidden features
+  enableAgents: boolean
+  toggleEnableAgents: () => void
 
   // Theme
   themeMode: 'light' | 'dark'
@@ -169,6 +174,10 @@ export const useStore = create<AppState>()(
       // Hydration
       _hasHydrated: false,
       setHasHydrated: (state) => set({ _hasHydrated: state }),
+
+      // Hidden features
+      enableAgents: false,
+      toggleEnableAgents: () => set((state) => ({ enableAgents: !state.enableAgents })),
 
       // Theme
       themeMode: 'light',
