@@ -1,6 +1,15 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { Epic, Story, StoryContent, StoryStatus } from './types'
+import type { ProjectType } from './utils/projectTypes'
+
+export interface RecentProject {
+  path: string
+  projectType: ProjectType
+  name: string
+}
+
+const MAX_RECENT_PROJECTS = 10
 
 // Custom storage using Electron IPC
 const electronStorage = {
@@ -17,8 +26,8 @@ const electronStorage = {
       const parsed = JSON.parse(value)
       if (parsed.state) {
         // Only save the settings we care about
-        const { themeMode, projectPath, selectedEpicId, collapsedColumnsByEpic } = parsed.state
-        await window.fileAPI.saveSettings({ themeMode, projectPath, selectedEpicId, collapsedColumnsByEpic })
+        const { themeMode, projectPath, projectType, selectedEpicId, collapsedColumnsByEpic, recentProjects } = parsed.state
+        await window.fileAPI.saveSettings({ themeMode, projectPath, projectType, selectedEpicId, collapsedColumnsByEpic, recentProjects })
       }
     } catch (error) {
       console.error('Failed to save settings:', error)
@@ -28,8 +37,10 @@ const electronStorage = {
     await window.fileAPI.saveSettings({
       themeMode: 'light',
       projectPath: null,
+      projectType: null,
       selectedEpicId: null,
-      collapsedColumnsByEpic: {}
+      collapsedColumnsByEpic: {},
+      recentProjects: []
     })
   }
 }
@@ -46,7 +57,14 @@ interface AppState {
 
   // Project
   projectPath: string | null
+  projectType: ProjectType | null
   setProjectPath: (path: string | null) => void
+  setProjectType: (type: ProjectType | null) => void
+
+  // Recent Projects
+  recentProjects: RecentProject[]
+  addRecentProject: (project: RecentProject) => void
+  removeRecentProject: (path: string) => void
 
   // Data
   epics: Epic[]
@@ -95,7 +113,22 @@ export const useStore = create<AppState>()(
 
       // Project
       projectPath: null,
+      projectType: null,
       setProjectPath: (path) => set({ projectPath: path }),
+      setProjectType: (type) => set({ projectType: type }),
+
+      // Recent Projects
+      recentProjects: [],
+      addRecentProject: (project) => set((state) => {
+        // Remove if already exists (to move it to top)
+        const filtered = state.recentProjects.filter((p) => p.path !== project.path)
+        // Add to beginning and limit to max
+        const updated = [project, ...filtered].slice(0, MAX_RECENT_PROJECTS)
+        return { recentProjects: updated }
+      }),
+      removeRecentProject: (path) => set((state) => ({
+        recentProjects: state.recentProjects.filter((p) => p.path !== path)
+      })),
 
       // Data
       epics: [],

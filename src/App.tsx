@@ -6,6 +6,8 @@ import Header from './components/Header/Header'
 import Board from './components/Board/Board'
 import StoryDialog from './components/StoryDialog/StoryDialog'
 import WelcomeDialog from './components/WelcomeDialog/WelcomeDialog'
+import CommandPalette from './components/CommandPalette'
+import KeyboardShortcuts from './components/KeyboardShortcuts'
 
 export default function App() {
   const hasHydrated = useStore((state) => state._hasHydrated)
@@ -40,6 +42,8 @@ export default function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
+      <CommandPalette />
+      <KeyboardShortcuts />
       <Box
         sx={{
           height: '100vh',

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, Menu } from 'electron'
 import { join } from 'path'
 import { readFile, readdir, stat, writeFile, mkdir } from 'fs/promises'
 import { existsSync, watch, FSWatcher } from 'fs'
@@ -7,24 +7,35 @@ import { existsSync, watch, FSWatcher } from 'fs'
 app.setName('BMad Board')
 
 let mainWindow: BrowserWindow | null = null
-let fileWatcher: FSWatcher | null = null
 let watchDebounceTimer: NodeJS.Timeout | null = null
 
 // Settings file path in user data directory
 const getSettingsPath = () => join(app.getPath('userData'), 'settings.json')
 
+type ProjectType = 'bmm' | 'bmgd'
+
+interface RecentProject {
+  path: string
+  projectType: ProjectType
+  name: string
+}
+
 interface AppSettings {
   themeMode: 'light' | 'dark'
   projectPath: string | null
+  projectType: ProjectType | null
   selectedEpicId: number | null
   collapsedColumnsByEpic: Record<string, string[]>
+  recentProjects: RecentProject[]
 }
 
 const defaultSettings: AppSettings = {
   themeMode: 'light',
   projectPath: null,
+  projectType: null,
   selectedEpicId: null,
-  collapsedColumnsByEpic: {}
+  collapsedColumnsByEpic: {},
+  recentProjects: []
 }
 
 async function loadSettings(): Promise<AppSettings> {
@@ -89,7 +100,98 @@ function createWindow() {
   })
 }
 
-app.whenReady().then(createWindow)
+function createMenu() {
+  const isMac = process.platform === 'darwin'
+
+  const template: Electron.MenuItemConstructorOptions[] = [
+    // App menu (macOS only)
+    ...(isMac
+      ? [
+          {
+            label: app.name,
+            submenu: [
+              { role: 'about' as const },
+              { type: 'separator' as const },
+              { role: 'services' as const },
+              { type: 'separator' as const },
+              { role: 'hide' as const },
+              { role: 'hideOthers' as const },
+              { role: 'unhide' as const },
+              { type: 'separator' as const },
+              { role: 'quit' as const }
+            ]
+          }
+        ]
+      : []),
+    // Edit menu
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'selectAll' }
+      ]
+    },
+    // View menu
+    {
+      label: 'View',
+      submenu: [
+        { role: 'reload' },
+        { role: 'forceReload' },
+        { role: 'toggleDevTools' },
+        { type: 'separator' },
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' }
+      ]
+    },
+    // Window menu
+    {
+      label: 'Window',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'zoom' },
+        ...(isMac
+          ? [
+              { type: 'separator' as const },
+              { role: 'front' as const },
+              { type: 'separator' as const },
+              { role: 'window' as const }
+            ]
+          : [{ role: 'close' as const }])
+      ]
+    },
+    // Help menu
+    {
+      role: 'help',
+      submenu: [
+        {
+          label: 'Keyboard Shortcuts',
+          accelerator: isMac ? 'Cmd+/' : 'Ctrl+/',
+          click: () => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('show-keyboard-shortcuts')
+            }
+          }
+        }
+      ]
+    }
+  ]
+
+  const menu = Menu.buildFromTemplate(template)
+  Menu.setApplicationMenu(menu)
+}
+
+app.whenReady().then(() => {
+  createWindow()
+  createMenu()
+})
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
@@ -116,14 +218,29 @@ ipcMain.handle('select-directory', async () => {
   }
 
   const projectPath = result.filePaths[0]
+  const bmadOutputPath = join(projectPath, '_bmad-output')
 
-  // Validate it's a BMAD project
-  const sprintStatusPath = join(projectPath, '_bmad-output', 'implementation-artifacts', 'sprint-status.yaml')
+  // Validate sprint-status.yaml exists (required for both project types)
+  const sprintStatusPath = join(bmadOutputPath, 'implementation-artifacts', 'sprint-status.yaml')
   if (!existsSync(sprintStatusPath)) {
     return { error: 'Invalid BMAD project: sprint-status.yaml not found' }
   }
 
-  return { path: projectPath }
+  // Detect project type by epics.md location
+  const bmmEpicsPath = join(bmadOutputPath, 'planning-artifacts', 'epics.md')
+  const bmgdEpicsPath = join(bmadOutputPath, 'epics.md')
+
+  let projectType: ProjectType
+
+  if (existsSync(bmmEpicsPath)) {
+    projectType = 'bmm'
+  } else if (existsSync(bmgdEpicsPath)) {
+    projectType = 'bmgd'
+  } else {
+    return { error: 'Invalid BMAD project: epics.md not found' }
+  }
+
+  return { path: projectPath, projectType }
 })
 
 ipcMain.handle('read-file', async (_, filePath: string) => {
@@ -164,40 +281,52 @@ ipcMain.handle('save-settings', async (_, settings: Partial<AppSettings>) => {
 })
 
 // File watching for auto-refresh
-function startWatching(projectPath: string) {
-  // Stop any existing watcher
+let fileWatchers: FSWatcher[] = []
+
+function startWatching(projectPath: string, projectType: ProjectType) {
+  // Stop any existing watchers
   stopWatching()
 
-  const watchPath = join(projectPath, '_bmad-output', 'implementation-artifacts')
+  const watchPaths: string[] = [
+    join(projectPath, '_bmad-output', 'implementation-artifacts')
+  ]
 
-  if (!existsSync(watchPath)) {
-    console.log('Watch path does not exist:', watchPath)
-    return
+  // For BMM projects, also watch planning-artifacts (where epics.md lives)
+  if (projectType === 'bmm') {
+    watchPaths.push(join(projectPath, '_bmad-output', 'planning-artifacts'))
   }
 
-  try {
-    fileWatcher = watch(watchPath, { recursive: true }, (_eventType, filename) => {
-      // Only care about .yaml and .md files
-      if (!filename || (!filename.endsWith('.yaml') && !filename.endsWith('.md'))) {
-        return
-      }
+  for (const watchPath of watchPaths) {
+    if (!existsSync(watchPath)) {
+      console.log('Watch path does not exist:', watchPath)
+      continue
+    }
 
-      // Debounce to avoid multiple rapid refreshes
-      if (watchDebounceTimer) {
-        clearTimeout(watchDebounceTimer)
-      }
-
-      watchDebounceTimer = setTimeout(() => {
-        console.log('File changed:', filename)
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('files-changed')
+    try {
+      const watcher = watch(watchPath, { recursive: true }, (_eventType, filename) => {
+        // Only care about .yaml and .md files
+        if (!filename || (!filename.endsWith('.yaml') && !filename.endsWith('.md'))) {
+          return
         }
-      }, 500)
-    })
 
-    console.log('Started watching:', watchPath)
-  } catch (error) {
-    console.error('Failed to start file watcher:', error)
+        // Debounce to avoid multiple rapid refreshes
+        if (watchDebounceTimer) {
+          clearTimeout(watchDebounceTimer)
+        }
+
+        watchDebounceTimer = setTimeout(() => {
+          console.log('File changed:', filename)
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('files-changed')
+          }
+        }, 500)
+      })
+
+      fileWatchers.push(watcher)
+      console.log('Started watching:', watchPath)
+    } catch (error) {
+      console.error('Failed to start file watcher:', error)
+    }
   }
 }
 
@@ -207,15 +336,17 @@ function stopWatching() {
     watchDebounceTimer = null
   }
 
-  if (fileWatcher) {
-    fileWatcher.close()
-    fileWatcher = null
-    console.log('Stopped file watcher')
+  for (const watcher of fileWatchers) {
+    watcher.close()
   }
+  if (fileWatchers.length > 0) {
+    console.log('Stopped file watchers')
+  }
+  fileWatchers = []
 }
 
-ipcMain.handle('start-watching', async (_, projectPath: string) => {
-  startWatching(projectPath)
+ipcMain.handle('start-watching', async (_, projectPath: string, projectType: ProjectType) => {
+  startWatching(projectPath, projectType)
   return true
 })
 
