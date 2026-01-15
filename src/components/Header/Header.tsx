@@ -44,7 +44,7 @@ export default function Header() {
           }
         }}
       >
-        {/* Logo and Title */}
+        {/* Left section - Logo */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
           <Box
             sx={{
@@ -59,38 +59,42 @@ export default function Header() {
           >
             <DashboardIcon sx={{ fontSize: 22, color: 'white' }} />
           </Box>
-          <Typography
-            variant="h6"
-            color="text.primary"
-            fontWeight={600}
-            sx={{ whiteSpace: 'nowrap' }}
-          >
-            {projectName}
-          </Typography>
         </Box>
 
         {/* Spacer */}
         <Box sx={{ flexGrow: 1 }} />
 
-        {/* Search */}
-        <SearchBar />
+        {/* Center section - Project Name (absolutely positioned) */}
+        <Typography
+          variant="h6"
+          color="text.primary"
+          fontWeight={600}
+          sx={{
+            position: 'absolute',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            whiteSpace: 'nowrap'
+          }}
+        >
+          {projectName}
+        </Typography>
 
-        {/* Epic Filter */}
-        <EpicFilter />
-
-        {/* Actions */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-          <Tooltip title="Change Project">
-            <IconButton
-              onClick={selectProject}
-              size="small"
-              sx={{ color: 'text.secondary' }}
-            >
-              <FolderOpenIcon />
-            </IconButton>
-          </Tooltip>
-
-          <ThemeToggle />
+        {/* Right section - Search, Filter, Actions */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <SearchBar />
+          <EpicFilter />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Tooltip title="Change Project">
+              <IconButton
+                onClick={selectProject}
+                size="small"
+                sx={{ color: 'text.secondary' }}
+              >
+                <FolderOpenIcon />
+              </IconButton>
+            </Tooltip>
+            <ThemeToggle />
+          </Box>
         </Box>
       </Toolbar>
     </AppBar>
