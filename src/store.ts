@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import { Epic, Story, StoryContent } from './types'
+import { Epic, Story, StoryContent, StoryStatus } from './types'
 
 // Custom storage using Electron IPC
 const electronStorage = {
@@ -17,8 +17,8 @@ const electronStorage = {
       const parsed = JSON.parse(value)
       if (parsed.state) {
         // Only save the settings we care about
-        const { themeMode, projectPath, selectedEpicId } = parsed.state
-        await window.fileAPI.saveSettings({ themeMode, projectPath, selectedEpicId })
+        const { themeMode, projectPath, selectedEpicId, collapsedColumns } = parsed.state
+        await window.fileAPI.saveSettings({ themeMode, projectPath, selectedEpicId, collapsedColumns })
       }
     } catch (error) {
       console.error('Failed to save settings:', error)
@@ -28,7 +28,8 @@ const electronStorage = {
     await window.fileAPI.saveSettings({
       themeMode: 'light',
       projectPath: null,
-      selectedEpicId: null
+      selectedEpicId: null,
+      collapsedColumns: []
     })
   }
 }
@@ -62,6 +63,10 @@ interface AppState {
   setSelectedEpicId: (id: number | null) => void
   searchQuery: string
   setSearchQuery: (query: string) => void
+
+  // Column collapse state
+  collapsedColumns: StoryStatus[]
+  toggleColumnCollapse: (status: StoryStatus) => void
 
   // Story dialog
   selectedStory: Story | null
@@ -106,6 +111,17 @@ export const useStore = create<AppState>()(
       setSelectedEpicId: (id) => set({ selectedEpicId: id }),
       searchQuery: '',
       setSearchQuery: (query) => set({ searchQuery: query }),
+
+      // Column collapse state
+      collapsedColumns: [],
+      toggleColumnCollapse: (status) => set((state) => {
+        const isCollapsed = state.collapsedColumns.includes(status)
+        return {
+          collapsedColumns: isCollapsed
+            ? state.collapsedColumns.filter((s) => s !== status)
+            : [...state.collapsedColumns, status]
+        }
+      }),
 
       // Story dialog
       selectedStory: null,

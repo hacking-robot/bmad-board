@@ -17,12 +17,14 @@ interface AppSettings {
   themeMode: 'light' | 'dark'
   projectPath: string | null
   selectedEpicId: number | null
+  collapsedColumns: string[]
 }
 
 const defaultSettings: AppSettings = {
   themeMode: 'light',
   projectPath: null,
-  selectedEpicId: null
+  selectedEpicId: null,
+  collapsedColumns: []
 }
 
 async function loadSettings(): Promise<AppSettings> {
