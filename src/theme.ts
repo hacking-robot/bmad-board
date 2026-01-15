@@ -75,24 +75,24 @@ export const lightTheme = createTheme({
   palette: {
     mode: 'light',
     primary: {
-      main: '#1976d2',
-      light: '#42a5f5',
-      dark: '#1565c0'
+      main: '#E97451',
+      light: '#F09A7C',
+      dark: '#D4563A'
     },
     secondary: {
-      main: '#7c4dff',
-      light: '#b47cff',
-      dark: '#3f1dcb'
+      main: '#8B5CF6',
+      light: '#A78BFA',
+      dark: '#7C3AED'
     },
     background: {
-      default: '#f5f7fa',
-      paper: '#ffffff'
+      default: '#FAFAFA',
+      paper: '#FFFFFF'
     },
     text: {
-      primary: '#1a1a2e',
-      secondary: '#6b7280'
+      primary: '#1A1A1A',
+      secondary: '#6B7280'
     },
-    divider: '#e5e7eb'
+    divider: '#E5E5E5'
   }
 })
 
@@ -101,24 +101,24 @@ export const darkTheme = createTheme({
   palette: {
     mode: 'dark',
     primary: {
-      main: '#60a5fa',
-      light: '#93c5fd',
-      dark: '#2563eb'
+      main: '#E97451',
+      light: '#F09A7C',
+      dark: '#D4563A'
     },
     secondary: {
-      main: '#a78bfa',
-      light: '#c4b5fd',
-      dark: '#7c3aed'
+      main: '#A78BFA',
+      light: '#C4B5FD',
+      dark: '#8B5CF6'
     },
     background: {
-      default: '#0f172a',
-      paper: '#1e293b'
+      default: '#0D0D0D',
+      paper: '#1A1A1A'
     },
     text: {
-      primary: '#f1f5f9',
-      secondary: '#94a3b8'
+      primary: '#E5E5E5',
+      secondary: '#A3A3A3'
     },
-    divider: '#334155'
+    divider: '#2E2E2E'
   },
   components: {
     ...commonOptions.components,
