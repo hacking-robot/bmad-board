@@ -1,7 +1,7 @@
-import { useMemo } from 'react'
+import { useMemo, useState, useCallback } from 'react'
 import { Box, CircularProgress, Typography, Alert } from '@mui/material'
 import { useStore } from '../../store'
-import { STATUS_COLUMNS } from '../../types'
+import { STATUS_COLUMNS, StoryStatus } from '../../types'
 import Column from './Column'
 
 export default function Board() {
@@ -10,6 +10,21 @@ export default function Board() {
   const allStories = useStore((state) => state.stories)
   const selectedEpicId = useStore((state) => state.selectedEpicId)
   const searchQuery = useStore((state) => state.searchQuery)
+
+  // Track which columns are collapsed
+  const [collapsedColumns, setCollapsedColumns] = useState<Set<StoryStatus>>(new Set())
+
+  const toggleColumnCollapse = useCallback((status: StoryStatus) => {
+    setCollapsedColumns((prev) => {
+      const next = new Set(prev)
+      if (next.has(status)) {
+        next.delete(status)
+      } else {
+        next.add(status)
+      }
+      return next
+    })
+  }, [])
 
   // Filter stories reactively when filter state changes
   const stories = useMemo(() => {
@@ -106,6 +121,8 @@ export default function Board() {
               label={column.label}
               color={column.color}
               stories={columnStories}
+              isCollapsed={collapsedColumns.has(column.status)}
+              onToggleCollapse={() => toggleColumnCollapse(column.status)}
             />
           )
         })}

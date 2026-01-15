@@ -1,4 +1,6 @@
-import { Box, Typography, Paper, Chip } from '@mui/material'
+import { Box, Typography, Paper, Chip, IconButton, Tooltip } from '@mui/material'
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
+import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import { Story, StoryStatus } from '../../types'
 import StoryCard from '../StoryCard/StoryCard'
 
@@ -7,12 +9,98 @@ interface ColumnProps {
   label: string
   color: string
   stories: Story[]
+  isCollapsed?: boolean
+  onToggleCollapse?: () => void
 }
 
-// status is part of the interface for type checking but not directly used in rendering
-
-export default function Column({ status: _status, label, color, stories }: ColumnProps) {
+export default function Column({
+  status: _status,
+  label,
+  color,
+  stories,
+  isCollapsed = false,
+  onToggleCollapse
+}: ColumnProps) {
   void _status // Used for type discrimination
+
+  // Collapsed view - thin vertical bar
+  if (isCollapsed) {
+    return (
+      <Paper
+        elevation={0}
+        onClick={onToggleCollapse}
+        sx={{
+          width: 48,
+          flexShrink: 0,
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          bgcolor: 'background.default',
+          border: 1,
+          borderColor: 'divider',
+          borderRadius: 2,
+          overflow: 'hidden',
+          cursor: 'pointer',
+          transition: 'all 0.2s ease',
+          '&:hover': {
+            bgcolor: 'action.hover'
+          }
+        }}
+      >
+        {/* Collapsed Header */}
+        <Box
+          sx={{
+            py: 1.5,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 1
+          }}
+        >
+          <ChevronRightIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+          <Box
+            sx={{
+              width: 12,
+              height: 12,
+              borderRadius: '50%',
+              bgcolor: color
+            }}
+          />
+          <Chip
+            label={stories.length}
+            size="small"
+            sx={{
+              height: 20,
+              minWidth: 24,
+              bgcolor: 'action.hover',
+              fontWeight: 600,
+              fontSize: '0.7rem',
+              '& .MuiChip-label': { px: 0.75 }
+            }}
+          />
+        </Box>
+
+        {/* Rotated Label */}
+        <Typography
+          variant="caption"
+          fontWeight={600}
+          sx={{
+            writingMode: 'vertical-rl',
+            textOrientation: 'mixed',
+            transform: 'rotate(180deg)',
+            color: 'text.secondary',
+            mt: 1,
+            letterSpacing: '0.05em'
+          }}
+        >
+          {label}
+        </Typography>
+      </Paper>
+    )
+  }
+
+  // Expanded view
   return (
     <Paper
       elevation={0}
@@ -26,22 +114,36 @@ export default function Column({ status: _status, label, color, stories }: Colum
         border: 1,
         borderColor: 'divider',
         borderRadius: 2,
-        overflow: 'hidden'
+        overflow: 'hidden',
+        transition: 'width 0.2s ease'
       }}
     >
       {/* Column Header */}
       <Box
         sx={{
-          px: 2,
-          py: 1.5,
+          px: 1.5,
+          py: 1,
           bgcolor: 'background.paper',
           borderBottom: 1,
           borderColor: 'divider',
           display: 'flex',
           alignItems: 'center',
-          gap: 1.5
+          gap: 1
         }}
       >
+        <Tooltip title="Collapse column">
+          <IconButton
+            size="small"
+            onClick={onToggleCollapse}
+            sx={{
+              p: 0.25,
+              color: 'text.secondary',
+              '&:hover': { color: 'text.primary' }
+            }}
+          >
+            <ChevronLeftIcon sx={{ fontSize: 18 }} />
+          </IconButton>
+        </Tooltip>
         <Box
           sx={{
             width: 12,
