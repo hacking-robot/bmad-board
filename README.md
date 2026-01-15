@@ -11,7 +11,7 @@
 
 ## Features
 
-- **Kanban Board**: Organize stories across columns (Backlog, Ready for Dev, In Progress, Review, Done)
+- **Sprint Board**: Visualize stories across columns (Backlog, Ready for Dev, In Progress, Review, Done)
 - **Epic Organization**: Stories grouped by epic with color-coded badges
 - **Story Details**: View acceptance criteria, tasks, subtasks, and file changes
 - **Search & Filter**: Find stories by text or filter by epic
@@ -20,16 +20,15 @@
 - **Collapsible Columns**: Minimize columns to focus on active work
 - **Command Palette**: Quick access to actions with keyboard shortcuts
 
-## Installation
+## Download
 
-### From Release
+| Platform | Download |
+|----------|----------|
+| macOS | [![Download for macOS](https://img.shields.io/badge/Download-.dmg-E97451)](https://github.com/hacking-robot/bmad-board/releases/latest) |
+| Windows | [![Download for Windows](https://img.shields.io/badge/Download-.exe-E97451)](https://github.com/hacking-robot/bmad-board/releases/latest) |
+| Linux | [![Download for Linux](https://img.shields.io/badge/Download-.AppImage-E97451)](https://github.com/hacking-robot/bmad-board/releases/latest) |
 
-Download the latest release for your platform:
-- **macOS**: `.dmg` installer
-- **Windows**: `.exe` installer
-- **Linux**: `.AppImage`
-
-### From Source
+## Build from Source
 
 ```bash
 # Clone the repository
