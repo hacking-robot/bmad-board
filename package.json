@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build && electron-builder",
+    "build:dev": "tsc && vite build && electron-builder --mac --arm64",
     "preview": "vite preview",
     "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
     "typecheck": "tsc --noEmit",
@@ -28,6 +29,7 @@
     "zustand": "^5.0.2"
   },
   "devDependencies": {
+    "@electron/notarize": "^3.1.1",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@types/react-syntax-highlighter": "^15.5.13",
@@ -54,10 +56,31 @@
       "dist-electron/**/*"
     ],
     "mac": {
-      "target": "dmg",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
       "icon": "build/icon.icns",
-      "identity": null
+      "identity": "David Soyez (3SWR3Y8WU5)",
+      "teamId": "3SWR3Y8WU5",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
     },
+    "afterSign": "scripts/notarize.js",
     "win": {
       "target": "nsis",
       "icon": "build/icon.png"
