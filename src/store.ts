@@ -50,7 +50,7 @@ const electronStorage = {
       const parsed = JSON.parse(value)
       if (parsed.state) {
         // Only save the settings we care about
-        const { themeMode, projectPath, projectType, selectedEpicId, collapsedColumnsByEpic, agentHistory, recentProjects, enableAgents } = parsed.state
+        const { themeMode, projectPath, projectType, selectedEpicId, collapsedColumnsByEpic, agentHistory, recentProjects } = parsed.state
 
         // Don't persist full output - it can contain characters that break JSON
         // Just save metadata and a small summary
@@ -60,6 +60,7 @@ const electronStorage = {
         }))
 
         // Use debounced save to prevent rapid writes
+        // Note: enableAgents is intentionally NOT persisted - must re-enable each session
         debouncedSave({
           themeMode,
           projectPath,
@@ -67,8 +68,7 @@ const electronStorage = {
           selectedEpicId,
           collapsedColumnsByEpic,
           agentHistory: sanitizedHistory,
-          recentProjects: recentProjects || [],
-          enableAgents: enableAgents || false
+          recentProjects: recentProjects || []
         })
       }
     } catch (error) {
