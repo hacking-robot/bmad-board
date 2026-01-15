@@ -17,6 +17,8 @@ export function useProjectData() {
     setStories,
     setLoading,
     setError,
+    setLastRefreshed,
+    setIsWatching,
     setStoryContent,
     selectedStory
   } = useStore()
@@ -118,12 +120,13 @@ export function useProjectData() {
 
       setEpics(epics)
       setStories(stories)
+      setLastRefreshed(new Date())
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load project data')
     } finally {
       setLoading(false)
     }
-  }, [projectPath, projectType, setEpics, setStories, setLoading, setError])
+  }, [projectPath, projectType, setEpics, setStories, setLoading, setError, setLastRefreshed])
 
   const loadStoryContent = useCallback(async (story: typeof selectedStory) => {
     if (!story?.filePath) {
@@ -153,6 +156,7 @@ export function useProjectData() {
 
       // Start watching for file changes
       window.fileAPI.startWatching(projectPath, projectType)
+      setIsWatching(true)
 
       // Listen for file changes
       const cleanup = window.fileAPI.onFilesChanged(() => {
@@ -164,9 +168,10 @@ export function useProjectData() {
       return () => {
         cleanup()
         window.fileAPI.stopWatching()
+        setIsWatching(false)
       }
     }
-  }, [_hasHydrated, projectPath, projectType, loadProjectData])
+  }, [_hasHydrated, projectPath, projectType, loadProjectData, setIsWatching])
 
   // Load story content when selected story changes
   useEffect(() => {

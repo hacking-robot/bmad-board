@@ -13,6 +13,8 @@ import {
 import FolderIcon from '@mui/icons-material/Folder'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import KeyboardIcon from '@mui/icons-material/Keyboard'
+import CategoryIcon from '@mui/icons-material/Category'
+import AllInclusiveIcon from '@mui/icons-material/AllInclusive'
 import { useStore } from '../../store'
 import { useProjectData } from '../../hooks/useProjectData'
 
@@ -38,13 +40,16 @@ const truncatePath = (path: string, maxLength: number = 50) => {
 
 export default function CommandPalette() {
   const [open, setOpen] = useState(false)
-  const [inputValue, setInputValue] = useState('project:')
+  const [inputValue, setInputValue] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLUListElement>(null)
 
   const projectPath = useStore((state) => state.projectPath)
   const recentProjects = useStore((state) => state.recentProjects)
+  const epics = useStore((state) => state.epics)
+  const selectedEpicId = useStore((state) => state.selectedEpicId)
+  const setSelectedEpicId = useStore((state) => state.setSelectedEpicId)
   const { selectProject, switchToProject } = useProjectData()
 
   // Define command types
@@ -85,6 +90,41 @@ export default function CommandPalette() {
       }
     },
     {
+      prefix: 'epic:',
+      label: 'Epics',
+      getItems: () => {
+        const items: CommandItem[] = []
+
+        // Add "All Epics" option
+        items.push({
+          id: 'epic:all',
+          label: 'All Epics',
+          description: 'Show stories from all epics',
+          icon: <AllInclusiveIcon sx={{ color: selectedEpicId === null ? 'primary.main' : 'text.secondary' }} />,
+          action: () => {
+            setSelectedEpicId(null)
+            setOpen(false)
+          }
+        })
+
+        // Add each epic
+        epics.forEach((epic) => {
+          items.push({
+            id: `epic:${epic.id}`,
+            label: epic.name,
+            description: `Epic ${epic.id} · ${epic.stories.length} stories`,
+            icon: <CategoryIcon sx={{ color: selectedEpicId === epic.id ? 'primary.main' : 'text.secondary' }} />,
+            action: () => {
+              setSelectedEpicId(epic.id)
+              setOpen(false)
+            }
+          })
+        })
+
+        return items
+      }
+    },
+    {
       prefix: '>',
       label: 'Commands',
       getItems: () => [
@@ -110,7 +150,7 @@ export default function CommandPalette() {
         }
       ]
     }
-  ], [recentProjects, projectPath, switchToProject, selectProject])
+  ], [recentProjects, projectPath, switchToProject, selectProject, epics, selectedEpicId, setSelectedEpicId])
 
   // Parse input to get active prefix and search query
   const { activeType, searchQuery } = useMemo(() => {
@@ -144,6 +184,8 @@ export default function CommandPalette() {
           action: () => {
             setInputValue(type.prefix)
             setSelectedIndex(0)
+            // Keep focus on input for continued typing
+            setTimeout(() => searchInputRef.current?.focus(), 0)
           }
         }))
     }
@@ -185,8 +227,8 @@ export default function CommandPalette() {
       }, 50)
       return () => clearTimeout(timer)
     } else {
-      // Reset to default when closing
-      setInputValue('project:')
+      // Reset when closing
+      setInputValue('')
       setSelectedIndex(0)
     }
   }, [open])
@@ -217,7 +259,7 @@ export default function CommandPalette() {
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
       setSelectedIndex((prev) => Math.max(prev - 1, 0))
-    } else if (e.key === 'Enter') {
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
       e.preventDefault()
       const selectedItem = filteredItems[selectedIndex]
       if (selectedItem) {

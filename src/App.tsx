@@ -9,6 +9,7 @@ import WelcomeDialog from './components/WelcomeDialog/WelcomeDialog'
 import AgentPanel from './components/AgentPanel/AgentPanel'
 import CommandPalette from './components/CommandPalette'
 import KeyboardShortcuts from './components/KeyboardShortcuts'
+import StatusBar from './components/StatusBar'
 
 const AGENT_PANEL_WIDTH = 500
 
@@ -73,6 +74,7 @@ export default function App() {
             >
               <Header />
               <Board />
+              <StatusBar />
             </Box>
             <AgentPanel />
             <StoryDialog />
