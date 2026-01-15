@@ -17,6 +17,7 @@ export default function StoryCard({ story }: StoryCardProps) {
   const setActiveAgent = useStore((state) => state.setActiveAgent)
   const setAgentPanelOpen = useStore((state) => state.setAgentPanelOpen)
   const agents = useStore((state) => state.agents)
+  const enableAgents = useStore((state) => state.enableAgents)
 
   const epicColor = EPIC_COLORS[(story.epicId - 1) % EPIC_COLORS.length]
   const agentAction = AGENT_ACTIONS[story.status]
@@ -163,7 +164,7 @@ export default function StoryCard({ story }: StoryCardProps) {
         )}
 
         {/* Agent Action Button */}
-        {agentAction && (
+        {enableAgents && agentAction && (
           <Box sx={{ mt: 1.5 }}>
             <Button
               size="small"
