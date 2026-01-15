@@ -7,7 +7,7 @@
 
 ---
 
-![BMad Board Screenshot](assets/screenshot.png)
+<img src="assets/screenshot.png" alt="BMad Board Screenshot" width="100%">
 
 ## Features
 
