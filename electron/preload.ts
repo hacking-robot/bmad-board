@@ -4,7 +4,7 @@ export interface AppSettings {
   themeMode: 'light' | 'dark'
   projectPath: string | null
   selectedEpicId: number | null
-  collapsedColumns: string[]
+  collapsedColumnsByEpic: Record<string, string[]>
 }
 
 export interface FileAPI {

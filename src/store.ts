@@ -17,8 +17,8 @@ const electronStorage = {
       const parsed = JSON.parse(value)
       if (parsed.state) {
         // Only save the settings we care about
-        const { themeMode, projectPath, selectedEpicId, collapsedColumns } = parsed.state
-        await window.fileAPI.saveSettings({ themeMode, projectPath, selectedEpicId, collapsedColumns })
+        const { themeMode, projectPath, selectedEpicId, collapsedColumnsByEpic } = parsed.state
+        await window.fileAPI.saveSettings({ themeMode, projectPath, selectedEpicId, collapsedColumnsByEpic })
       }
     } catch (error) {
       console.error('Failed to save settings:', error)
@@ -29,7 +29,7 @@ const electronStorage = {
       themeMode: 'light',
       projectPath: null,
       selectedEpicId: null,
-      collapsedColumns: []
+      collapsedColumnsByEpic: {}
     })
   }
 }
@@ -64,9 +64,10 @@ interface AppState {
   searchQuery: string
   setSearchQuery: (query: string) => void
 
-  // Column collapse state
-  collapsedColumns: StoryStatus[]
+  // Column collapse state (per epic)
+  collapsedColumnsByEpic: Record<string, StoryStatus[]>
   toggleColumnCollapse: (status: StoryStatus) => void
+  getCollapsedColumns: () => StoryStatus[]
 
   // Story dialog
   selectedStory: Story | null
@@ -112,16 +113,26 @@ export const useStore = create<AppState>()(
       searchQuery: '',
       setSearchQuery: (query) => set({ searchQuery: query }),
 
-      // Column collapse state
-      collapsedColumns: [],
+      // Column collapse state (per epic)
+      collapsedColumnsByEpic: {},
       toggleColumnCollapse: (status) => set((state) => {
-        const isCollapsed = state.collapsedColumns.includes(status)
+        const epicKey = state.selectedEpicId === null ? 'all' : String(state.selectedEpicId)
+        const currentCollapsed = state.collapsedColumnsByEpic[epicKey] || []
+        const isCollapsed = currentCollapsed.includes(status)
         return {
-          collapsedColumns: isCollapsed
-            ? state.collapsedColumns.filter((s) => s !== status)
-            : [...state.collapsedColumns, status]
+          collapsedColumnsByEpic: {
+            ...state.collapsedColumnsByEpic,
+            [epicKey]: isCollapsed
+              ? currentCollapsed.filter((s) => s !== status)
+              : [...currentCollapsed, status]
+          }
         }
       }),
+      getCollapsedColumns: () => {
+        const state = get()
+        const epicKey = state.selectedEpicId === null ? 'all' : String(state.selectedEpicId)
+        return state.collapsedColumnsByEpic[epicKey] || []
+      },
 
       // Story dialog
       selectedStory: null,

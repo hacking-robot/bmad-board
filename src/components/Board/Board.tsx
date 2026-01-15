@@ -10,8 +10,14 @@ export default function Board() {
   const allStories = useStore((state) => state.stories)
   const selectedEpicId = useStore((state) => state.selectedEpicId)
   const searchQuery = useStore((state) => state.searchQuery)
-  const collapsedColumns = useStore((state) => state.collapsedColumns)
+  const collapsedColumnsByEpic = useStore((state) => state.collapsedColumnsByEpic)
   const toggleColumnCollapse = useStore((state) => state.toggleColumnCollapse)
+
+  // Get collapsed columns for current epic
+  const collapsedColumns = useMemo(() => {
+    const epicKey = selectedEpicId === null ? 'all' : String(selectedEpicId)
+    return collapsedColumnsByEpic[epicKey] || []
+  }, [collapsedColumnsByEpic, selectedEpicId])
 
   // Filter stories reactively when filter state changes
   const stories = useMemo(() => {
