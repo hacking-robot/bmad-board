@@ -1,0 +1,77 @@
+export type StoryStatus = 'backlog' | 'ready-for-dev' | 'in-progress' | 'review' | 'done' | 'optional'
+
+export interface Epic {
+  id: number
+  name: string
+  goal: string
+  status: StoryStatus
+  stories: Story[]
+}
+
+export interface Story {
+  id: string // e.g., "1-1-place-nand-gates"
+  epicId: number
+  storyNumber: number
+  title: string
+  slug: string
+  status: StoryStatus
+  filePath?: string
+  // Parsed content (loaded on demand)
+  content?: StoryContent
+}
+
+export interface StoryContent {
+  rawMarkdown: string
+  description: string // The "As a... I want... so that..." part
+  acceptanceCriteria: AcceptanceCriterion[]
+  tasks: Task[]
+  devNotes: string
+  fileChanges?: FileChanges
+}
+
+export interface AcceptanceCriterion {
+  id: string
+  title: string
+  description: string
+}
+
+export interface Task {
+  id: string
+  title: string
+  completed: boolean
+  subtasks: Subtask[]
+}
+
+export interface Subtask {
+  id: string
+  title: string
+  completed: boolean
+}
+
+export interface FileChanges {
+  created: string[]
+  modified: string[]
+  verified: string[]
+}
+
+// Column configuration for the board
+export const STATUS_COLUMNS: { status: StoryStatus; label: string; color: string }[] = [
+  { status: 'backlog', label: 'Backlog', color: '#9e9e9e' },
+  { status: 'ready-for-dev', label: 'Ready for Dev', color: '#2196f3' },
+  { status: 'in-progress', label: 'In Progress', color: '#ff9800' },
+  { status: 'review', label: 'Review', color: '#9c27b0' },
+  { status: 'done', label: 'Done', color: '#4caf50' }
+]
+
+// Epic colors for badges
+export const EPIC_COLORS: string[] = [
+  '#1976d2', // Blue
+  '#388e3c', // Green
+  '#f57c00', // Orange
+  '#7b1fa2', // Purple
+  '#c62828', // Red
+  '#00838f', // Cyan
+  '#5d4037', // Brown
+  '#455a64', // Blue Grey
+  '#ad1457'  // Pink
+]
