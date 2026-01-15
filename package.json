@@ -74,7 +74,6 @@
       ],
       "icon": "build/icon.icns",
       "identity": "David Soyez (3SWR3Y8WU5)",
-      "teamId": "3SWR3Y8WU5",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
