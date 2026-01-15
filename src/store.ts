@@ -1,8 +1,16 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import { Epic, Story, StoryContent, StoryStatus, Agent, ProjectType, AgentHistoryEntry } from './types'
+import { Epic, Story, StoryContent, StoryStatus, Agent, AgentHistoryEntry } from './types'
+import type { ProjectType } from './utils/projectTypes'
+
+export interface RecentProject {
+  path: string
+  projectType: ProjectType
+  name: string
+}
 
 const MAX_HISTORY_ENTRIES = 50
+const MAX_RECENT_PROJECTS = 10
 
 // Debounce settings saves to prevent rapid writes that corrupt the file
 let saveTimeout: NodeJS.Timeout | null = null
@@ -43,7 +51,7 @@ const electronStorage = {
       const parsed = JSON.parse(value)
       if (parsed.state) {
         // Only save the settings we care about
-        const { themeMode, projectPath, selectedEpicId, collapsedColumnsByEpic, agentHistory } = parsed.state
+        const { themeMode, projectPath, projectType, selectedEpicId, collapsedColumnsByEpic, agentHistory, recentProjects } = parsed.state
 
         // Don't persist full output - it can contain characters that break JSON
         // Just save metadata and a small summary
@@ -56,9 +64,11 @@ const electronStorage = {
         debouncedSave({
           themeMode,
           projectPath,
+          projectType,
           selectedEpicId,
           collapsedColumnsByEpic,
-          agentHistory: sanitizedHistory
+          agentHistory: sanitizedHistory,
+          recentProjects: recentProjects || []
         })
       }
     } catch (error) {
@@ -69,9 +79,11 @@ const electronStorage = {
     await window.fileAPI.saveSettings({
       themeMode: 'light',
       projectPath: null,
+      projectType: null,
       selectedEpicId: null,
       collapsedColumnsByEpic: {},
-      agentHistory: []
+      agentHistory: [],
+      recentProjects: []
     })
   }
 }
@@ -88,7 +100,14 @@ interface AppState {
 
   // Project
   projectPath: string | null
+  projectType: ProjectType | null
   setProjectPath: (path: string | null) => void
+  setProjectType: (type: ProjectType | null) => void
+
+  // Recent Projects
+  recentProjects: RecentProject[]
+  addRecentProject: (project: RecentProject) => void
+  removeRecentProject: (path: string) => void
 
   // Data
   epics: Epic[]
@@ -121,7 +140,6 @@ interface AppState {
   agents: Record<string, Agent>
   activeAgentId: string | null
   agentPanelOpen: boolean
-  projectType: ProjectType
   addAgent: (agent: Agent) => void
   updateAgent: (agentId: string, updates: Partial<Agent>) => void
   appendAgentOutput: (agentId: string, output: string) => void
@@ -129,7 +147,6 @@ interface AppState {
   setActiveAgent: (agentId: string | null) => void
   toggleAgentPanel: () => void
   setAgentPanelOpen: (open: boolean) => void
-  setProjectType: (type: ProjectType) => void
   getAgentForStory: (storyId: string) => Agent | null
 
   // Agent History (persisted)
@@ -159,7 +176,22 @@ export const useStore = create<AppState>()(
 
       // Project
       projectPath: null,
+      projectType: null,
       setProjectPath: (path) => set({ projectPath: path }),
+      setProjectType: (type) => set({ projectType: type }),
+
+      // Recent Projects
+      recentProjects: [],
+      addRecentProject: (project) => set((state) => {
+        // Remove if already exists (to move it to top)
+        const filtered = state.recentProjects.filter((p) => p.path !== project.path)
+        // Add to beginning and limit to max
+        const updated = [project, ...filtered].slice(0, MAX_RECENT_PROJECTS)
+        return { recentProjects: updated }
+      }),
+      removeRecentProject: (path) => set((state) => ({
+        recentProjects: state.recentProjects.filter((p) => p.path !== path)
+      })),
 
       // Data
       epics: [],
@@ -208,7 +240,6 @@ export const useStore = create<AppState>()(
       agents: {},
       activeAgentId: null,
       agentPanelOpen: false,
-      projectType: 'bmad',
       addAgent: (agent) => set((state) => ({
         agents: { ...state.agents, [agent.id]: agent }
       })),
@@ -245,7 +276,6 @@ export const useStore = create<AppState>()(
       setActiveAgent: (agentId) => set({ activeAgentId: agentId }),
       toggleAgentPanel: () => set((state) => ({ agentPanelOpen: !state.agentPanelOpen })),
       setAgentPanelOpen: (open) => set({ agentPanelOpen: open }),
-      setProjectType: (type) => set({ projectType: type }),
       getAgentForStory: (storyId) => {
         const { agents } = get()
         return Object.values(agents).find((a) => a.storyId === storyId) || null

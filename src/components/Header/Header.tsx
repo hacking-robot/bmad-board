@@ -8,26 +8,23 @@ import {
   Badge
 } from '@mui/material'
 import DashboardIcon from '@mui/icons-material/Dashboard'
-import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import TerminalIcon from '@mui/icons-material/Terminal'
 import SearchBar from '../SearchBar/SearchBar'
 import EpicFilter from '../EpicFilter/EpicFilter'
 import ThemeToggle from '../ThemeToggle/ThemeToggle'
+import SettingsMenu from '../SettingsMenu'
+import ProjectSwitcher from '../ProjectSwitcher'
 import { useStore } from '../../store'
 import { useProjectData } from '../../hooks/useProjectData'
 
 export default function Header() {
-  const projectPath = useStore((state) => state.projectPath)
   const agents = useStore((state) => state.agents)
   const agentPanelOpen = useStore((state) => state.agentPanelOpen)
   const toggleAgentPanel = useStore((state) => state.toggleAgentPanel)
-  const { selectProject, loadProjectData } = useProjectData()
+  const { loadProjectData } = useProjectData()
 
   const runningAgentsCount = Object.values(agents).filter((a) => a.status === 'running').length
-
-  // Extract project name from path
-  const projectName = projectPath?.split('/').pop() || 'BMad Board'
 
   return (
     <AppBar
@@ -80,20 +77,8 @@ export default function Header() {
         {/* Spacer */}
         <Box sx={{ flexGrow: 1 }} />
 
-        {/* Center section - Project Name (absolutely positioned) */}
-        <Typography
-          variant="h6"
-          color="text.primary"
-          fontWeight={600}
-          sx={{
-            position: 'absolute',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            whiteSpace: 'nowrap'
-          }}
-        >
-          {projectName}
-        </Typography>
+        {/* Center section - Project Switcher (absolutely positioned) */}
+        <ProjectSwitcher />
 
         {/* Right section - Search, Filter, Actions */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -126,16 +111,8 @@ export default function Header() {
                 <RefreshIcon />
               </IconButton>
             </Tooltip>
-            <Tooltip title="Change Project">
-              <IconButton
-                onClick={selectProject}
-                size="small"
-                sx={{ color: 'text.secondary' }}
-              >
-                <FolderOpenIcon />
-              </IconButton>
-            </Tooltip>
             <ThemeToggle />
+            <SettingsMenu />
           </Box>
         </Box>
       </Toolbar>

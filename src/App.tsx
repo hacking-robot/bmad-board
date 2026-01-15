@@ -7,6 +7,8 @@ import Board from './components/Board/Board'
 import StoryDialog from './components/StoryDialog/StoryDialog'
 import WelcomeDialog from './components/WelcomeDialog/WelcomeDialog'
 import AgentPanel from './components/AgentPanel/AgentPanel'
+import CommandPalette from './components/CommandPalette'
+import KeyboardShortcuts from './components/KeyboardShortcuts'
 
 const AGENT_PANEL_WIDTH = 500
 
@@ -44,6 +46,8 @@ export default function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
+      <CommandPalette />
+      <KeyboardShortcuts />
       <Box
         sx={{
           height: '100vh',
