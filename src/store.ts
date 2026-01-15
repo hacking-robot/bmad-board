@@ -71,10 +71,14 @@ interface AppState {
   stories: Story[]
   loading: boolean
   error: string | null
+  lastRefreshed: Date | null
+  isWatching: boolean
   setEpics: (epics: Epic[]) => void
   setStories: (stories: Story[]) => void
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
+  setLastRefreshed: (date: Date | null) => void
+  setIsWatching: (watching: boolean) => void
 
   // Filters
   selectedEpicId: number | null
@@ -135,10 +139,14 @@ export const useStore = create<AppState>()(
       stories: [],
       loading: false,
       error: null,
+      lastRefreshed: null,
+      isWatching: false,
       setEpics: (epics) => set({ epics }),
       setStories: (stories) => set({ stories }),
       setLoading: (loading) => set({ loading }),
       setError: (error) => set({ error }),
+      setLastRefreshed: (date) => set({ lastRefreshed: date }),
+      setIsWatching: (watching) => set({ isWatching: watching }),
 
       // Filters
       selectedEpicId: null,

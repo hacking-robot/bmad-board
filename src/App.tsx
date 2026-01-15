@@ -8,6 +8,7 @@ import StoryDialog from './components/StoryDialog/StoryDialog'
 import WelcomeDialog from './components/WelcomeDialog/WelcomeDialog'
 import CommandPalette from './components/CommandPalette'
 import KeyboardShortcuts from './components/KeyboardShortcuts'
+import StatusBar from './components/StatusBar'
 
 export default function App() {
   const hasHydrated = useStore((state) => state._hasHydrated)
@@ -59,6 +60,7 @@ export default function App() {
           <>
             <Header />
             <Board />
+            <StatusBar />
             <StoryDialog />
           </>
         )}
