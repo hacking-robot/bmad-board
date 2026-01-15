@@ -1,6 +1,11 @@
-# BMad Board
+<div align="center">
+  <img src="assets/banner.png" alt="BMad Board" width="400">
+  <p><strong>A desktop sprint board for BMAD methodology projects</strong></p>
 
-A desktop sprint board application for managing BMAD methodology projects. Visualize your epics and stories in a Kanban-style interface.
+  ![License](https://img.shields.io/badge/license-MIT-blue) ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey) ![Electron](https://img.shields.io/badge/electron-33-47848F)
+</div>
+
+---
 
 ![BMad Board Screenshot](assets/screenshot.png)
 
