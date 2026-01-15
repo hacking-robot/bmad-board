@@ -2,6 +2,8 @@
 
 A desktop sprint board application for managing BMAD methodology projects. Visualize your epics and stories in a Kanban-style interface.
 
+![BMad Board Screenshot](assets/screenshot.png)
+
 ## Features
 
 - **Kanban Board**: Organize stories across columns (Backlog, Ready for Dev, In Progress, Review, Done)
