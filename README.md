@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="assets/banner.png" alt="BMad Board" width="400">
+  <img src="assets/banner.svg" alt="BMad Board" width="500">
   <p><strong>A desktop sprint board for BMAD methodology projects</strong></p>
 
   ![License](https://img.shields.io/badge/license-MIT-blue) ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey) ![Electron](https://img.shields.io/badge/electron-33-47848F)
