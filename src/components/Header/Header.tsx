@@ -44,7 +44,7 @@ export default function Header() {
           }
         }}
       >
-        {/* Left section - Logo */}
+        {/* Left section - Logo and App Name */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
           <Box
             sx={{
@@ -59,6 +59,14 @@ export default function Header() {
           >
             <DashboardIcon sx={{ fontSize: 22, color: 'white' }} />
           </Box>
+          <Typography
+            variant="subtitle1"
+            color="text.secondary"
+            fontWeight={500}
+            sx={{ whiteSpace: 'nowrap' }}
+          >
+            BMad Board
+          </Typography>
         </Box>
 
         {/* Spacer */}
