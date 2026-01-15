@@ -63,7 +63,7 @@ export default function Header() {
         {/* Left section - Logo and App Name */}
         <Box
           onClick={handleLogoClick}
-          sx={{ display: 'flex', alignItems: 'center', gap: 1.5, cursor: 'default', userSelect: 'none' }}
+          sx={{ display: 'flex', alignItems: 'center', gap: 1.5, cursor: 'default', userSelect: 'none', WebkitAppRegion: 'no-drag' }}
         >
           <Box
             sx={{
