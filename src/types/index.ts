@@ -78,7 +78,7 @@ export const EPIC_COLORS: string[] = [
 
 // Agent types
 export type AgentStatus = 'running' | 'completed' | 'error' | 'interrupted'
-export type ProjectType = 'bmad' | 'bmad-game'
+export type ProjectType = 'bmm' | 'bmgd'
 
 export interface Agent {
   id: string

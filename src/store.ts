@@ -1,7 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import { Epic, Story, StoryContent, StoryStatus, Agent, AgentHistoryEntry } from './types'
-import type { ProjectType } from './utils/projectTypes'
+import { Epic, Story, StoryContent, StoryStatus, Agent, ProjectType, AgentHistoryEntry } from './types'
 
 export interface RecentProject {
   path: string

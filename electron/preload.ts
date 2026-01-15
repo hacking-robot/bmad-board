@@ -117,7 +117,7 @@ export interface AgentAPI {
   getAgents: () => Promise<AgentInfo[]>
   getAgent: (agentId: string) => Promise<AgentInfo | null>
   getAgentForStory: (storyId: string) => Promise<string | null>
-  detectProjectType: (projectPath: string) => Promise<'bmad' | 'bmad-game'>
+  detectProjectType: (projectPath: string) => Promise<ProjectType>
   // Agent output file management
   appendOutput: (agentId: string, lines: string[]) => Promise<boolean>
   loadOutput: (agentId: string) => Promise<string[]>

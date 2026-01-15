@@ -431,22 +431,16 @@ ipcMain.handle('get-agent-for-story', async (_, storyId: string) => {
   return agentManager.hasAgentForStory(storyId)
 })
 
-// Detect project type (bmad vs bmad-game)
+// Detect project type (bmm vs bmgd structure)
 ipcMain.handle('detect-project-type', async (_, projectPath: string) => {
-  // Check for bmad-game markers
-  const gameMarkers = [
-    join(projectPath, '_bmad', 'bmad-game.md'),
-    join(projectPath, '_bmad', 'game-design-doc.md'),
-    join(projectPath, '.bmad-game')
-  ]
+  // Check for BMM structure (planning-artifacts directory with epics.md)
+  const bmmEpicsPath = join(projectPath, '_bmad-output', 'planning-artifacts', 'epics.md')
 
-  for (const marker of gameMarkers) {
-    if (existsSync(marker)) {
-      return 'bmad-game'
-    }
+  if (existsSync(bmmEpicsPath)) {
+    return 'bmm'
   }
 
-  return 'bmad'
+  return 'bmgd'
 })
 
 // Agent output file management
