@@ -88,12 +88,7 @@ const defaultSettings: AppSettings = {
   // Human Review defaults
   enableHumanReviewColumn: false,
   humanReviewChecklist: [
-    { id: 'code-quality', label: 'Code Quality Review', description: 'Code follows project standards and conventions' },
-    { id: 'test-coverage', label: 'Test Coverage', description: 'Adequate tests exist for new functionality' },
-    { id: 'documentation', label: 'Documentation Updated', description: 'README, comments, and docs are current' },
-    { id: 'security', label: 'Security Review', description: 'No security vulnerabilities introduced' },
-    { id: 'performance', label: 'Performance Check', description: 'No significant performance regressions' },
-    { id: 'ux-validation', label: 'UX Validation', description: 'UI changes match design requirements' }
+    { id: 'approved', label: 'Approved', description: 'Story implementation has been reviewed and approved' }
   ],
   humanReviewStates: {},
   humanReviewStories: []

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useRef } from 'react'
 import { Box, CircularProgress, Typography, Alert, Snackbar } from '@mui/material'
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, rectIntersection, closestCorners, CollisionDetection, PointerSensor, useSensor, useSensors, UniqueIdentifier } from '@dnd-kit/core'
 import { arrayMove } from '@dnd-kit/sortable'
@@ -38,6 +38,10 @@ export default function Board() {
   // Drag and drop state
   const [activeStory, setActiveStory] = useState<Story | null>(null)
   const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null)
+
+  // Ref for scrollable container to preserve scroll position
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const savedScrollPositionRef = useRef<number>(0)
 
   // Custom collision detection:
   // - Same column: use closestCorners for card-level detection (reordering with preview)
@@ -96,6 +100,8 @@ export default function Board() {
 
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event
+    // Save scroll position when drag starts
+    savedScrollPositionRef.current = scrollContainerRef.current?.scrollLeft || 0
     setActiveId(active.id)
     const story = allStories.find((s) => s.id === active.id)
     if (story) {
@@ -105,8 +111,17 @@ export default function Board() {
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event
+
+    // Use the scroll position saved at drag start
+    const savedScrollLeft = savedScrollPositionRef.current
+
     setActiveStory(null)
     setActiveId(null)
+
+    // Restore scroll position immediately after clearing drag state
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollLeft = savedScrollLeft
+    }
 
     if (!over) return
 
@@ -201,7 +216,17 @@ export default function Board() {
           setSnackbarMessage(`Moved "${story.title}" to ${newStatus}`)
           setSnackbarOpen(true)
           // Refresh stories to reflect the change
-          loadProjectData()
+          await loadProjectData()
+          // Restore scroll position multiple times to ensure it sticks
+          const restoreScroll = () => {
+            if (scrollContainerRef.current) {
+              scrollContainerRef.current.scrollLeft = savedScrollLeft
+            }
+          }
+          restoreScroll()
+          setTimeout(restoreScroll, 0)
+          setTimeout(restoreScroll, 50)
+          setTimeout(restoreScroll, 100)
         } else {
           setSnackbarMessage(`Failed to update status: ${result.error}`)
           setSnackbarOpen(true)
@@ -310,6 +335,7 @@ export default function Board() {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       collisionDetection={collisionDetection}
+      autoScroll={false}
     >
       <Box
         sx={{
@@ -319,6 +345,7 @@ export default function Board() {
         }}
       >
         <Box
+          ref={scrollContainerRef}
           sx={{
             position: 'absolute',
             top: 0,
@@ -330,6 +357,7 @@ export default function Board() {
             p: 2,
             overflowX: 'auto',
             overflowY: 'hidden',
+            overflowAnchor: 'none', // Prevent browser auto-scroll anchoring
             '&::-webkit-scrollbar': {
               height: 8
             },
