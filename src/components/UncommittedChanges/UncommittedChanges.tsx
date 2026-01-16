@@ -9,16 +9,18 @@ import {
   Button,
   CircularProgress
 } from '@mui/material'
-import EditNoteIcon from '@mui/icons-material/EditNote'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import CheckIcon from '@mui/icons-material/Check'
+import CompareArrowsIcon from '@mui/icons-material/CompareArrows'
 import { useStore } from '../../store'
+import GitDiffDialog from '../GitDiffDialog'
 
 export default function UncommittedChanges() {
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
   const [copiedCommand, setCopiedCommand] = useState<string | null>(null)
   const [committing, setCommitting] = useState(false)
   const [commitError, setCommitError] = useState<string | null>(null)
+  const [diffDialogOpen, setDiffDialogOpen] = useState(false)
 
   const projectPath = useStore((state) => state.projectPath)
   const stories = useStore((state) => state.stories)
@@ -141,7 +143,7 @@ export default function UncommittedChanges() {
             '&:hover': { bgcolor: 'action.hover' }
           }}
         >
-          <EditNoteIcon sx={{ fontSize: 16 }} />
+          <CompareArrowsIcon sx={{ fontSize: 16 }} />
         </IconButton>
       </Tooltip>
 
@@ -221,17 +223,38 @@ export default function UncommittedChanges() {
           </Tooltip>
         </Box>
 
-        <Button
-          variant="contained"
-          size="small"
-          fullWidth
-          onClick={handleCommit}
-          disabled={committing}
-          startIcon={committing ? <CircularProgress size={14} /> : undefined}
-        >
-          {committing ? 'Committing...' : 'Commit Changes'}
-        </Button>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={() => {
+              setDiffDialogOpen(true)
+              handleClose()
+            }}
+            startIcon={<CompareArrowsIcon />}
+            sx={{ flex: 1 }}
+          >
+            View Diff
+          </Button>
+          <Button
+            variant="contained"
+            size="small"
+            onClick={handleCommit}
+            disabled={committing}
+            startIcon={committing ? <CircularProgress size={14} /> : undefined}
+            sx={{ flex: 1 }}
+          >
+            {committing ? 'Committing...' : 'Commit'}
+          </Button>
+        </Box>
       </Popover>
+
+      {/* Git Diff Dialog */}
+      <GitDiffDialog
+        open={diffDialogOpen}
+        onClose={() => setDiffDialogOpen(false)}
+        branchName={branchName}
+      />
     </>
   )
 }
