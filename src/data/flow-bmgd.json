@@ -35,6 +35,14 @@
       "visible": true
     },
     {
+      "id": "human-review",
+      "label": "Human Review",
+      "color": "#E91E63",
+      "description": "Awaiting human review and approval. Complete all checklist items before moving to Done.",
+      "displayOrder": 4.5,
+      "visible": true
+    },
+    {
       "id": "done",
       "label": "Done",
       "color": "#10B981",
@@ -57,7 +65,10 @@
     { "from": "ready-for-dev", "to": "in-progress" },
     { "from": "in-progress", "to": "review" },
     { "from": "review", "to": "done" },
+    { "from": "review", "to": "human-review" },
     { "from": "review", "to": "in-progress" },
+    { "from": "human-review", "to": "done" },
+    { "from": "human-review", "to": "review" },
     { "from": "optional", "to": "ready-for-dev" }
   ],
   "statusActions": {
@@ -136,6 +147,35 @@
       ]
     },
     "review": {
+      "nextSteps": [
+        {
+          "label": "Code Review",
+          "agentId": "game-dev",
+          "command": "/bmad:bmgd:workflows:code-review",
+          "description": "Use Game Dev to review code changes",
+          "primary": true
+        },
+        {
+          "label": "Test Review",
+          "agentId": "game-qa",
+          "command": "/bmad:bmgd:workflows:gametest-test-review",
+          "description": "Use Game QA to review test coverage"
+        },
+        {
+          "label": "Playtest Plan",
+          "agentId": "game-qa",
+          "command": "/bmad:bmgd:workflows:gametest-playtest-plan",
+          "description": "Use Game QA to create playtest plan"
+        },
+        {
+          "label": "Correct Course",
+          "agentId": "game-dev",
+          "command": "/bmad:bmgd:workflows:correct-course",
+          "description": "Send back with corrections needed"
+        }
+      ]
+    },
+    "human-review": {
       "nextSteps": [
         {
           "label": "Code Review",

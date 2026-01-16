@@ -15,7 +15,9 @@ import {
   ListItemIcon,
   ListItemText,
   CircularProgress,
-  Tooltip
+  Tooltip,
+  Checkbox,
+  FormControlLabel
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
@@ -25,6 +27,7 @@ import AddIcon from '@mui/icons-material/Add'
 import EditIcon from '@mui/icons-material/Edit'
 import VerifiedIcon from '@mui/icons-material/Verified'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
+import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn'
 import ReactMarkdown, { Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
@@ -78,14 +81,20 @@ export default function StoryDialog() {
   const selectedStory = useStore((state) => state.selectedStory)
   const storyContent = useStore((state) => state.storyContent)
   const setSelectedStory = useStore((state) => state.setSelectedStory)
+  const humanReviewChecklist = useStore((state) => state.humanReviewChecklist)
+  const humanReviewStates = useStore((state) => state.humanReviewStates)
+  const toggleReviewItem = useStore((state) => state.toggleReviewItem)
+  const getEffectiveStatus = useStore((state) => state.getEffectiveStatus)
+
   const handleClose = () => {
     setSelectedStory(null)
   }
 
   if (!selectedStory) return null
 
+  const effectiveStatus = getEffectiveStatus(selectedStory)
   const epicColor = EPIC_COLORS[(selectedStory.epicId - 1) % EPIC_COLORS.length]
-  const statusConfig = STATUS_COLUMNS.find((c) => c.status === selectedStory.status)
+  const statusConfig = STATUS_COLUMNS.find((c) => c.status === effectiveStatus)
 
   return (
     <Dialog
@@ -119,7 +128,7 @@ export default function StoryDialog() {
               }}
             />
             <Chip
-              label={statusConfig?.label || selectedStory.status}
+              label={statusConfig?.label || effectiveStatus}
               size="small"
               sx={{
                 bgcolor: statusConfig?.color,
@@ -170,6 +179,69 @@ export default function StoryDialog() {
           </Box>
         ) : (
           <Box>
+            {/* Human Review Checklist - only shows for human-review status */}
+            {effectiveStatus === 'human-review' && humanReviewChecklist.length > 0 && (
+              <>
+                <Box sx={{ p: 3, bgcolor: 'action.hover' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                    <AssignmentTurnedInIcon color="primary" />
+                    <Typography variant="h6">
+                      Human Review Checklist ({(humanReviewStates[selectedStory.id]?.checkedItems.length || 0)}/{humanReviewChecklist.length})
+                    </Typography>
+                    <Tooltip title="Complete all items before moving to Done" arrow>
+                      <InfoOutlinedIcon sx={{ fontSize: 18, color: 'text.disabled', cursor: 'help' }} />
+                    </Tooltip>
+                  </Box>
+                  <List dense disablePadding>
+                    {humanReviewChecklist.map((item) => {
+                      const isChecked = humanReviewStates[selectedStory.id]?.checkedItems.includes(item.id) || false
+                      return (
+                        <ListItem key={item.id} sx={{ px: 0, py: 0.5 }}>
+                          <FormControlLabel
+                            control={
+                              <Checkbox
+                                checked={isChecked}
+                                onChange={() => toggleReviewItem(selectedStory.id, item.id)}
+                                color="success"
+                              />
+                            }
+                            label={
+                              <Box>
+                                <Typography fontWeight={500} sx={{ color: isChecked ? 'text.secondary' : 'text.primary' }}>
+                                  {item.label}
+                                </Typography>
+                                {item.description && (
+                                  <Typography variant="caption" color="text.secondary" display="block">
+                                    {item.description}
+                                  </Typography>
+                                )}
+                              </Box>
+                            }
+                            sx={{ alignItems: 'flex-start', '& .MuiFormControlLabel-label': { pt: 0.5 } }}
+                          />
+                        </ListItem>
+                      )
+                    })}
+                  </List>
+
+                  {/* Progress indicator */}
+                  <Box sx={{ mt: 2, p: 2, bgcolor: 'background.paper', borderRadius: 1, border: 1, borderColor: 'divider' }}>
+                    <Typography
+                      variant="body2"
+                      color={(humanReviewStates[selectedStory.id]?.checkedItems.length || 0) === humanReviewChecklist.length ? 'success.main' : 'text.secondary'}
+                      fontWeight={500}
+                    >
+                      {(humanReviewStates[selectedStory.id]?.checkedItems.length || 0) === humanReviewChecklist.length
+                        ? 'All items approved. Ready to move to Done.'
+                        : `${humanReviewChecklist.length - (humanReviewStates[selectedStory.id]?.checkedItems.length || 0)} item(s) remaining to review.`
+                      }
+                    </Typography>
+                  </Box>
+                </Box>
+                <Divider />
+              </>
+            )}
+
             {/* Story Description */}
             <Box sx={{ p: 3 }}>
               <Typography variant="h6" gutterBottom>

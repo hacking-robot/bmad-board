@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Box, CircularProgress, Typography, Alert, Snackbar } from '@mui/material'
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, pointerWithin } from '@dnd-kit/core'
+import { arrayMove } from '@dnd-kit/sortable'
 import { useStore } from '../../store'
 import { useProjectData } from '../../hooks/useProjectData'
 import { STATUS_COLUMNS, Story, StoryStatus } from '../../types'
@@ -16,6 +17,13 @@ export default function Board() {
   const collapsedColumnsByEpic = useStore((state) => state.collapsedColumnsByEpic)
   const toggleColumnCollapse = useStore((state) => state.toggleColumnCollapse)
   const setIsUserDragging = useStore((state) => state.setIsUserDragging)
+  const storyOrder = useStore((state) => state.storyOrder)
+  const setStoryOrder = useStore((state) => state.setStoryOrder)
+  const enableHumanReviewColumn = useStore((state) => state.enableHumanReviewColumn)
+  const humanReviewStories = useStore((state) => state.humanReviewStories)
+  const addToHumanReview = useStore((state) => state.addToHumanReview)
+  const removeFromHumanReview = useStore((state) => state.removeFromHumanReview)
+  const getEffectiveStatus = useStore((state) => state.getEffectiveStatus)
   const { loadProjectData } = useProjectData()
 
   // Drag and drop state
@@ -38,29 +46,95 @@ export default function Board() {
     if (!over) return
 
     const storyId = active.id as string
-    const newStatus = over.id as StoryStatus
     const story = allStories.find((s) => s.id === storyId)
+    if (!story) return
 
-    if (!story || story.status === newStatus) return
+    const overId = over.id as string
+    const epicKey = selectedEpicId === null ? 'all' : String(selectedEpicId)
 
-    // Update the story status in sprint-status.yaml
-    if (story.filePath) {
-      // Set flag to prevent notification for user's own drag action
-      setIsUserDragging(true)
-      const result = await window.fileAPI.updateStoryStatus(story.filePath, newStatus)
-      if (result.success) {
-        setSnackbarMessage(`Moved "${story.title}" to ${newStatus}`)
-        setSnackbarOpen(true)
-        // Refresh stories to reflect the change
-        loadProjectData()
-      } else {
-        setSnackbarMessage(`Failed to update status: ${result.error}`)
-        setSnackbarOpen(true)
-        setIsUserDragging(false)
+    // Check if we're dropping on another story (reorder within same column)
+    const overStory = allStories.find((s) => s.id === overId)
+    const storyEffectiveStatus = getEffectiveStatus(story)
+
+    if (overStory && getEffectiveStatus(overStory) === storyEffectiveStatus) {
+      // Reorder within the same column
+      const status = storyEffectiveStatus
+      const columnStories = allStories
+        .filter((s) => getEffectiveStatus(s) === status)
+        .filter((s) => selectedEpicId === null || s.epicId === selectedEpicId)
+
+      // Get current order or create from existing stories
+      const currentOrder = storyOrder[epicKey]?.[status] || columnStories.map(s => s.id)
+
+      // Ensure all stories in column are in the order array
+      const allIds = columnStories.map(s => s.id)
+      const orderedIds = currentOrder.filter(id => allIds.includes(id))
+      const missingIds = allIds.filter(id => !orderedIds.includes(id))
+      const fullOrder = [...orderedIds, ...missingIds]
+
+      const oldIndex = fullOrder.indexOf(storyId)
+      const newIndex = fullOrder.indexOf(overId)
+
+      if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
+        const newOrder = arrayMove(fullOrder, oldIndex, newIndex)
+        setStoryOrder(epicKey, status, newOrder)
       }
-    } else {
-      setSnackbarMessage('Cannot update story without a file path')
-      setSnackbarOpen(true)
+      return
+    }
+
+    // Check if we're dropping on a column (status change)
+    // Only allow dropping on visible columns
+    const validStatuses: string[] = STATUS_COLUMNS
+      .filter(c => c.status !== 'optional')
+      .filter(c => c.status !== 'human-review' || enableHumanReviewColumn)
+      .map(c => c.status)
+    if (validStatuses.includes(overId)) {
+      const newStatus = overId as StoryStatus
+      const currentEffectiveStatus = getEffectiveStatus(story)
+      if (currentEffectiveStatus === newStatus) return
+
+      // Handle human-review as app-level status (not written to BMAD)
+      if (newStatus === 'human-review') {
+        // Moving TO human-review: just add to app-level list
+        addToHumanReview(story.id)
+        setSnackbarMessage(`Moved "${story.title}" to Human Review`)
+        setSnackbarOpen(true)
+        return
+      }
+
+      // If moving FROM human-review to another status
+      const wasInHumanReview = humanReviewStories.includes(story.id)
+      if (wasInHumanReview) {
+        removeFromHumanReview(story.id)
+      }
+
+      // Update the story status in sprint-status.yaml (for real BMAD statuses)
+      if (story.filePath) {
+        // Set flag to prevent notification for user's own drag action
+        setIsUserDragging(true)
+        const result = await window.fileAPI.updateStoryStatus(story.filePath, newStatus)
+        if (result.success) {
+          setSnackbarMessage(`Moved "${story.title}" to ${newStatus}`)
+          setSnackbarOpen(true)
+          // Refresh stories to reflect the change
+          loadProjectData()
+        } else {
+          setSnackbarMessage(`Failed to update status: ${result.error}`)
+          setSnackbarOpen(true)
+          setIsUserDragging(false)
+          // Re-add to human review if the update failed and it was there before
+          if (wasInHumanReview) {
+            addToHumanReview(story.id)
+          }
+        }
+      } else {
+        setSnackbarMessage('Cannot update story without a file path')
+        setSnackbarOpen(true)
+        // Re-add to human review if no file path and it was there before
+        if (wasInHumanReview) {
+          addToHumanReview(story.id)
+        }
+      }
     }
   }
 
@@ -116,8 +190,35 @@ export default function Board() {
     )
   }
 
-  // Filter out 'optional' status which is only for retrospectives
-  const displayColumns = STATUS_COLUMNS.filter((col) => col.status !== 'optional')
+  // Filter out 'optional' status and conditionally filter 'human-review'
+  const displayColumns = STATUS_COLUMNS.filter((col) => {
+    if (col.status === 'optional') return false
+    if (col.status === 'human-review' && !enableHumanReviewColumn) return false
+    return true
+  })
+
+  // Helper to sort stories by persisted order
+  const sortStoriesByOrder = (columnStories: Story[], status: StoryStatus): Story[] => {
+    const epicKey = selectedEpicId === null ? 'all' : String(selectedEpicId)
+    const order = storyOrder[epicKey]?.[status]
+
+    if (!order || order.length === 0) {
+      return columnStories
+    }
+
+    // Sort by order, with stories not in order array at the end
+    return [...columnStories].sort((a, b) => {
+      const indexA = order.indexOf(a.id)
+      const indexB = order.indexOf(b.id)
+
+      // Stories not in order go to the end
+      if (indexA === -1 && indexB === -1) return 0
+      if (indexA === -1) return 1
+      if (indexB === -1) return -1
+
+      return indexA - indexB
+    })
+  }
 
   return (
     <DndContext
@@ -161,7 +262,8 @@ export default function Board() {
           }}
         >
           {displayColumns.map((column) => {
-            const columnStories = stories.filter((s) => s.status === column.status)
+            const columnStories = stories.filter((s) => getEffectiveStatus(s) === column.status)
+            const sortedStories = sortStoriesByOrder(columnStories, column.status)
 
             return (
               <Column
@@ -169,7 +271,7 @@ export default function Board() {
                 status={column.status}
                 label={column.label}
                 color={column.color}
-                stories={columnStories}
+                stories={sortedStories}
                 isCollapsed={collapsedColumns.includes(column.status)}
                 onToggleCollapse={() => toggleColumnCollapse(column.status)}
               />

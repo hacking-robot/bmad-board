@@ -30,6 +30,19 @@ export interface WindowBounds {
   isMaximized?: boolean
 }
 
+// Human Review checklist types (must match src/types/index.ts)
+export interface HumanReviewChecklistItem {
+  id: string
+  label: string
+  description?: string
+}
+
+export interface StoryReviewState {
+  storyId: string
+  checkedItems: string[]
+  lastUpdated: number
+}
+
 export interface AppSettings {
   themeMode: 'light' | 'dark'
   aiTool: AITool
@@ -41,6 +54,12 @@ export interface AppSettings {
   recentProjects: RecentProject[]
   windowBounds?: WindowBounds
   notificationsEnabled: boolean
+  storyOrder: Record<string, Record<string, string[]>> // { [epicId]: { [status]: [storyIds...] } }
+  // Human Review feature
+  enableHumanReviewColumn: boolean
+  humanReviewChecklist: HumanReviewChecklistItem[]
+  humanReviewStates: Record<string, StoryReviewState> // keyed by storyId
+  humanReviewStories: string[] // story IDs currently in human-review (app-level status override)
 }
 
 export interface FileAPI {

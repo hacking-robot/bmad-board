@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Card, CardContent, Typography, Box, Chip, Button, CircularProgress, Tooltip, IconButton, Menu, Snackbar } from '@mui/material'
-import { useDraggable } from '@dnd-kit/core'
+import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import DescriptionIcon from '@mui/icons-material/Description'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
@@ -13,6 +13,8 @@ import GitHubIcon from '@mui/icons-material/GitHub'
 import CompareArrowsIcon from '@mui/icons-material/CompareArrows'
 import AutorenewIcon from '@mui/icons-material/Autorenew'
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator'
+import ChecklistIcon from '@mui/icons-material/Checklist'
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline'
 import { Story, EPIC_COLORS } from '../../types'
 import { useStore } from '../../store'
 import { useWorkflow } from '../../hooks/useWorkflow'
@@ -31,8 +33,33 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
   const setAgentPanelOpen = useStore((state) => state.setAgentPanelOpen)
   const agents = useStore((state) => state.agents)
   const enableAgents = useStore((state) => state.enableAgents)
+  const humanReviewChecklist = useStore((state) => state.humanReviewChecklist)
+  const humanReviewStates = useStore((state) => state.humanReviewStates)
+  const getEffectiveStatus = useStore((state) => state.getEffectiveStatus)
+  const aiTool = useStore((state) => state.aiTool)
+
+  // Transform command based on selected AI tool
+  // Claude Code uses /command, others use *command (universal)
+  const transformCommand = (command: string | null | undefined): string => {
+    if (!command) return ''
+    if (aiTool === 'claude-code') {
+      // Claude Code uses slash commands as-is
+      return command
+    }
+    // For other tools, replace leading / with * (universal command syntax)
+    return command.replace(/^\//, '*')
+  }
 
   const { getNextSteps, getAgent, getPrimaryNextStep } = useWorkflow()
+
+  // Get effective status (may be overridden to 'human-review' at app level)
+  const effectiveStatus = getEffectiveStatus(story)
+
+  // Human review progress
+  const reviewState = humanReviewStates[story.id]
+  const checkedCount = reviewState?.checkedItems.length || 0
+  const totalItems = humanReviewChecklist.length
+  const allApproved = checkedCount === totalItems && totalItems > 0
 
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null)
   const [snackbarOpen, setSnackbarOpen] = useState(false)
@@ -41,14 +68,15 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
   const [isActivelyWorking, setIsActivelyWorking] = useState(false)
   const [diffDialogOpen, setDiffDialogOpen] = useState(false)
 
-  // Make card draggable
-  const { attributes, listeners, setNodeRef, transform, isDragging: isBeingDragged } = useDraggable({
+  // Make card sortable (draggable + reorderable)
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging: isBeingDragged } = useSortable({
     id: story.id
   })
-  const dragStyle = transform ? {
-    transform: CSS.Translate.toString(transform),
-    zIndex: 1000
-  } : undefined
+  const dragStyle = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isBeingDragged ? 1000 : undefined
+  }
 
   // Check if the story's branch exists and has recent activity
   useEffect(() => {
@@ -94,8 +122,8 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
   }, [projectPath, story.id, story.status])
 
   const epicColor = EPIC_COLORS[(story.epicId - 1) % EPIC_COLORS.length]
-  const nextSteps = getNextSteps(story.status)
-  const primaryStep = getPrimaryNextStep(story.status)
+  const nextSteps = getNextSteps(effectiveStatus)
+  const primaryStep = getPrimaryNextStep(effectiveStatus)
   const runningAgent = Object.values(agents).find((a) => a.storyId === story.id && a.status === 'running')
 
   const handleClick = () => {
@@ -127,7 +155,7 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
   // Git commands for committing (combined add + commit)
   const gitCommitImplementation = `git add . && git commit -m "feat(${branchName}): implement story ${story.epicId}.${story.storyNumber}"`
   const gitCommitComplete = `git add . && git commit -m "feat(${branchName}): complete story ${story.epicId}.${story.storyNumber}"`
-  const gitCommitCommand = story.status === 'review' ? gitCommitImplementation : gitCommitComplete
+  const gitCommitCommand = effectiveStatus === 'review' ? gitCommitImplementation : gitCommitComplete
 
   // Generate git commit command based on command name
   const getAgentGitCommand = (command: string): string => {
@@ -216,7 +244,6 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
         sx={{
           border: 1,
           borderColor: runningAgent ? 'success.main' : isDragging ? 'primary.main' : 'divider',
-          transition: isDragging ? 'none' : 'all 0.15s ease',
           position: 'relative',
           cursor: isDragging ? 'grabbing' : 'pointer',
           // Hide the original card when being dragged (DragOverlay shows the copy)
@@ -227,7 +254,9 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
             transform: isDragging ? 'none' : 'translateY(-2px)',
             boxShadow: isDragging ? '0 8px 20px rgba(0,0,0,0.2)' : '0 4px 12px rgba(0,0,0,0.1)'
           },
-          ...dragStyle
+          ...dragStyle,
+          // Override transition for non-drag states to keep hover effects smooth
+          transition: isBeingDragged ? dragStyle.transition : 'all 0.15s ease'
         }}
         onClick={handleClick}
       >
@@ -278,12 +307,12 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
                   {story.epicId}.{story.storyNumber}
                 </Typography>
                 {/* Spinning icon: shows for in-progress/review when agent running OR recent git activity (last 1 min) */}
-                {(story.status === 'in-progress' || story.status === 'review') && (runningAgent || isActivelyWorking) && (
+                {(effectiveStatus === 'in-progress' || effectiveStatus === 'review') && (runningAgent || isActivelyWorking) && (
                   <Tooltip title={runningAgent ? 'Agent running' : 'Recent git activity'} arrow placement="top">
                     <AutorenewIcon
                       sx={{
                         fontSize: 14,
-                        color: runningAgent ? 'success.main' : story.status === 'review' ? 'info.main' : 'warning.main',
+                        color: runningAgent ? 'success.main' : effectiveStatus === 'review' ? 'info.main' : 'warning.main',
                         animation: 'spin 2s linear infinite',
                         '@keyframes spin': {
                           '0%': { transform: 'rotate(0deg)' },
@@ -374,6 +403,43 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
             </Box>
           )}
 
+          {/* Human Review Progress Badge - only shows for human-review status */}
+          {effectiveStatus === 'human-review' && totalItems > 0 && (
+            <Tooltip
+              title={allApproved ? 'All items approved' : `${checkedCount}/${totalItems} reviewed`}
+              arrow
+              placement="top"
+            >
+              <Box
+                sx={{
+                  position: 'absolute',
+                  bottom: 8,
+                  right: branchExists ? 36 : 8,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 0.5,
+                  bgcolor: allApproved ? 'success.main' : 'warning.main',
+                  color: 'white',
+                  px: 0.75,
+                  py: 0.25,
+                  borderRadius: 1,
+                  fontSize: '0.7rem'
+                }}
+              >
+                {allApproved ? (
+                  <CheckCircleOutlineIcon sx={{ fontSize: 14 }} />
+                ) : (
+                  <>
+                    <ChecklistIcon sx={{ fontSize: 14 }} />
+                    <Typography variant="caption" sx={{ fontWeight: 600, color: 'inherit', lineHeight: 1 }}>
+                      {checkedCount}/{totalItems}
+                    </Typography>
+                  </>
+                )}
+              </Box>
+            </Tooltip>
+          )}
+
           {/* Git Diff Icon - only shows when story's branch exists */}
           {branchExists && (
             <Tooltip title="View branch diff" arrow placement="top">
@@ -426,7 +492,7 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
         </Box>
 
         {/* Git Branch Command - Only for ready-for-dev */}
-        {story.status === 'ready-for-dev' && (
+        {effectiveStatus === 'ready-for-dev' && (
           <Box sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: 'divider', bgcolor: 'action.hover' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
               <GitHubIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
@@ -465,12 +531,12 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
         )}
 
         {/* Git Commit Command - For review (commit implementation) and done (complete) */}
-        {(story.status === 'review' || story.status === 'done') && (
+        {(effectiveStatus === 'review' || effectiveStatus === 'done') && (
           <Box sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: 'divider', bgcolor: 'action.hover' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
               <GitHubIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
               <Typography variant="body2" fontWeight={500}>
-                {story.status === 'review' ? 'Commit Implementation' : 'Commit & Complete'}
+                {effectiveStatus === 'review' ? 'Commit Implementation' : 'Commit & Complete'}
               </Typography>
             </Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -520,7 +586,7 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
                   <Chip label="Primary" size="small" sx={{ height: 18, fontSize: '0.65rem' }} />
                 )}
                 {step.command && (
-                  <Tooltip title={`Copy git commit for ${step.command}`}>
+                  <Tooltip title={`Copy git commit for ${transformCommand(step.command)}`}>
                     <IconButton
                       size="small"
                       onClick={(e) => handleCopySingle(getAgentGitCommand(step.command), e)}
@@ -555,11 +621,11 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
                       wordBreak: 'break-all'
                     }}
                   >
-                    {agent.commands[0]}
+                    {transformCommand(agent.commands[0])}
                   </Typography>
                   <IconButton
                     size="small"
-                    onClick={(e) => handleCopySingle(agent.commands[0], e)}
+                    onClick={(e) => handleCopySingle(transformCommand(agent.commands[0]), e)}
                     sx={{ p: 0.25, color: 'text.disabled', '&:hover': { color: 'primary.main' } }}
                   >
                     <ContentCopyIcon sx={{ fontSize: 14 }} />
@@ -587,11 +653,11 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
                       wordBreak: 'break-all'
                     }}
                   >
-                    {step.command} {story.id}
+                    {transformCommand(step.command)} {story.id}
                   </Typography>
                   <IconButton
                     size="small"
-                    onClick={(e) => handleCopySingle(`${step.command} ${story.id}`, e)}
+                    onClick={(e) => handleCopySingle(`${transformCommand(step.command)} ${story.id}`, e)}
                     sx={{ p: 0.25, color: 'text.disabled', '&:hover': { color: 'primary.main' } }}
                   >
                     <ContentCopyIcon sx={{ fontSize: 14 }} />

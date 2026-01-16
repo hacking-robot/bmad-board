@@ -1,4 +1,4 @@
-export type StoryStatus = 'backlog' | 'ready-for-dev' | 'in-progress' | 'review' | 'done' | 'optional'
+export type StoryStatus = 'backlog' | 'ready-for-dev' | 'in-progress' | 'review' | 'human-review' | 'done' | 'optional'
 
 export interface Epic {
   id: number
@@ -60,8 +60,22 @@ export const STATUS_COLUMNS: { status: StoryStatus; label: string; color: string
   { status: 'ready-for-dev', label: 'Ready for Dev', color: '#2196f3' },
   { status: 'in-progress', label: 'In Progress', color: '#ff9800' },
   { status: 'review', label: 'Review', color: '#9c27b0' },
+  { status: 'human-review', label: 'Human Review', color: '#e91e63' },
   { status: 'done', label: 'Done', color: '#4caf50' }
 ]
+
+// Human Review checklist types
+export interface HumanReviewChecklistItem {
+  id: string
+  label: string
+  description?: string
+}
+
+export interface StoryReviewState {
+  storyId: string
+  checkedItems: string[]
+  lastUpdated: number
+}
 
 // Epic colors for badges
 export const EPIC_COLORS: string[] = [

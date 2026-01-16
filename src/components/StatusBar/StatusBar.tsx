@@ -11,6 +11,7 @@ const statusDescriptions: Record<StoryStatus, string> = {
   'ready-for-dev': 'Stories ready to implement',
   'in-progress': 'Currently being developed',
   review: 'Code complete, awaiting review',
+  'human-review': 'Awaiting human review approval',
   done: 'Implemented and verified',
   optional: 'Nice-to-have features'
 }
@@ -49,6 +50,7 @@ export default function StatusBar() {
       'ready-for-dev': 0,
       'in-progress': 0,
       'review': 0,
+      'human-review': 0,
       'done': 0,
       'optional': 0
     }
