@@ -6,6 +6,7 @@ import Header from './components/Header/Header'
 import Board from './components/Board/Board'
 import StoryDialog from './components/StoryDialog/StoryDialog'
 import WelcomeDialog from './components/WelcomeDialog/WelcomeDialog'
+import NewProjectDialog from './components/NewProjectDialog'
 import AgentPanel from './components/AgentPanel/AgentPanel'
 import CommandPalette from './components/CommandPalette'
 import KeyboardShortcuts from './components/KeyboardShortcuts'
@@ -63,6 +64,7 @@ export default function App() {
       <CssBaseline />
       <CommandPalette />
       <KeyboardShortcuts />
+      <NewProjectDialog />
       <HelpPanel
         open={helpPanelOpen}
         onClose={() => setHelpPanelOpen(false)}

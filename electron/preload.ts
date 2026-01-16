@@ -63,7 +63,7 @@ export interface AppSettings {
 }
 
 export interface FileAPI {
-  selectDirectory: () => Promise<{ path?: string; projectType?: ProjectType; error?: string } | null>
+  selectDirectory: () => Promise<{ path?: string; projectType?: ProjectType; isNewProject?: boolean; error?: string } | null>
   readFile: (filePath: string) => Promise<{ content?: string; error?: string }>
   listDirectory: (dirPath: string) => Promise<{ files?: string[]; error?: string }>
   getSettings: () => Promise<AppSettings>

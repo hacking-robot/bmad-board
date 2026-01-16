@@ -424,27 +424,27 @@ ipcMain.handle('select-directory', async () => {
   const projectPath = result.filePaths[0]
   const bmadOutputPath = join(projectPath, '_bmad-output')
 
-  // Validate sprint-status.yaml exists (required for both project types)
+  // Check if _bmad-output directory exists
+  if (!existsSync(bmadOutputPath)) {
+    return { error: 'Invalid BMAD project: _bmad-output directory not found' }
+  }
+
+  // Check for required files
   const sprintStatusPath = join(bmadOutputPath, 'implementation-artifacts', 'sprint-status.yaml')
-  if (!existsSync(sprintStatusPath)) {
-    return { error: 'Invalid BMAD project: sprint-status.yaml not found' }
-  }
-
-  // Detect project type by epics.md location
-  const bmmEpicsPath = join(bmadOutputPath, 'planning-artifacts', 'epics.md')
   const bmgdEpicsPath = join(bmadOutputPath, 'epics.md')
+  const bmmEpicsPath = join(bmadOutputPath, 'planning-artifacts', 'epics.md')
 
-  let projectType: ProjectType
+  const hasSprintStatus = existsSync(sprintStatusPath)
+  const hasBmgdEpics = existsSync(bmgdEpicsPath)
+  const hasBmmEpics = existsSync(bmmEpicsPath)
 
-  if (existsSync(bmmEpicsPath)) {
-    projectType = 'bmm'
-  } else if (existsSync(bmgdEpicsPath)) {
-    projectType = 'bmgd'
-  } else {
-    return { error: 'Invalid BMAD project: epics.md not found' }
-  }
+  // Detect project type: BMGD if epics.md at root, otherwise BMM (default)
+  let projectType: ProjectType = hasBmgdEpics ? 'bmgd' : 'bmm'
 
-  return { path: projectPath, projectType }
+  // Check if this is a new/empty project
+  const isNewProject = !hasSprintStatus || (!hasBmgdEpics && !hasBmmEpics)
+
+  return { path: projectPath, projectType, isNewProject }
 })
 
 ipcMain.handle('read-file', async (_, filePath: string) => {
@@ -605,14 +605,15 @@ ipcMain.handle('get-agent-for-story', async (_, storyId: string) => {
 
 // Detect project type (bmm vs bmgd structure)
 ipcMain.handle('detect-project-type', async (_, projectPath: string) => {
-  // Check for BMM structure (planning-artifacts directory with epics.md)
-  const bmmEpicsPath = join(projectPath, '_bmad-output', 'planning-artifacts', 'epics.md')
+  // Check for BMGD structure (epics.md at root of _bmad-output)
+  const bmgdEpicsPath = join(projectPath, '_bmad-output', 'epics.md')
 
-  if (existsSync(bmmEpicsPath)) {
-    return 'bmm'
+  if (existsSync(bmgdEpicsPath)) {
+    return 'bmgd'
   }
 
-  return 'bmgd'
+  // Default to BMM (standard BMAD Method)
+  return 'bmm'
 })
 
 // Agent output file management
