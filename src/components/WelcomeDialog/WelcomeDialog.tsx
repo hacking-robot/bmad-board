@@ -1,18 +1,26 @@
+import { useState } from 'react'
 import {
   Box,
   Button,
   Typography,
   Paper,
-  Stack
+  Stack,
+  Collapse,
+  Link,
+  Divider
 } from '@mui/material'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import DashboardIcon from '@mui/icons-material/Dashboard'
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
+import ExpandLessIcon from '@mui/icons-material/ExpandLess'
+import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import { useProjectData } from '../../hooks/useProjectData'
 import { useStore } from '../../store'
 
 export default function WelcomeDialog() {
   const { selectProject } = useProjectData()
   const error = useStore((state) => state.error)
+  const [showInfo, setShowInfo] = useState(false)
 
   const handleSelectProject = async () => {
     await selectProject()
@@ -32,7 +40,7 @@ export default function WelcomeDialog() {
         elevation={0}
         sx={{
           p: 6,
-          maxWidth: 480,
+          maxWidth: 520,
           width: '100%',
           textAlign: 'center',
           border: 1,
@@ -83,6 +91,66 @@ export default function WelcomeDialog() {
           <Typography variant="caption" color="text.secondary">
             Choose a folder containing a <code>_bmad-output</code> directory
           </Typography>
+
+          <Divider sx={{ width: '100%', my: 1 }} />
+
+          {/* What is BMAD section */}
+          <Box sx={{ width: '100%' }}>
+            <Button
+              onClick={() => setShowInfo(!showInfo)}
+              endIcon={showInfo ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+              sx={{
+                textTransform: 'none',
+                color: 'text.secondary',
+                '&:hover': {
+                  bgcolor: 'action.hover'
+                }
+              }}
+            >
+              What is BMAD?
+            </Button>
+
+            <Collapse in={showInfo}>
+              <Box
+                sx={{
+                  mt: 2,
+                  p: 2,
+                  bgcolor: 'action.hover',
+                  borderRadius: 1,
+                  textAlign: 'left'
+                }}
+              >
+                <Typography variant="body2" sx={{ mb: 1.5 }}>
+                  <strong>BMAD</strong> (Breakthrough Method of Agile AI-Driven Development) is an AI-powered
+                  framework that uses specialized agents to guide you through software development.
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                  Each agent has a specific role: <strong>Analyst</strong> (Mary) handles research,{' '}
+                  <strong>PM</strong> (John) creates requirements, <strong>Architect</strong> (Winston)
+                  designs systems, <strong>SM</strong> (Bob) manages sprints, and <strong>DEV</strong> (Amelia)
+                  implements features.
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                  BMad Board visualizes your project's progress as stories move through the development
+                  lifecycle—from backlog to done.
+                </Typography>
+                <Link
+                  href="https://docs.bmad-method.org"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  sx={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 0.5,
+                    fontSize: '0.875rem'
+                  }}
+                >
+                  Learn more about BMAD
+                  <OpenInNewIcon sx={{ fontSize: 16 }} />
+                </Link>
+              </Box>
+            </Collapse>
+          </Box>
         </Stack>
       </Paper>
     </Box>

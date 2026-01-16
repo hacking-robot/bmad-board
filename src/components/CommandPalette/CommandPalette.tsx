@@ -15,6 +15,11 @@ import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import KeyboardIcon from '@mui/icons-material/Keyboard'
 import CategoryIcon from '@mui/icons-material/Category'
 import AllInclusiveIcon from '@mui/icons-material/AllInclusive'
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
+import GroupIcon from '@mui/icons-material/Group'
+import AccountTreeIcon from '@mui/icons-material/AccountTree'
+import TerminalIcon from '@mui/icons-material/Terminal'
+import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import { useStore } from '../../store'
 import { useProjectData } from '../../hooks/useProjectData'
 
@@ -50,6 +55,7 @@ export default function CommandPalette() {
   const epics = useStore((state) => state.epics)
   const selectedEpicId = useStore((state) => state.selectedEpicId)
   const setSelectedEpicId = useStore((state) => state.setSelectedEpicId)
+  const setHelpPanelOpen = useStore((state) => state.setHelpPanelOpen)
   const { selectProject, switchToProject } = useProjectData()
 
   // Define command types
@@ -129,6 +135,56 @@ export default function CommandPalette() {
       label: 'Commands',
       getItems: () => [
         {
+          id: 'command:help-overview',
+          label: 'Help: BMAD Overview',
+          description: 'Learn about the BMAD methodology',
+          icon: <HelpOutlineIcon sx={{ color: 'text.secondary' }} />,
+          action: () => {
+            setOpen(false)
+            setHelpPanelOpen(true, 0)
+          }
+        },
+        {
+          id: 'command:help-agents',
+          label: 'Help: Meet the Agents',
+          description: 'Learn about BMAD AI agents and their roles',
+          icon: <GroupIcon sx={{ color: 'text.secondary' }} />,
+          action: () => {
+            setOpen(false)
+            setHelpPanelOpen(true, 1)
+          }
+        },
+        {
+          id: 'command:help-workflow',
+          label: 'Help: Story Workflow',
+          description: 'Understand story statuses and lifecycle',
+          icon: <AccountTreeIcon sx={{ color: 'text.secondary' }} />,
+          action: () => {
+            setOpen(false)
+            setHelpPanelOpen(true, 2)
+          }
+        },
+        {
+          id: 'command:help-commands',
+          label: 'Help: BMAD Commands',
+          description: 'Reference for all BMAD commands',
+          icon: <TerminalIcon sx={{ color: 'text.secondary' }} />,
+          action: () => {
+            setOpen(false)
+            setHelpPanelOpen(true, 3)
+          }
+        },
+        {
+          id: 'command:help-docs',
+          label: 'Help: Open Documentation',
+          description: 'Open BMAD docs in browser',
+          icon: <OpenInNewIcon sx={{ color: 'text.secondary' }} />,
+          action: () => {
+            setOpen(false)
+            window.open('https://docs.bmad-method.org', '_blank')
+          }
+        },
+        {
           id: 'command:keyboard-shortcuts',
           label: 'Preferences: Keyboard Shortcuts',
           description: 'View all keyboard shortcuts',
@@ -150,7 +206,7 @@ export default function CommandPalette() {
         }
       ]
     }
-  ], [recentProjects, projectPath, switchToProject, selectProject, epics, selectedEpicId, setSelectedEpicId])
+  ], [recentProjects, projectPath, switchToProject, selectProject, epics, selectedEpicId, setSelectedEpicId, setHelpPanelOpen])
 
   // Parse input to get active prefix and search query
   const { activeType, searchQuery } = useMemo(() => {

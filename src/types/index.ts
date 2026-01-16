@@ -80,6 +80,16 @@ export const EPIC_COLORS: string[] = [
 export type AgentStatus = 'running' | 'completed' | 'error' | 'interrupted'
 export type ProjectType = 'bmm' | 'bmgd'
 
+// AI Tool types - determines command syntax
+export type AITool = 'claude-code' | 'cursor' | 'windsurf' | 'roo-code'
+
+export const AI_TOOLS: { id: AITool; name: string; agentPrefix: string; description: string }[] = [
+  { id: 'claude-code', name: 'Claude Code', agentPrefix: '/', description: 'Anthropic CLI - uses /agent slash commands' },
+  { id: 'cursor', name: 'Cursor', agentPrefix: '@', description: 'Cursor IDE - uses @agent rules' },
+  { id: 'windsurf', name: 'Windsurf', agentPrefix: '@', description: 'Codeium IDE - uses @agent workflows' },
+  { id: 'roo-code', name: 'Roo Code', agentPrefix: '@', description: 'VS Code extension - uses @agent rules' }
+]
+
 export interface Agent {
   id: string
   storyId: string
@@ -104,27 +114,5 @@ export interface AgentHistoryEntry {
   exitCode?: number
 }
 
-export interface AgentAction {
-  label: string
-  command: string
-  icon: 'play' | 'continue' | 'review'
-}
-
-// Agent actions available per story status
-export const AGENT_ACTIONS: Partial<Record<StoryStatus, AgentAction>> = {
-  'ready-for-dev': {
-    label: 'Start Dev',
-    command: '*dev-story',
-    icon: 'play'
-  },
-  'in-progress': {
-    label: 'Continue',
-    command: '', // No initial command, just opens agent
-    icon: 'continue'
-  },
-  'review': {
-    label: 'Code Review',
-    command: '*code-review',
-    icon: 'review'
-  }
-}
+// NOTE: Agent actions are now defined in src/data/flow.json
+// Use the useWorkflow hook to access workflow data
