@@ -20,7 +20,9 @@ export function useProjectData() {
     setLastRefreshed,
     setIsWatching,
     setStoryContent,
-    selectedStory
+    selectedStory,
+    setNewProjectDialogOpen,
+    setPendingNewProject
   } = useStore()
 
   const selectProject = useCallback(async () => {
@@ -36,6 +38,16 @@ export function useProjectData() {
     }
 
     if (result.path && result.projectType) {
+      // Check if this is a new/empty project
+      if (result.isNewProject) {
+        setPendingNewProject({
+          path: result.path,
+          projectType: result.projectType
+        })
+        setNewProjectDialogOpen(true)
+        return false // Don't set project yet - let dialog handle it
+      }
+
       const projectName = result.path.split('/').pop() || 'Unknown'
       setProjectPath(result.path)
       setProjectType(result.projectType)
@@ -48,7 +60,7 @@ export function useProjectData() {
     }
 
     return false
-  }, [setProjectPath, setProjectType, setError, addRecentProject])
+  }, [setProjectPath, setProjectType, setError, addRecentProject, setNewProjectDialogOpen, setPendingNewProject])
 
   const switchToProject = useCallback((path: string, type: typeof projectType) => {
     if (!type) return
