@@ -9,35 +9,17 @@ import { useProjectData } from '../../hooks/useProjectData'
 export default function BranchSwitcher() {
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
   const [branches, setBranches] = useState<string[]>([])
-  const [currentBranch, setCurrentBranch] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [checkoutLoading, setCheckoutLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const triggerRef = useRef<HTMLDivElement>(null)
 
   const projectPath = useStore((state) => state.projectPath)
+  const currentBranch = useStore((state) => state.currentBranch)
+  const setCurrentBranch = useStore((state) => state.setCurrentBranch)
   const { loadProjectData } = useProjectData()
 
   const open = Boolean(anchorEl)
-
-  // Load current branch on mount and when project changes
-  const loadCurrentBranch = useCallback(async () => {
-    if (!projectPath) {
-      setCurrentBranch(null)
-      return
-    }
-
-    try {
-      const result = await window.gitAPI.getCurrentBranch(projectPath)
-      if (result.error) {
-        setCurrentBranch(null)
-      } else {
-        setCurrentBranch(result.branch || null)
-      }
-    } catch {
-      setCurrentBranch(null)
-    }
-  }, [projectPath])
 
   // Load branches when dropdown opens
   const loadBranches = useCallback(async () => {
@@ -69,11 +51,6 @@ export default function BranchSwitcher() {
       setLoading(false)
     }
   }, [projectPath])
-
-  // Load current branch on mount and project change
-  useEffect(() => {
-    loadCurrentBranch()
-  }, [loadCurrentBranch])
 
   // Load branches when dropdown opens
   useEffect(() => {
