@@ -40,6 +40,7 @@ export interface AppSettings {
   agentHistory?: AgentHistoryEntry[]
   recentProjects: RecentProject[]
   windowBounds?: WindowBounds
+  notificationsEnabled: boolean
 }
 
 export interface FileAPI {
@@ -50,6 +51,8 @@ export interface FileAPI {
   saveSettings: (settings: Partial<AppSettings>) => Promise<boolean>
   startWatching: (projectPath: string, projectType: ProjectType) => Promise<boolean>
   stopWatching: () => Promise<boolean>
+  updateStoryStatus: (filePath: string, newStatus: string) => Promise<{ success: boolean; error?: string }>
+  showNotification: (title: string, body: string) => Promise<void>
   onFilesChanged: (callback: () => void) => () => void
   onShowKeyboardShortcuts: (callback: () => void) => () => void
 }
@@ -62,6 +65,8 @@ const fileAPI: FileAPI = {
   saveSettings: (settings: Partial<AppSettings>) => ipcRenderer.invoke('save-settings', settings),
   startWatching: (projectPath: string, projectType: ProjectType) => ipcRenderer.invoke('start-watching', projectPath, projectType),
   stopWatching: () => ipcRenderer.invoke('stop-watching'),
+  updateStoryStatus: (filePath: string, newStatus: string) => ipcRenderer.invoke('update-story-status', filePath, newStatus),
+  showNotification: (title: string, body: string) => ipcRenderer.invoke('show-notification', title, body),
   onFilesChanged: (callback: () => void) => {
     const listener = () => callback()
     ipcRenderer.on('files-changed', listener)
@@ -196,6 +201,18 @@ export interface GitBranchActivity {
   isActive: boolean
 }
 
+export interface GitCommit {
+  hash: string
+  author: string
+  timestamp: number
+  subject: string
+}
+
+export interface GitCommitFile {
+  status: 'A' | 'M' | 'D' | 'R' | 'C'
+  path: string
+}
+
 export interface GitAPI {
   getCurrentBranch: (projectPath: string) => Promise<{ branch?: string; error?: string }>
   branchExists: (projectPath: string, branchName: string) => Promise<{ exists: boolean }>
@@ -204,6 +221,10 @@ export interface GitAPI {
   getChangedFiles: (projectPath: string, baseBranch: string, featureBranch?: string) => Promise<{ files?: GitChangedFile[]; mergeBase?: string; error?: string }>
   getFileContent: (projectPath: string, filePath: string, commitOrBranch: string) => Promise<{ content: string }>
   getWorkingFileContent: (projectPath: string, filePath: string) => Promise<{ content: string }>
+  getCommitHistory: (projectPath: string, baseBranch: string, featureBranch: string) => Promise<{ commits: GitCommit[]; error?: string }>
+  getCommitDiff: (projectPath: string, commitHash: string) => Promise<{ files: GitCommitFile[]; error?: string }>
+  getFileAtParent: (projectPath: string, filePath: string, commitHash: string) => Promise<{ content: string }>
+  getFileAtCommit: (projectPath: string, filePath: string, commitHash: string) => Promise<{ content: string }>
 }
 
 const gitAPI: GitAPI = {
@@ -213,7 +234,11 @@ const gitAPI: GitAPI = {
   getDefaultBranch: (projectPath) => ipcRenderer.invoke('git-default-branch', projectPath),
   getChangedFiles: (projectPath, baseBranch, featureBranch) => ipcRenderer.invoke('git-changed-files', projectPath, baseBranch, featureBranch),
   getFileContent: (projectPath, filePath, commitOrBranch) => ipcRenderer.invoke('git-file-content', projectPath, filePath, commitOrBranch),
-  getWorkingFileContent: (projectPath, filePath) => ipcRenderer.invoke('git-working-file-content', projectPath, filePath)
+  getWorkingFileContent: (projectPath, filePath) => ipcRenderer.invoke('git-working-file-content', projectPath, filePath),
+  getCommitHistory: (projectPath, baseBranch, featureBranch) => ipcRenderer.invoke('git-commit-history', projectPath, baseBranch, featureBranch),
+  getCommitDiff: (projectPath, commitHash) => ipcRenderer.invoke('git-commit-diff', projectPath, commitHash),
+  getFileAtParent: (projectPath, filePath, commitHash) => ipcRenderer.invoke('git-file-at-parent', projectPath, filePath, commitHash),
+  getFileAtCommit: (projectPath, filePath, commitHash) => ipcRenderer.invoke('git-file-at-commit', projectPath, filePath, commitHash)
 }
 
 contextBridge.exposeInMainWorld('gitAPI', gitAPI)

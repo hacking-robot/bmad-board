@@ -1,7 +1,8 @@
-import { app, BrowserWindow, ipcMain, dialog, Menu, screen } from 'electron'
-import { join } from 'path'
+import { app, BrowserWindow, ipcMain, dialog, Menu, screen, Notification } from 'electron'
+import { join, dirname, basename } from 'path'
 import { readFile, readdir, stat, writeFile, mkdir } from 'fs/promises'
 import { existsSync, watch, FSWatcher } from 'fs'
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 import { agentManager } from './agentManager'
 
 // Set app name (shows in menu bar on macOS)
@@ -904,5 +905,145 @@ ipcMain.handle('git-working-file-content', async (_, projectPath: string, filePa
     return { content }
   } catch {
     return { content: '' }
+  }
+})
+
+// Get commit history for a branch (since it diverged from base)
+ipcMain.handle('git-commit-history', async (_, projectPath: string, baseBranch: string, featureBranch: string) => {
+  try {
+    // Get merge base
+    const mergeBase = execSync(`git merge-base ${baseBranch} ${featureBranch}`, {
+      cwd: projectPath,
+      encoding: 'utf-8'
+    }).trim()
+
+    // Get commits from merge-base to feature branch
+    // Format: hash|author|timestamp|subject
+    const logOutput = execSync(`git log --format="%H|%an|%at|%s" ${mergeBase}..${featureBranch}`, {
+      cwd: projectPath,
+      encoding: 'utf-8'
+    }).trim()
+
+    if (!logOutput) {
+      return { commits: [] }
+    }
+
+    const commits = logOutput.split('\n').map(line => {
+      const [hash, author, timestamp, subject] = line.split('|')
+      return {
+        hash,
+        author,
+        timestamp: parseInt(timestamp, 10) * 1000,
+        subject
+      }
+    })
+
+    return { commits }
+  } catch (error) {
+    console.error('Failed to get commit history:', error)
+    return { commits: [], error: 'Failed to get commit history' }
+  }
+})
+
+// Get diff for a specific commit
+ipcMain.handle('git-commit-diff', async (_, projectPath: string, commitHash: string) => {
+  try {
+    // Get files changed in this commit with status
+    const diffOutput = execSync(`git diff-tree --no-commit-id --name-status -r ${commitHash}`, {
+      cwd: projectPath,
+      encoding: 'utf-8'
+    }).trim()
+
+    if (!diffOutput) {
+      return { files: [] }
+    }
+
+    const files = diffOutput.split('\n').map(line => {
+      const [status, ...pathParts] = line.split('\t')
+      return {
+        status: status as 'A' | 'M' | 'D' | 'R' | 'C',
+        path: pathParts.join('\t')
+      }
+    })
+
+    return { files }
+  } catch (error) {
+    console.error('Failed to get commit diff:', error)
+    return { files: [], error: 'Failed to get commit diff' }
+  }
+})
+
+// Get file content at a specific commit's parent (for diff comparison)
+ipcMain.handle('git-file-at-parent', async (_, projectPath: string, filePath: string, commitHash: string) => {
+  try {
+    const content = execSync(`git show ${commitHash}^:${filePath}`, {
+      cwd: projectPath,
+      encoding: 'utf-8',
+      maxBuffer: 10 * 1024 * 1024
+    })
+    return { content }
+  } catch {
+    return { content: '' }
+  }
+})
+
+// Get file content at a specific commit
+ipcMain.handle('git-file-at-commit', async (_, projectPath: string, filePath: string, commitHash: string) => {
+  try {
+    const content = execSync(`git show ${commitHash}:${filePath}`, {
+      cwd: projectPath,
+      encoding: 'utf-8',
+      maxBuffer: 10 * 1024 * 1024
+    })
+    return { content }
+  } catch {
+    return { content: '' }
+  }
+})
+
+// Update story status in sprint-status.yaml
+ipcMain.handle('update-story-status', async (_, filePath: string, newStatus: string) => {
+  try {
+    // Extract story key from file path (filename without .md)
+    // Story path: {projectPath}/_bmad-output/implementation-artifacts/{story-key}.md
+    const storyKey = basename(filePath, '.md')
+
+    // Derive sprint-status.yaml path from story file path
+    // Sprint-status.yaml is in the same directory as story files (implementation-artifacts/)
+    const implementationDir = dirname(filePath)
+    const sprintStatusPath = join(implementationDir, 'sprint-status.yaml')
+
+    if (!existsSync(sprintStatusPath)) {
+      return { success: false, error: 'sprint-status.yaml not found' }
+    }
+
+    // Read and parse sprint-status.yaml
+    const content = await readFile(sprintStatusPath, 'utf-8')
+    const sprintStatus = parseYaml(content)
+
+    // Update the story status in development_status section
+    if (!sprintStatus.development_status) {
+      sprintStatus.development_status = {}
+    }
+    sprintStatus.development_status[storyKey] = newStatus
+
+    // Write the file back with proper YAML formatting
+    const updatedContent = stringifyYaml(sprintStatus, {
+      lineWidth: 0, // Don't wrap lines
+      nullStr: '' // Use empty string for null values
+    })
+    await writeFile(sprintStatusPath, updatedContent, 'utf-8')
+
+    return { success: true }
+  } catch (error) {
+    console.error('Failed to update story status:', error)
+    return { success: false, error: String(error) }
+  }
+})
+
+// Show native notification
+ipcMain.handle('show-notification', async (_, title: string, body: string) => {
+  if (Notification.isSupported()) {
+    new Notification({ title, body }).show()
   }
 })

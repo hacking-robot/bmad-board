@@ -50,7 +50,7 @@ const electronStorage = {
       const parsed = JSON.parse(value)
       if (parsed.state) {
         // Only save the settings we care about
-        const { themeMode, aiTool, projectPath, projectType, selectedEpicId, collapsedColumnsByEpic, agentHistory, recentProjects } = parsed.state
+        const { themeMode, aiTool, projectPath, projectType, selectedEpicId, collapsedColumnsByEpic, agentHistory, recentProjects, notificationsEnabled } = parsed.state
 
         // Don't persist full output - it can contain characters that break JSON
         // Just save metadata and a small summary
@@ -69,7 +69,8 @@ const electronStorage = {
           selectedEpicId,
           collapsedColumnsByEpic,
           agentHistory: sanitizedHistory,
-          recentProjects: recentProjects || []
+          recentProjects: recentProjects || [],
+          notificationsEnabled: notificationsEnabled ?? false
         })
       }
     } catch (error) {
@@ -85,7 +86,8 @@ const electronStorage = {
       selectedEpicId: null,
       collapsedColumnsByEpic: {},
       agentHistory: [],
-      recentProjects: []
+      recentProjects: [],
+      notificationsEnabled: false
     })
   }
 }
@@ -107,6 +109,12 @@ interface AppState {
   // AI Tool
   aiTool: AITool
   setAITool: (tool: AITool) => void
+
+  // Notifications
+  notificationsEnabled: boolean
+  setNotificationsEnabled: (enabled: boolean) => void
+  isUserDragging: boolean
+  setIsUserDragging: (dragging: boolean) => void
 
   // Project
   projectPath: string | null
@@ -201,6 +209,12 @@ export const useStore = create<AppState>()(
       // AI Tool
       aiTool: 'claude-code',
       setAITool: (tool) => set({ aiTool: tool }),
+
+      // Notifications
+      notificationsEnabled: false,
+      setNotificationsEnabled: (enabled) => set({ notificationsEnabled: enabled }),
+      isUserDragging: false,
+      setIsUserDragging: (dragging) => set({ isUserDragging: dragging }),
 
       // Project
       projectPath: null,
