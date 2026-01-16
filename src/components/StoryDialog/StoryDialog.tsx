@@ -25,10 +25,54 @@ import AddIcon from '@mui/icons-material/Add'
 import EditIcon from '@mui/icons-material/Edit'
 import VerifiedIcon from '@mui/icons-material/Verified'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
-import ReactMarkdown from 'react-markdown'
+import ReactMarkdown, { Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { useStore } from '../../store'
 import { EPIC_COLORS, STATUS_COLUMNS } from '../../types'
+
+// Custom code component for syntax highlighting
+const CodeBlock: Components['code'] = ({ className, children, ...props }) => {
+  const match = /language-(\w+)/.exec(className || '')
+  const language = match ? match[1] : ''
+  const codeString = String(children).replace(/\n$/, '')
+
+  // Check if this is inline code (no language and short content without newlines)
+  const isInline = !match && !codeString.includes('\n')
+
+  if (isInline) {
+    return (
+      <code
+        style={{
+          backgroundColor: 'rgba(255, 255, 255, 0.1)',
+          padding: '2px 6px',
+          borderRadius: 4,
+          fontFamily: 'monospace',
+          fontSize: '0.85em'
+        }}
+        {...props}
+      >
+        {children}
+      </code>
+    )
+  }
+
+  return (
+    <SyntaxHighlighter
+      style={oneDark}
+      language={language || 'text'}
+      PreTag="div"
+      customStyle={{
+        margin: '8px 0',
+        borderRadius: 8,
+        fontSize: '0.85rem'
+      }}
+    >
+      {codeString}
+    </SyntaxHighlighter>
+  )
+}
 
 export default function StoryDialog() {
   const selectedStory = useStore((state) => state.selectedStory)
@@ -136,10 +180,15 @@ export default function StoryDialog() {
                   bgcolor: 'action.hover',
                   borderRadius: 2,
                   p: 2,
-                  '& p': { m: 0 }
+                  '& p': { m: 0, mb: 1, '&:last-child': { mb: 0 } },
+                  '& ul, & ol': {
+                    pl: 3,
+                    mb: 1,
+                    '& li': { mb: 0.5 }
+                  }
                 }}
               >
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: CodeBlock }}>
                   {storyContent.description}
                 </ReactMarkdown>
               </Box>
@@ -180,14 +229,14 @@ export default function StoryDialog() {
                     </ListItemIcon>
                     <ListItemText
                       primary={
-                        <Box sx={{ '& p': { m: 0 }, '& code': { bgcolor: 'action.hover', px: 0.5, borderRadius: 0.5, fontFamily: 'monospace', fontSize: '0.85em' } }}>
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{ac.title}</ReactMarkdown>
+                        <Box sx={{ '& p': { m: 0 } }}>
+                          <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: CodeBlock }}>{ac.title}</ReactMarkdown>
                         </Box>
                       }
                       secondary={
                         ac.description ? (
-                          <Box sx={{ '& p': { m: 0 }, '& code': { bgcolor: 'action.hover', px: 0.5, borderRadius: 0.5, fontFamily: 'monospace', fontSize: '0.85em' } }}>
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{ac.description}</ReactMarkdown>
+                          <Box sx={{ '& p': { m: 0 } }}>
+                            <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: CodeBlock }}>{ac.description}</ReactMarkdown>
                           </Box>
                         ) : null
                       }
@@ -228,10 +277,9 @@ export default function StoryDialog() {
                             primary={
                               <Box sx={{
                                 '& p': { m: 0 },
-                                '& code': { bgcolor: 'action.hover', px: 0.5, borderRadius: 0.5, fontFamily: 'monospace', fontSize: '0.85em' },
                                 ...(task.completed ? { textDecoration: 'line-through', color: 'text.secondary' } : {})
                               }}>
-                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{task.title}</ReactMarkdown>
+                                <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: CodeBlock }}>{task.title}</ReactMarkdown>
                               </Box>
                             }
                             primaryTypographyProps={{ fontWeight: 500, component: 'div' }}
@@ -258,11 +306,10 @@ export default function StoryDialog() {
                                   primary={
                                     <Box sx={{
                                       '& p': { m: 0 },
-                                      '& code': { bgcolor: 'action.hover', px: 0.5, borderRadius: 0.5, fontFamily: 'monospace', fontSize: '0.85em' },
                                       fontSize: '0.875rem',
                                       ...(subtask.completed ? { textDecoration: 'line-through', color: 'text.secondary' } : {})
                                     }}>
-                                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{subtask.title}</ReactMarkdown>
+                                      <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: CodeBlock }}>{subtask.title}</ReactMarkdown>
                                     </Box>
                                   }
                                   primaryTypographyProps={{ component: 'div' }}
@@ -297,17 +344,12 @@ export default function StoryDialog() {
                         '&:first-of-type': { mt: 0 }
                       },
                       '& p': { mb: 1 },
-                      '& pre': {
-                        bgcolor: 'action.hover',
-                        p: 2,
-                        borderRadius: 1,
-                        overflow: 'auto'
-                      },
-                      '& code': {
-                        bgcolor: 'action.hover',
-                        px: 0.5,
-                        borderRadius: 0.5,
-                        fontFamily: 'monospace'
+                      '& ul, & ol': {
+                        pl: 3,
+                        mb: 1,
+                        '& li': {
+                          mb: 0.5
+                        }
                       },
                       '& table': {
                         width: '100%',
@@ -324,7 +366,7 @@ export default function StoryDialog() {
                       }
                     }}
                   >
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: CodeBlock }}>
                       {storyContent.devNotes}
                     </ReactMarkdown>
                   </Box>

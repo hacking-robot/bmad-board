@@ -13,7 +13,13 @@ import {
   AccordionDetails,
   ToggleButtonGroup,
   ToggleButton,
-  Tooltip
+  Tooltip,
+  Tabs,
+  Tab,
+  List,
+  ListItemButton,
+  ListItemText,
+  Divider
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
@@ -22,6 +28,8 @@ import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
 import ViewColumnIcon from '@mui/icons-material/ViewColumn'
 import ViewStreamIcon from '@mui/icons-material/ViewStream'
+import CommitIcon from '@mui/icons-material/Commit'
+import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import { DiffView, DiffModeEnum } from '@git-diff-view/react'
 import { generateDiffFile } from '@git-diff-view/file'
 import { useStore } from '../../store'
@@ -33,6 +41,18 @@ interface GitChangedFile {
   path: string
   mtime: number | null
   lastCommitTime: number | null
+}
+
+interface GitCommit {
+  hash: string
+  author: string
+  timestamp: number
+  subject: string
+}
+
+interface GitCommitFile {
+  status: 'A' | 'M' | 'D' | 'R' | 'C'
+  path: string
 }
 
 interface GitDiffDialogProps {
@@ -272,6 +292,160 @@ function FileDiff({
   )
 }
 
+// Single file diff for a specific commit (compares commit vs parent)
+function CommitFileDiff({
+  file,
+  projectPath,
+  commitHash,
+  themeMode,
+  diffMode
+}: {
+  file: GitCommitFile
+  projectPath: string
+  commitHash: string
+  themeMode: 'light' | 'dark'
+  diffMode: DiffModeEnum
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [diffData, setDiffData] = useState<FileDiffData | null>(null)
+
+  useEffect(() => {
+    if (expanded && !diffData) {
+      loadDiff()
+    }
+  }, [expanded])
+
+  const loadDiff = async () => {
+    setLoading(true)
+    try {
+      const [oldResult, newResult] = await Promise.all([
+        file.status === 'A'
+          ? Promise.resolve({ content: '' })
+          : window.gitAPI.getFileAtParent(projectPath, file.path, commitHash),
+        file.status === 'D'
+          ? Promise.resolve({ content: '' })
+          : window.gitAPI.getFileAtCommit(projectPath, file.path, commitHash)
+      ])
+
+      setDiffData({
+        oldContent: oldResult.content,
+        newContent: newResult.content,
+        oldFileName: file.status === 'A' ? '' : file.path,
+        newFileName: file.status === 'D' ? '' : file.path
+      })
+    } catch (error) {
+      console.error('Failed to load commit diff:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const diffFile = useMemo(() => {
+    if (!diffData) return null
+
+    const lang = getLanguageFromPath(file.path)
+    const df = generateDiffFile(
+      diffData.oldFileName,
+      diffData.oldContent,
+      diffData.newFileName,
+      diffData.newContent,
+      lang,
+      lang
+    )
+    df.init()
+    return df
+  }, [diffData, file.path])
+
+  const stats = useMemo(() => {
+    if (!diffData) return { additions: 0, deletions: 0 }
+    const oldLines = diffData.oldContent.split('\n').length
+    const newLines = diffData.newContent.split('\n').length
+    return {
+      additions: Math.max(0, newLines - oldLines),
+      deletions: Math.max(0, oldLines - newLines)
+    }
+  }, [diffData])
+
+  return (
+    <Accordion
+      expanded={expanded}
+      onChange={() => setExpanded(!expanded)}
+      elevation={0}
+      disableGutters
+      sx={{
+        border: 1,
+        borderColor: 'divider',
+        '&:not(:last-child)': { mb: 1 },
+        '&:before': { display: 'none' }
+      }}
+    >
+      <AccordionSummary
+        expandIcon={<ExpandMoreIcon />}
+        sx={{
+          bgcolor: 'action.hover',
+          '&:hover': { bgcolor: 'action.selected' }
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%', pr: 2 }}>
+          <StatusBadge status={file.status} />
+          <Typography
+            variant="body2"
+            sx={{
+              fontFamily: 'monospace',
+              fontSize: '0.85rem',
+              flex: 1,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            {file.path}
+          </Typography>
+          {diffData && (
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Typography variant="caption" sx={{ color: '#10B981', fontWeight: 600 }}>
+                +{stats.additions}
+              </Typography>
+              <Typography variant="caption" sx={{ color: '#EF4444', fontWeight: 600 }}>
+                -{stats.deletions}
+              </Typography>
+            </Box>
+          )}
+        </Box>
+      </AccordionSummary>
+      <AccordionDetails sx={{ p: 0 }}>
+        {loading ? (
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 4 }}>
+            <CircularProgress size={24} />
+            <Typography sx={{ ml: 2 }} color="text.secondary">
+              Loading diff...
+            </Typography>
+          </Box>
+        ) : diffFile ? (
+          <Box
+            className={`diff-view-wrapper ${themeMode}`}
+            sx={{
+              '& .diff-view': {
+                fontSize: '12px',
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace'
+              }
+            }}
+          >
+            <DiffView
+              diffFile={diffFile}
+              diffViewTheme={themeMode}
+              diffViewMode={diffMode}
+              diffViewHighlight
+              diffViewFontSize={12}
+            />
+          </Box>
+        ) : null}
+      </AccordionDetails>
+    </Accordion>
+  )
+}
+
 export default function GitDiffDialog({ open, onClose, branchName }: GitDiffDialogProps) {
   const projectPath = useStore((state) => state.projectPath)
   const themeMode = useStore((state) => state.themeMode)
@@ -281,6 +455,15 @@ export default function GitDiffDialog({ open, onClose, branchName }: GitDiffDial
   const [changedFiles, setChangedFiles] = useState<GitChangedFile[]>([])
   const [mergeBase, setMergeBase] = useState<string>('')
   const [diffMode, setDiffMode] = useState<DiffModeEnum>(DiffModeEnum.Split)
+  const [defaultBranch, setDefaultBranch] = useState<string>('')
+
+  // Tab and commit state
+  const [activeTab, setActiveTab] = useState(0)
+  const [commits, setCommits] = useState<GitCommit[]>([])
+  const [commitsLoading, setCommitsLoading] = useState(false)
+  const [selectedCommit, setSelectedCommit] = useState<GitCommit | null>(null)
+  const [commitFiles, setCommitFiles] = useState<GitCommitFile[]>([])
+  const [commitFilesLoading, setCommitFilesLoading] = useState(false)
 
   useEffect(() => {
     if (open && projectPath) {
@@ -310,6 +493,8 @@ export default function GitDiffDialog({ open, onClose, branchName }: GitDiffDial
         return
       }
 
+      setDefaultBranch(defaultBranchResult.branch)
+
       // Get changed files between default branch and the feature branch
       const result = await window.gitAPI.getChangedFiles(projectPath, defaultBranchResult.branch, branchName)
       if (result.error) {
@@ -325,6 +510,76 @@ export default function GitDiffDialog({ open, onClose, branchName }: GitDiffDial
     } finally {
       setLoading(false)
     }
+  }
+
+  // Load commit history when Commits tab is selected
+  const loadCommits = async () => {
+    if (!projectPath || !defaultBranch) return
+
+    setCommitsLoading(true)
+    try {
+      const result = await window.gitAPI.getCommitHistory(projectPath, defaultBranch, branchName)
+      setCommits(result.commits || [])
+    } catch (err) {
+      console.error('Failed to load commits:', err)
+    } finally {
+      setCommitsLoading(false)
+    }
+  }
+
+  // Load files changed in a specific commit
+  const loadCommitFiles = async (commitHash: string) => {
+    if (!projectPath) return
+
+    setCommitFilesLoading(true)
+    try {
+      const result = await window.gitAPI.getCommitDiff(projectPath, commitHash)
+      setCommitFiles(result.files || [])
+    } catch (err) {
+      console.error('Failed to load commit files:', err)
+    } finally {
+      setCommitFilesLoading(false)
+    }
+  }
+
+  // Load commits when switching to Commits tab
+  useEffect(() => {
+    if (activeTab === 1 && commits.length === 0 && defaultBranch) {
+      loadCommits()
+    }
+  }, [activeTab, defaultBranch])
+
+  // Load commit files when selecting a commit
+  useEffect(() => {
+    if (selectedCommit) {
+      loadCommitFiles(selectedCommit.hash)
+    }
+  }, [selectedCommit])
+
+  // Reset selected commit when changing tabs
+  useEffect(() => {
+    if (activeTab === 0) {
+      setSelectedCommit(null)
+      setCommitFiles([])
+    }
+  }, [activeTab])
+
+  // Detect agent from commit message
+  const getAgentFromCommit = (subject: string): { name: string; color: string } | null => {
+    const lowerSubject = subject.toLowerCase()
+    if (lowerSubject.includes('implement') || lowerSubject.includes('feat:') || lowerSubject.includes('feature')) {
+      return { name: 'DEV', color: '#10B981' } // Amelia
+    }
+    if (lowerSubject.includes('review') || lowerSubject.includes('fix:') || lowerSubject.includes('address')) {
+      return { name: 'Review', color: '#3B82F6' } // Reviewer
+    }
+    if (lowerSubject.includes('test') || lowerSubject.includes('spec')) {
+      return { name: 'TEA', color: '#8B5CF6' } // Test
+    }
+    if (lowerSubject.includes('doc') || lowerSubject.includes('readme')) {
+      return { name: 'DOC', color: '#F59E0B' } // Paige
+    }
+    return null
   }
 
   // Calculate total stats
@@ -430,7 +685,15 @@ export default function GitDiffDialog({ open, onClose, branchName }: GitDiffDial
         </IconButton>
       </DialogTitle>
 
-      <DialogContent dividers sx={{ p: 2 }}>
+      <DialogContent dividers sx={{ p: 0 }}>
+        {/* Tabs */}
+        <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 2 }}>
+          <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)}>
+            <Tab label="All Changes" />
+            <Tab label={`Commits${commits.length > 0 ? ` (${commits.length})` : ''}`} icon={<CommitIcon sx={{ fontSize: 18 }} />} iconPosition="start" />
+          </Tabs>
+        </Box>
+
         {loading ? (
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 8 }}>
             <CircularProgress size={32} />
@@ -447,82 +710,204 @@ export default function GitDiffDialog({ open, onClose, branchName }: GitDiffDial
             <Typography color="text.secondary">No changes found on this branch</Typography>
           </Box>
         ) : (
-          <Box>
-            {/* Recent Activity Section */}
-            {recentFiles.length > 0 && (
-              <Box
-                sx={{
-                  mb: 2,
-                  p: 2,
-                  bgcolor: 'action.hover',
-                  borderRadius: 2,
-                  border: 1,
-                  borderColor: 'divider'
-                }}
-              >
-                <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1.5 }}>
-                  Recent Activity
-                </Typography>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
-                  {recentFiles.map((file) => (
-                    <Box
-                      key={file.path}
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 1,
-                        fontSize: '0.85rem'
-                      }}
-                    >
-                      <Typography
-                        component="span"
-                        sx={{
-                          fontWeight: 600,
-                          color: file.status === 'A' ? '#10B981' : file.status === 'D' ? '#EF4444' : '#F59E0B',
-                          minWidth: 70
-                        }}
-                      >
-                        {getStatusLabel(file.status)}
-                      </Typography>
-                      <Typography
-                        component="span"
-                        sx={{
-                          fontFamily: 'monospace',
-                          fontSize: '0.8rem',
-                          flex: 1,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap'
-                        }}
-                      >
-                        {file.path}
-                      </Typography>
-                      <Typography
-                        component="span"
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ whiteSpace: 'nowrap' }}
-                      >
-                        {formatRelativeTime(file.sortTime)}
-                      </Typography>
+          <Box sx={{ p: 2 }}>
+            {/* Tab 0: All Changes */}
+            {activeTab === 0 && (
+              <>
+                {/* Recent Activity Section */}
+                {recentFiles.length > 0 && (
+                  <Box
+                    sx={{
+                      mb: 2,
+                      p: 2,
+                      bgcolor: 'action.hover',
+                      borderRadius: 2,
+                      border: 1,
+                      borderColor: 'divider'
+                    }}
+                  >
+                    <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1.5 }}>
+                      Recent Activity
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+                      {recentFiles.map((file) => (
+                        <Box
+                          key={file.path}
+                          sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1,
+                            fontSize: '0.85rem'
+                          }}
+                        >
+                          <Typography
+                            component="span"
+                            sx={{
+                              fontWeight: 600,
+                              color: file.status === 'A' ? '#10B981' : file.status === 'D' ? '#EF4444' : '#F59E0B',
+                              minWidth: 70
+                            }}
+                          >
+                            {getStatusLabel(file.status)}
+                          </Typography>
+                          <Typography
+                            component="span"
+                            sx={{
+                              fontFamily: 'monospace',
+                              fontSize: '0.8rem',
+                              flex: 1,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap'
+                            }}
+                          >
+                            {file.path}
+                          </Typography>
+                          <Typography
+                            component="span"
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ whiteSpace: 'nowrap' }}
+                          >
+                            {formatRelativeTime(file.sortTime)}
+                          </Typography>
+                        </Box>
+                      ))}
                     </Box>
-                  ))}
-                </Box>
-              </Box>
+                  </Box>
+                )}
+
+                {/* File Diffs */}
+                {changedFiles.map((file) => (
+                  <FileDiff
+                    key={file.path}
+                    file={file}
+                    projectPath={projectPath!}
+                    mergeBase={mergeBase}
+                    branchName={branchName}
+                    themeMode={themeMode}
+                    diffMode={diffMode}
+                  />
+                ))}
+              </>
             )}
 
-            {/* File Diffs */}
-            {changedFiles.map((file) => (
-              <FileDiff
-                key={file.path}
-                file={file}
-                projectPath={projectPath!}
-                mergeBase={mergeBase}
-                branchName={branchName}
-                themeMode={themeMode}
-                diffMode={diffMode}
-              />
-            ))}
+            {/* Tab 1: Commits */}
+            {activeTab === 1 && (
+              <>
+                {commitsLoading ? (
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 8 }}>
+                    <CircularProgress size={24} />
+                    <Typography sx={{ ml: 2 }} color="text.secondary">
+                      Loading commits...
+                    </Typography>
+                  </Box>
+                ) : selectedCommit ? (
+                  // Show selected commit's diff
+                  <Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                      <IconButton size="small" onClick={() => setSelectedCommit(null)}>
+                        <ArrowBackIcon />
+                      </IconButton>
+                      <Box sx={{ flex: 1 }}>
+                        <Typography variant="subtitle2" fontWeight={600}>
+                          {selectedCommit.subject}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {selectedCommit.hash.substring(0, 7)} • {selectedCommit.author} • {formatRelativeTime(selectedCommit.timestamp)}
+                        </Typography>
+                      </Box>
+                      {getAgentFromCommit(selectedCommit.subject) && (
+                        <Chip
+                          label={getAgentFromCommit(selectedCommit.subject)!.name}
+                          size="small"
+                          sx={{
+                            bgcolor: getAgentFromCommit(selectedCommit.subject)!.color,
+                            color: 'white',
+                            fontWeight: 600,
+                            fontSize: '0.7rem'
+                          }}
+                        />
+                      )}
+                    </Box>
+                    <Divider sx={{ mb: 2 }} />
+                    {commitFilesLoading ? (
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 4 }}>
+                        <CircularProgress size={24} />
+                        <Typography sx={{ ml: 2 }} color="text.secondary">
+                          Loading files...
+                        </Typography>
+                      </Box>
+                    ) : (
+                      commitFiles.map((file) => (
+                        <CommitFileDiff
+                          key={file.path}
+                          file={file}
+                          projectPath={projectPath!}
+                          commitHash={selectedCommit.hash}
+                          themeMode={themeMode}
+                          diffMode={diffMode}
+                        />
+                      ))
+                    )}
+                  </Box>
+                ) : commits.length === 0 ? (
+                  <Box sx={{ textAlign: 'center', py: 8 }}>
+                    <Typography color="text.secondary">No commits found on this branch</Typography>
+                  </Box>
+                ) : (
+                  // Commit list
+                  <List disablePadding>
+                    {commits.map((commit, index) => {
+                      const agent = getAgentFromCommit(commit.subject)
+                      return (
+                        <ListItemButton
+                          key={commit.hash}
+                          onClick={() => setSelectedCommit(commit)}
+                          sx={{
+                            borderBottom: index < commits.length - 1 ? 1 : 0,
+                            borderColor: 'divider'
+                          }}
+                        >
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mr: 2 }}>
+                            <CommitIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
+                            {agent && (
+                              <Tooltip title={`${agent.name} agent work`}>
+                                <Chip
+                                  label={agent.name}
+                                  size="small"
+                                  sx={{
+                                    height: 20,
+                                    bgcolor: agent.color,
+                                    color: 'white',
+                                    fontWeight: 600,
+                                    fontSize: '0.65rem',
+                                    minWidth: 50
+                                  }}
+                                />
+                              </Tooltip>
+                            )}
+                          </Box>
+                          <ListItemText
+                            primary={commit.subject}
+                            secondary={
+                              <Typography variant="caption" color="text.secondary">
+                                {commit.hash.substring(0, 7)} • {commit.author} • {formatRelativeTime(commit.timestamp)}
+                              </Typography>
+                            }
+                            primaryTypographyProps={{
+                              variant: 'body2',
+                              fontWeight: 500,
+                              sx: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
+                            }}
+                          />
+                        </ListItemButton>
+                      )
+                    })}
+                  </List>
+                )}
+              </>
+            )}
           </Box>
         )}
       </DialogContent>

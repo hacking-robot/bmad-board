@@ -14,11 +14,13 @@ import {
   Radio,
   RadioGroup,
   FormControlLabel,
-  Chip
+  Chip,
+  Switch
 } from '@mui/material'
 import SettingsIcon from '@mui/icons-material/Settings'
 import KeyboardIcon from '@mui/icons-material/Keyboard'
 import SmartToyIcon from '@mui/icons-material/SmartToy'
+import NotificationsIcon from '@mui/icons-material/Notifications'
 import CloseIcon from '@mui/icons-material/Close'
 import { useStore } from '../../store'
 import { AI_TOOLS, AITool } from '../../types'
@@ -30,6 +32,8 @@ export default function SettingsMenu() {
 
   const aiTool = useStore((state) => state.aiTool)
   const setAITool = useStore((state) => state.setAITool)
+  const notificationsEnabled = useStore((state) => state.notificationsEnabled)
+  const setNotificationsEnabled = useStore((state) => state.setNotificationsEnabled)
 
   const selectedTool = AI_TOOLS.find((t) => t.id === aiTool) || AI_TOOLS[0]
 
@@ -95,6 +99,21 @@ export default function SettingsMenu() {
             primary="AI Tool"
             secondary={selectedTool.name}
             secondaryTypographyProps={{ variant: 'caption' }}
+          />
+        </MenuItem>
+        <MenuItem onClick={() => setNotificationsEnabled(!notificationsEnabled)}>
+          <ListItemIcon>
+            <NotificationsIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText
+            primary="Notifications"
+            secondary="Story status changes"
+            secondaryTypographyProps={{ variant: 'caption' }}
+          />
+          <Switch
+            edge="end"
+            checked={notificationsEnabled}
+            size="small"
           />
         </MenuItem>
         <MenuItem onClick={handleKeyboardShortcuts}>

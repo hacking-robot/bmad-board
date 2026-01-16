@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Card, CardContent, Typography, Box, Chip, Button, CircularProgress, Tooltip, IconButton, Menu, Snackbar } from '@mui/material'
+import { useDraggable } from '@dnd-kit/core'
+import { CSS } from '@dnd-kit/utilities'
 import DescriptionIcon from '@mui/icons-material/Description'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline'
@@ -10,6 +12,7 @@ import PersonIcon from '@mui/icons-material/Person'
 import GitHubIcon from '@mui/icons-material/GitHub'
 import CompareArrowsIcon from '@mui/icons-material/CompareArrows'
 import AutorenewIcon from '@mui/icons-material/Autorenew'
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator'
 import { Story, EPIC_COLORS } from '../../types'
 import { useStore } from '../../store'
 import { useWorkflow } from '../../hooks/useWorkflow'
@@ -17,9 +20,10 @@ import GitDiffDialog from '../GitDiffDialog'
 
 interface StoryCardProps {
   story: Story
+  isDragging?: boolean
 }
 
-export default function StoryCard({ story }: StoryCardProps) {
+export default function StoryCard({ story, isDragging = false }: StoryCardProps) {
   const setSelectedStory = useStore((state) => state.setSelectedStory)
   const projectPath = useStore((state) => state.projectPath)
   const addAgent = useStore((state) => state.addAgent)
@@ -36,6 +40,15 @@ export default function StoryCard({ story }: StoryCardProps) {
   const [branchExists, setBranchExists] = useState(false)
   const [isActivelyWorking, setIsActivelyWorking] = useState(false)
   const [diffDialogOpen, setDiffDialogOpen] = useState(false)
+
+  // Make card draggable
+  const { attributes, listeners, setNodeRef, transform, isDragging: isBeingDragged } = useDraggable({
+    id: story.id
+  })
+  const dragStyle = transform ? {
+    transform: CSS.Translate.toString(transform),
+    zIndex: 1000
+  } : undefined
 
   // Check if the story's branch exists and has recent activity
   useEffect(() => {
@@ -116,6 +129,31 @@ export default function StoryCard({ story }: StoryCardProps) {
   const gitCommitComplete = `git add . && git commit -m "feat(${branchName}): complete story ${story.epicId}.${story.storyNumber}"`
   const gitCommitCommand = story.status === 'review' ? gitCommitImplementation : gitCommitComplete
 
+  // Generate git commit command based on command name
+  const getAgentGitCommand = (command: string): string => {
+    // Remove leading * or / and get just the last part after colon
+    const cleanCommand = command.replace(/^[*\/]/, '')
+    const actionPart = cleanCommand.includes(':') ? cleanCommand.split(':').pop()! : cleanCommand
+
+    const cmdLower = actionPart.toLowerCase()
+    let commitType = 'chore'
+
+    // Determine commit type from command name
+    if (cmdLower.includes('implement') || cmdLower.includes('feature') || cmdLower.includes('quick')) {
+      commitType = 'feat'
+    } else if (cmdLower.includes('review') || cmdLower.includes('fix')) {
+      commitType = 'fix'
+    } else if (cmdLower.includes('test') || cmdLower.includes('playtest')) {
+      commitType = 'test'
+    } else if (cmdLower.includes('doc') || cmdLower.includes('prd') || cmdLower.includes('draft') || cmdLower.includes('arch')) {
+      commitType = 'docs'
+    } else if (cmdLower.includes('ux') || cmdLower.includes('design') || cmdLower.includes('style')) {
+      commitType = 'style'
+    }
+
+    return `git add . && git commit -m "${commitType}(${branchName}): ${actionPart} story ${story.epicId}.${story.storyNumber}"`
+  }
+
   const handleAgentAction = async (e: React.MouseEvent) => {
     e.stopPropagation()
 
@@ -173,24 +211,47 @@ export default function StoryCard({ story }: StoryCardProps) {
   return (
     <>
       <Card
+        ref={setNodeRef}
         elevation={0}
         sx={{
           border: 1,
-          borderColor: runningAgent ? 'success.main' : 'divider',
-          transition: 'all 0.15s ease',
+          borderColor: runningAgent ? 'success.main' : isDragging ? 'primary.main' : 'divider',
+          transition: isDragging ? 'none' : 'all 0.15s ease',
           position: 'relative',
-          cursor: 'pointer',
+          cursor: isDragging ? 'grabbing' : 'pointer',
+          // Hide the original card when being dragged (DragOverlay shows the copy)
+          opacity: isBeingDragged ? 0.3 : isDragging ? 0.9 : 1,
+          boxShadow: isDragging ? '0 8px 20px rgba(0,0,0,0.2)' : 'none',
           '&:hover': {
             borderColor: runningAgent ? 'success.main' : 'primary.main',
-            transform: 'translateY(-2px)',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-          }
+            transform: isDragging ? 'none' : 'translateY(-2px)',
+            boxShadow: isDragging ? '0 8px 20px rgba(0,0,0,0.2)' : '0 4px 12px rgba(0,0,0,0.1)'
+          },
+          ...dragStyle
         }}
         onClick={handleClick}
       >
         <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
           {/* Header: Epic Badge + Story ID + Quick Actions Menu */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+            {/* Drag Handle */}
+            <Box
+              {...attributes}
+              {...listeners}
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                cursor: 'grab',
+                color: 'text.disabled',
+                ml: -0.5,
+                mr: -0.5,
+                '&:hover': { color: 'text.secondary' },
+                '&:active': { cursor: 'grabbing' }
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <DragIndicatorIcon sx={{ fontSize: 18 }} />
+            </Box>
             <Tooltip title="Epics group related stories into a theme" arrow placement="top">
               <Chip
                 label={`Epic ${story.epicId}`}
@@ -452,11 +513,22 @@ export default function StoryCard({ story }: StoryCardProps) {
               {/* Step Header */}
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                 <PersonIcon sx={{ fontSize: 18, color: agent?.color || 'text.secondary' }} />
-                <Typography variant="body2" fontWeight={500}>
+                <Typography variant="body2" fontWeight={500} sx={{ flex: 1 }}>
                   {step.label}
                 </Typography>
                 {step.primary && (
                   <Chip label="Primary" size="small" sx={{ height: 18, fontSize: '0.65rem' }} />
+                )}
+                {step.command && (
+                  <Tooltip title={`Copy git commit for ${step.command}`}>
+                    <IconButton
+                      size="small"
+                      onClick={(e) => handleCopySingle(getAgentGitCommand(step.command), e)}
+                      sx={{ p: 0.25, color: 'text.disabled', '&:hover': { color: 'primary.main' } }}
+                    >
+                      <GitHubIcon sx={{ fontSize: 16 }} />
+                    </IconButton>
+                  </Tooltip>
                 )}
               </Box>
               <Typography variant="caption" color="text.secondary" component="div" sx={{ mb: 1, ml: 3.25 }}>
@@ -544,7 +616,7 @@ export default function StoryCard({ story }: StoryCardProps) {
       <GitDiffDialog
         open={diffDialogOpen}
         onClose={() => setDiffDialogOpen(false)}
-        branchName={story.id}
+        branchName={branchName}
       />
     </>
   )

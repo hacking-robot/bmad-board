@@ -65,6 +65,12 @@ export function useProjectData() {
   const loadProjectData = useCallback(async () => {
     if (!projectPath || !projectType) return
 
+    // Get current state values (don't use reactive values to avoid infinite loops)
+    const { stories: currentStories, notificationsEnabled, isUserDragging, setIsUserDragging } = useStore.getState()
+
+    // Capture previous statuses before loading new data
+    const previousStatuses = new Map(currentStories.map(s => [s.id, s.status]))
+
     setLoading(true)
     setError(null)
 
@@ -121,10 +127,25 @@ export function useProjectData() {
       setEpics(epics)
       setStories(stories)
       setLastRefreshed(new Date())
+
+      // Check for status changes and show notifications (only for external changes)
+      if (notificationsEnabled && !isUserDragging && previousStatuses.size > 0) {
+        for (const story of stories) {
+          const oldStatus = previousStatuses.get(story.id)
+          if (oldStatus && oldStatus !== story.status) {
+            window.fileAPI.showNotification(
+              'Story Status Changed',
+              `"${story.title}" moved from ${oldStatus} to ${story.status}`
+            )
+          }
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load project data')
     } finally {
       setLoading(false)
+      // Reset user dragging flag after load completes
+      setIsUserDragging(false)
     }
   }, [projectPath, projectType, setEpics, setStories, setLoading, setError, setLastRefreshed])
 

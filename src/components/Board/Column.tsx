@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Box, Typography, Paper, Chip, IconButton, Tooltip, Popover } from '@mui/material'
+import { useDroppable } from '@dnd-kit/core'
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
@@ -26,6 +27,11 @@ export default function Column({
 }: ColumnProps) {
   const [infoAnchor, setInfoAnchor] = useState<HTMLButtonElement | null>(null)
   const { getStatus, getPrimaryNextStep, getAgentName } = useWorkflow()
+
+  // Make column droppable
+  const { setNodeRef, isOver } = useDroppable({
+    id: status
+  })
 
   // Get status info from flow.json
   const statusDef = getStatus(status)
@@ -246,13 +252,21 @@ export default function Column({
         </Box>
       </Popover>
 
-      {/* Stories List */}
+      {/* Stories List - Droppable area */}
       <Box
+        ref={setNodeRef}
         sx={{
           flex: 1,
           overflowY: 'auto',
           overflowX: 'hidden',
           p: 1.5,
+          bgcolor: isOver ? 'action.hover' : 'transparent',
+          transition: 'background-color 0.2s ease',
+          border: isOver ? 2 : 0,
+          borderColor: isOver ? 'primary.main' : 'transparent',
+          borderStyle: 'dashed',
+          borderRadius: 1,
+          m: isOver ? 0.5 : 0,
           '&::-webkit-scrollbar': {
             width: 6
           },
@@ -276,7 +290,8 @@ export default function Column({
           sx={{
             display: 'flex',
             flexDirection: 'column',
-            gap: 1.5
+            gap: 1.5,
+            minHeight: isOver ? 100 : 0
           }}
         >
           {stories.length === 0 ? (
@@ -287,7 +302,7 @@ export default function Column({
               }}
             >
               <Typography variant="body2" color="text.secondary">
-                No stories
+                {isOver ? 'Drop here' : 'No stories'}
               </Typography>
             </Box>
           ) : (
