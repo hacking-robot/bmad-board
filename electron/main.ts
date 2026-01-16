@@ -757,6 +757,58 @@ ipcMain.handle('git-current-branch', async (_, projectPath: string) => {
   return { branch: result.stdout.trim() }
 })
 
+// List all local branches
+ipcMain.handle('git-list-branches', async (_, projectPath: string) => {
+  const result = runGitCommand(['branch', '--format=%(refname:short)'], projectPath)
+  if (result.error) {
+    return { branches: [], error: 'Failed to list branches' }
+  }
+  const branches = result.stdout.trim().split('\n').filter(Boolean)
+  return { branches }
+})
+
+// Checkout a branch
+ipcMain.handle('git-checkout-branch', async (_, projectPath: string, branchName: string) => {
+  // Security: Validate branch name
+  if (!isValidGitRef(branchName)) {
+    return { success: false, error: 'Invalid branch name' }
+  }
+
+  const result = runGitCommand(['checkout', branchName], projectPath)
+  if (result.error) {
+    // Parse common git checkout errors for better messages
+    if (result.error.includes('Your local changes')) {
+      return { success: false, error: 'You have uncommitted changes. Commit or stash them before switching branches.' }
+    }
+    if (result.error.includes('did not match any')) {
+      return { success: false, error: `Branch '${branchName}' does not exist.` }
+    }
+    return { success: false, error: result.error }
+  }
+  return { success: true }
+})
+
+// Create and switch to a new branch
+ipcMain.handle('git-create-branch', async (_, projectPath: string, branchName: string) => {
+  // Security: Validate branch name
+  if (!isValidGitRef(branchName)) {
+    return { success: false, error: 'Invalid branch name' }
+  }
+
+  const result = runGitCommand(['checkout', '-b', branchName], projectPath)
+  if (result.error) {
+    // Parse common git checkout -b errors for better messages
+    if (result.error.includes('already exists')) {
+      return { success: false, error: `Branch '${branchName}' already exists.`, alreadyExists: true }
+    }
+    if (result.error.includes('Your local changes')) {
+      return { success: false, error: 'You have uncommitted changes. Commit or stash them before creating a new branch.' }
+    }
+    return { success: false, error: result.error }
+  }
+  return { success: true }
+})
+
 // Check if a branch exists
 ipcMain.handle('git-branch-exists', async (_, projectPath: string, branchName: string) => {
   // Security: Validate branch name
@@ -765,6 +817,42 @@ ipcMain.handle('git-branch-exists', async (_, projectPath: string, branchName: s
   }
   const result = runGitCommand(['rev-parse', '--verify', branchName], projectPath)
   return { exists: !result.error }
+})
+
+// Check if there are uncommitted changes
+ipcMain.handle('git-has-changes', async (_, projectPath: string) => {
+  const result = runGitCommand(['status', '--porcelain'], projectPath)
+  if (result.error) {
+    return { hasChanges: false, error: result.error }
+  }
+  const hasChanges = result.stdout.trim().length > 0
+  return { hasChanges }
+})
+
+// Stage all changes and commit with a message
+ipcMain.handle('git-commit', async (_, projectPath: string, message: string) => {
+  // Security: Basic validation of commit message
+  if (!message || message.length > 1000) {
+    return { success: false, error: 'Invalid commit message' }
+  }
+
+  // First, stage all changes
+  const addResult = runGitCommand(['add', '.'], projectPath)
+  if (addResult.error) {
+    return { success: false, error: `Failed to stage changes: ${addResult.error}` }
+  }
+
+  // Then commit
+  const commitResult = runGitCommand(['commit', '-m', message], projectPath)
+  if (commitResult.error) {
+    // Check for common errors
+    if (commitResult.error.includes('nothing to commit')) {
+      return { success: false, error: 'Nothing to commit' }
+    }
+    return { success: false, error: commitResult.error }
+  }
+
+  return { success: true }
 })
 
 // Check if a branch has recent activity (recently modified files or recent commits)

@@ -67,6 +67,16 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
   const [branchExists, setBranchExists] = useState(false)
   const [isActivelyWorking, setIsActivelyWorking] = useState(false)
   const [diffDialogOpen, setDiffDialogOpen] = useState(false)
+  const [committing, setCommitting] = useState(false)
+
+  // Get git state from store (reactive)
+  const currentBranch = useStore((state) => state.currentBranch)
+  const hasUncommittedChanges = useStore((state) => state.hasUncommittedChanges)
+  const setHasUncommittedChanges = useStore((state) => state.setHasUncommittedChanges)
+
+  // Compute if we're on this story's branch (derived from store state)
+  const storyBranchName = `${story.epicId}-${story.id}`
+  const isOnStoryBranch = currentBranch === storyBranchName
 
   // Make card sortable (draggable + reorderable)
   const { attributes, listeners, setNodeRef, transform, transition, isDragging: isBeingDragged } = useSortable({
@@ -119,7 +129,7 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
     return () => {
       if (interval) clearInterval(interval)
     }
-  }, [projectPath, story.id, story.status])
+  }, [projectPath, story.epicId, story.id, story.status])
 
   const epicColor = EPIC_COLORS[(story.epicId - 1) % EPIC_COLORS.length]
   const nextSteps = getNextSteps(effectiveStatus)
@@ -153,9 +163,35 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
   const gitBranchCommand = `git checkout -b "${branchName}"`
 
   // Git commands for committing (combined add + commit)
-  const gitCommitImplementation = `git add . && git commit -m "feat(${branchName}): implement story ${story.epicId}.${story.storyNumber}"`
-  const gitCommitComplete = `git add . && git commit -m "feat(${branchName}): complete story ${story.epicId}.${story.storyNumber}"`
-  const gitCommitCommand = effectiveStatus === 'review' ? gitCommitImplementation : gitCommitComplete
+  const gitCommitMessageImpl = `feat(${branchName}): implement story ${story.epicId}.${story.storyNumber}`
+  const gitCommitMessageComplete = `feat(${branchName}): complete story ${story.epicId}.${story.storyNumber}`
+  const gitCommitMessage = effectiveStatus === 'review' ? gitCommitMessageImpl : gitCommitMessageComplete
+  const gitCommitCommand = `git add . && git commit -m "${gitCommitMessage}"`
+
+  // Handle commit action
+  const handleCommit = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!projectPath) return
+
+    setCommitting(true)
+    try {
+      const result = await window.gitAPI.commit(projectPath, gitCommitMessage)
+      if (result.success) {
+        setHasUncommittedChanges(false)
+        setSnackbarMessage('Changes committed successfully')
+        setSnackbarOpen(true)
+        handleMenuClose()
+      } else {
+        setSnackbarMessage(result.error || 'Failed to commit')
+        setSnackbarOpen(true)
+      }
+    } catch {
+      setSnackbarMessage('Failed to commit changes')
+      setSnackbarOpen(true)
+    } finally {
+      setCommitting(false)
+    }
+  }
 
   // Generate git commit command based on command name
   const getAgentGitCommand = (command: string): string => {
@@ -530,14 +566,24 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
           </Box>
         )}
 
-        {/* Git Commit Command - For review (commit implementation) and done (complete) */}
-        {(effectiveStatus === 'review' || effectiveStatus === 'done') && (
+        {/* Git Commit Command - For review (commit implementation) and done (complete) - only when on story branch with uncommitted changes */}
+        {(effectiveStatus === 'review' || effectiveStatus === 'done') && isOnStoryBranch && hasUncommittedChanges && (
           <Box sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: 'divider', bgcolor: 'action.hover' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
               <GitHubIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
-              <Typography variant="body2" fontWeight={500}>
+              <Typography variant="body2" fontWeight={500} sx={{ flex: 1 }}>
                 {effectiveStatus === 'review' ? 'Commit Implementation' : 'Commit & Complete'}
               </Typography>
+              <Button
+                size="small"
+                variant="contained"
+                onClick={handleCommit}
+                disabled={committing}
+                startIcon={committing ? <CircularProgress size={12} color="inherit" /> : undefined}
+                sx={{ fontSize: '0.7rem', py: 0.25, px: 1, minWidth: 0 }}
+              >
+                {committing ? 'Committing...' : 'Commit'}
+              </Button>
             </Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Typography
@@ -558,13 +604,15 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
               >
                 {gitCommitCommand}
               </Typography>
-              <IconButton
-                size="small"
-                onClick={(e) => handleCopySingle(gitCommitCommand, e)}
-                sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}
-              >
-                <ContentCopyIcon sx={{ fontSize: 16 }} />
-              </IconButton>
+              <Tooltip title="Copy command">
+                <IconButton
+                  size="small"
+                  onClick={(e) => handleCopySingle(gitCommitCommand, e)}
+                  sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}
+                >
+                  <ContentCopyIcon sx={{ fontSize: 16 }} />
+                </IconButton>
+              </Tooltip>
             </Box>
           </Box>
         )}
@@ -585,7 +633,7 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
                 {step.primary && (
                   <Chip label="Primary" size="small" sx={{ height: 18, fontSize: '0.65rem' }} />
                 )}
-                {step.command && (
+                {step.command && isOnStoryBranch && hasUncommittedChanges && (
                   <Tooltip title={`Copy git commit for ${transformCommand(step.command)}`}>
                     <IconButton
                       size="small"
