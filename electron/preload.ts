@@ -20,14 +20,46 @@ export interface RecentProject {
   name: string
 }
 
+export type AITool = 'claude-code' | 'cursor' | 'windsurf' | 'roo-code'
+
+export interface WindowBounds {
+  x: number
+  y: number
+  width: number
+  height: number
+  isMaximized?: boolean
+}
+
+// Human Review checklist types (must match src/types/index.ts)
+export interface HumanReviewChecklistItem {
+  id: string
+  label: string
+  description?: string
+}
+
+export interface StoryReviewState {
+  storyId: string
+  checkedItems: string[]
+  lastUpdated: number
+}
+
 export interface AppSettings {
   themeMode: 'light' | 'dark'
+  aiTool: AITool
   projectPath: string | null
   projectType: ProjectType | null
   selectedEpicId: number | null
   collapsedColumnsByEpic: Record<string, string[]>
   agentHistory?: AgentHistoryEntry[]
   recentProjects: RecentProject[]
+  windowBounds?: WindowBounds
+  notificationsEnabled: boolean
+  storyOrder: Record<string, Record<string, string[]>> // { [epicId]: { [status]: [storyIds...] } }
+  // Human Review feature
+  enableHumanReviewColumn: boolean
+  humanReviewChecklist: HumanReviewChecklistItem[]
+  humanReviewStates: Record<string, StoryReviewState> // keyed by storyId
+  humanReviewStories: string[] // story IDs currently in human-review (app-level status override)
 }
 
 export interface FileAPI {
@@ -38,6 +70,8 @@ export interface FileAPI {
   saveSettings: (settings: Partial<AppSettings>) => Promise<boolean>
   startWatching: (projectPath: string, projectType: ProjectType) => Promise<boolean>
   stopWatching: () => Promise<boolean>
+  updateStoryStatus: (filePath: string, newStatus: string) => Promise<{ success: boolean; error?: string }>
+  showNotification: (title: string, body: string) => Promise<void>
   onFilesChanged: (callback: () => void) => () => void
   onShowKeyboardShortcuts: (callback: () => void) => () => void
 }
@@ -50,6 +84,8 @@ const fileAPI: FileAPI = {
   saveSettings: (settings: Partial<AppSettings>) => ipcRenderer.invoke('save-settings', settings),
   startWatching: (projectPath: string, projectType: ProjectType) => ipcRenderer.invoke('start-watching', projectPath, projectType),
   stopWatching: () => ipcRenderer.invoke('stop-watching'),
+  updateStoryStatus: (filePath: string, newStatus: string) => ipcRenderer.invoke('update-story-status', filePath, newStatus),
+  showNotification: (title: string, body: string) => ipcRenderer.invoke('show-notification', title, body),
   onFilesChanged: (callback: () => void) => {
     const listener = () => callback()
     ipcRenderer.on('files-changed', listener)
@@ -168,9 +204,68 @@ const agentAPI: AgentAPI = {
 
 contextBridge.exposeInMainWorld('agentAPI', agentAPI)
 
+// Git API types
+export interface GitChangedFile {
+  status: 'A' | 'M' | 'D' | 'R' | 'C'
+  path: string
+  mtime: number | null
+  lastCommitTime: number | null
+}
+
+export interface GitBranchActivity {
+  isOnBranch: boolean
+  hasRecentFileChanges: boolean
+  lastCommitTime: number | null
+  hasRecentCommit: boolean
+  isActive: boolean
+}
+
+export interface GitCommit {
+  hash: string
+  author: string
+  timestamp: number
+  subject: string
+}
+
+export interface GitCommitFile {
+  status: 'A' | 'M' | 'D' | 'R' | 'C'
+  path: string
+}
+
+export interface GitAPI {
+  getCurrentBranch: (projectPath: string) => Promise<{ branch?: string; error?: string }>
+  branchExists: (projectPath: string, branchName: string) => Promise<{ exists: boolean }>
+  getBranchActivity: (projectPath: string, branchName: string) => Promise<GitBranchActivity>
+  getDefaultBranch: (projectPath: string) => Promise<{ branch?: string; error?: string }>
+  getChangedFiles: (projectPath: string, baseBranch: string, featureBranch?: string) => Promise<{ files?: GitChangedFile[]; mergeBase?: string; error?: string }>
+  getFileContent: (projectPath: string, filePath: string, commitOrBranch: string) => Promise<{ content: string }>
+  getWorkingFileContent: (projectPath: string, filePath: string) => Promise<{ content: string }>
+  getCommitHistory: (projectPath: string, baseBranch: string, featureBranch: string) => Promise<{ commits: GitCommit[]; error?: string }>
+  getCommitDiff: (projectPath: string, commitHash: string) => Promise<{ files: GitCommitFile[]; error?: string }>
+  getFileAtParent: (projectPath: string, filePath: string, commitHash: string) => Promise<{ content: string }>
+  getFileAtCommit: (projectPath: string, filePath: string, commitHash: string) => Promise<{ content: string }>
+}
+
+const gitAPI: GitAPI = {
+  getCurrentBranch: (projectPath) => ipcRenderer.invoke('git-current-branch', projectPath),
+  branchExists: (projectPath, branchName) => ipcRenderer.invoke('git-branch-exists', projectPath, branchName),
+  getBranchActivity: (projectPath, branchName) => ipcRenderer.invoke('git-branch-activity', projectPath, branchName),
+  getDefaultBranch: (projectPath) => ipcRenderer.invoke('git-default-branch', projectPath),
+  getChangedFiles: (projectPath, baseBranch, featureBranch) => ipcRenderer.invoke('git-changed-files', projectPath, baseBranch, featureBranch),
+  getFileContent: (projectPath, filePath, commitOrBranch) => ipcRenderer.invoke('git-file-content', projectPath, filePath, commitOrBranch),
+  getWorkingFileContent: (projectPath, filePath) => ipcRenderer.invoke('git-working-file-content', projectPath, filePath),
+  getCommitHistory: (projectPath, baseBranch, featureBranch) => ipcRenderer.invoke('git-commit-history', projectPath, baseBranch, featureBranch),
+  getCommitDiff: (projectPath, commitHash) => ipcRenderer.invoke('git-commit-diff', projectPath, commitHash),
+  getFileAtParent: (projectPath, filePath, commitHash) => ipcRenderer.invoke('git-file-at-parent', projectPath, filePath, commitHash),
+  getFileAtCommit: (projectPath, filePath, commitHash) => ipcRenderer.invoke('git-file-at-commit', projectPath, filePath, commitHash)
+}
+
+contextBridge.exposeInMainWorld('gitAPI', gitAPI)
+
 declare global {
   interface Window {
     fileAPI: FileAPI
     agentAPI: AgentAPI
+    gitAPI: GitAPI
   }
 }

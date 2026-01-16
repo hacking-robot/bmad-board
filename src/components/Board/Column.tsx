@@ -1,8 +1,13 @@
-import { Box, Typography, Paper, Chip, IconButton, Tooltip } from '@mui/material'
+import { useState } from 'react'
+import { Box, Typography, Paper, Chip, IconButton, Tooltip, Popover } from '@mui/material'
+import { useDroppable } from '@dnd-kit/core'
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import { Story, StoryStatus } from '../../types'
 import StoryCard from '../StoryCard/StoryCard'
+import { useWorkflow } from '../../hooks/useWorkflow'
 
 interface ColumnProps {
   status: StoryStatus
@@ -14,14 +19,29 @@ interface ColumnProps {
 }
 
 export default function Column({
-  status: _status,
+  status,
   label,
   color,
   stories,
   isCollapsed = false,
   onToggleCollapse
 }: ColumnProps) {
-  void _status // Used for type discrimination
+  const [infoAnchor, setInfoAnchor] = useState<HTMLButtonElement | null>(null)
+  const { getStatus, getPrimaryNextStep, getAgentName } = useWorkflow()
+
+  // Make column droppable
+  const { setNodeRef, isOver } = useDroppable({
+    id: status
+  })
+
+  // Get status info from flow.json
+  const statusDef = getStatus(status)
+  const primaryStep = getPrimaryNextStep(status)
+  const info = {
+    description: statusDef?.description || '',
+    agent: primaryStep ? getAgentName(primaryStep.agentId) : '-',
+    nextStep: primaryStep?.description || 'No next step defined'
+  }
 
   // Collapsed view - thin vertical bar
   if (isCollapsed) {
@@ -159,6 +179,19 @@ export default function Column({
         >
           {label}
         </Typography>
+        <Tooltip title="What's this?">
+          <IconButton
+            size="small"
+            onClick={(e) => setInfoAnchor(e.currentTarget)}
+            sx={{
+              p: 0.25,
+              color: 'text.disabled',
+              '&:hover': { color: 'text.secondary' }
+            }}
+          >
+            <InfoOutlinedIcon sx={{ fontSize: 16 }} />
+          </IconButton>
+        </Tooltip>
         <Chip
           label={stories.length}
           size="small"
@@ -172,13 +205,69 @@ export default function Column({
         />
       </Box>
 
-      {/* Stories List */}
+      {/* Info Popover */}
+      <Popover
+        open={Boolean(infoAnchor)}
+        anchorEl={infoAnchor}
+        onClose={() => setInfoAnchor(null)}
+        anchorOrigin={{
+          vertical: 'bottom',
+          horizontal: 'center'
+        }}
+        transformOrigin={{
+          vertical: 'top',
+          horizontal: 'center'
+        }}
+        slotProps={{
+          paper: {
+            sx: {
+              p: 2,
+              maxWidth: 280,
+              borderRadius: 1.5
+            }
+          }
+        }}
+      >
+        <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+          {label}
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+          {info.description}
+        </Typography>
+        {info.agent !== '-' && (
+          <Typography variant="caption" color="primary.main" sx={{ display: 'block', mb: 1 }}>
+            Agent: {info.agent}
+          </Typography>
+        )}
+        <Box
+          sx={{
+            bgcolor: 'action.hover',
+            p: 1,
+            borderRadius: 1,
+            mt: 1
+          }}
+        >
+          <Typography variant="caption" fontWeight={500}>
+            Next: {info.nextStep}
+          </Typography>
+        </Box>
+      </Popover>
+
+      {/* Stories List - Droppable area */}
       <Box
+        ref={setNodeRef}
         sx={{
           flex: 1,
           overflowY: 'auto',
           overflowX: 'hidden',
           p: 1.5,
+          bgcolor: isOver ? 'action.hover' : 'transparent',
+          transition: 'background-color 0.2s ease',
+          border: isOver ? 2 : 0,
+          borderColor: isOver ? 'primary.main' : 'transparent',
+          borderStyle: 'dashed',
+          borderRadius: 1,
+          m: isOver ? 0.5 : 0,
           '&::-webkit-scrollbar': {
             width: 6
           },
@@ -198,30 +287,33 @@ export default function Column({
           }
         }}
       >
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 1.5
-          }}
-        >
-          {stories.length === 0 ? (
-            <Box
-              sx={{
-                py: 4,
-                textAlign: 'center'
-              }}
-            >
-              <Typography variant="body2" color="text.secondary">
-                No stories
-              </Typography>
-            </Box>
-          ) : (
-            stories.map((story) => (
-              <StoryCard key={story.id} story={story} />
-            ))
-          )}
-        </Box>
+        <SortableContext items={stories.map(s => s.id)} strategy={verticalListSortingStrategy}>
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 1.5,
+              minHeight: isOver ? 100 : 0
+            }}
+          >
+            {stories.length === 0 ? (
+              <Box
+                sx={{
+                  py: 4,
+                  textAlign: 'center'
+                }}
+              >
+                <Typography variant="body2" color="text.secondary">
+                  {isOver ? 'Drop here' : 'No stories'}
+                </Typography>
+              </Box>
+            ) : (
+              stories.map((story) => (
+                <StoryCard key={story.id} story={story} />
+              ))
+            )}
+          </Box>
+        </SortableContext>
       </Box>
     </Paper>
   )

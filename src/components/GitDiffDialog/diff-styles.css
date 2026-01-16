@@ -1,0 +1,116 @@
+/* Git Diff View Custom Styles */
+
+/* Light theme overrides */
+.diff-view-wrapper.light {
+  --diff-add-content--: hsl(142, 77%, 88%);
+  --diff-del-content--: hsl(0, 100%, 90%);
+  --diff-add-lineNumber--: hsl(142, 77%, 82%);
+  --diff-del-lineNumber--: hsl(0, 100%, 85%);
+  --diff-plain-content--: #ffffff;
+  --diff-plain-lineNumber--: #f3f4f6;
+  --diff-expand-content--: #f9fafb;
+}
+
+/* Dark theme overrides */
+.diff-view-wrapper.dark {
+  --diff-add-content--: hsl(142, 30%, 18%);
+  --diff-del-content--: hsl(0, 30%, 18%);
+  --diff-add-lineNumber--: hsl(142, 30%, 14%);
+  --diff-del-lineNumber--: hsl(0, 30%, 14%);
+  --diff-plain-content--: #1a1a1a;
+  --diff-plain-lineNumber--: #262626;
+  --diff-expand-content--: #262626;
+}
+
+/* General diff view styling */
+.diff-view-wrapper .diff-view {
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+/* Line number styling */
+.diff-view-wrapper .diff-view-line-number {
+  text-align: right;
+  padding-right: 8px;
+  user-select: none;
+  opacity: 0.7;
+}
+
+/* Code content styling */
+.diff-view-wrapper .diff-view-content {
+  padding-left: 8px;
+  white-space: pre;
+  tab-size: 2;
+}
+
+/* Syntax highlighting enhancements */
+.diff-view-wrapper .diff-view-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+/* Split view spacing */
+.diff-view-wrapper .diff-view-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+}
+
+/* Unified view */
+.diff-view-wrapper .diff-view-unified {
+  width: 100%;
+}
+
+/* Scrollbar styling for dark theme */
+.diff-view-wrapper.dark ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.diff-view-wrapper.dark ::-webkit-scrollbar-track {
+  background: #262626;
+}
+
+.diff-view-wrapper.dark ::-webkit-scrollbar-thumb {
+  background: #404040;
+  border-radius: 4px;
+}
+
+.diff-view-wrapper.dark ::-webkit-scrollbar-thumb:hover {
+  background: #525252;
+}
+
+/* Light theme scrollbar */
+.diff-view-wrapper.light ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.diff-view-wrapper.light ::-webkit-scrollbar-track {
+  background: #f3f4f6;
+}
+
+.diff-view-wrapper.light ::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 4px;
+}
+
+.diff-view-wrapper.light ::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+/* Ensure proper overflow handling */
+.diff-view-wrapper {
+  overflow: auto;
+  max-height: 500px;
+}
+
+/* File header in split view */
+.diff-view-wrapper .diff-view-file-header {
+  padding: 8px 12px;
+  font-weight: 500;
+  border-bottom: 1px solid var(--divider-color, #e5e7eb);
+}
+
+.diff-view-wrapper.dark .diff-view-file-header {
+  border-bottom-color: #404040;
+}
