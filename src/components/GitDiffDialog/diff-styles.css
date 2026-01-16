@@ -1,25 +1,27 @@
-/* Git Diff View Custom Styles */
+/* Git Diff View Custom Styles - Gruvbox Theme */
 
-/* Light theme overrides */
+/* Gruvbox Light theme overrides */
 .diff-view-wrapper.light {
-  --diff-add-content--: hsl(142, 77%, 88%);
-  --diff-del-content--: hsl(0, 100%, 90%);
-  --diff-add-lineNumber--: hsl(142, 77%, 82%);
-  --diff-del-lineNumber--: hsl(0, 100%, 85%);
-  --diff-plain-content--: #ffffff;
-  --diff-plain-lineNumber--: #f3f4f6;
-  --diff-expand-content--: #f9fafb;
+  /* Green tinted backgrounds for additions */
+  --diff-add-content--: #daf0c4;
+  --diff-del-content--: #f9d8d8;
+  --diff-add-lineNumber--: #c8e6a8;
+  --diff-del-lineNumber--: #f5c4c4;
+  --diff-plain-content--: #fbf1c7;
+  --diff-plain-lineNumber--: #ebdbb2;
+  --diff-expand-content--: #f2e5bc;
 }
 
-/* Dark theme overrides */
+/* Gruvbox Dark theme overrides */
 .diff-view-wrapper.dark {
-  --diff-add-content--: hsl(142, 30%, 18%);
-  --diff-del-content--: hsl(0, 30%, 18%);
-  --diff-add-lineNumber--: hsl(142, 30%, 14%);
-  --diff-del-lineNumber--: hsl(0, 30%, 14%);
-  --diff-plain-content--: #1a1a1a;
-  --diff-plain-lineNumber--: #262626;
-  --diff-expand-content--: #262626;
+  /* Gruvbox dark green/red tinted backgrounds */
+  --diff-add-content--: #3d4220;
+  --diff-del-content--: #442828;
+  --diff-add-lineNumber--: #333a1a;
+  --diff-del-lineNumber--: #3a2020;
+  --diff-plain-content--: #282828;
+  --diff-plain-lineNumber--: #3c3836;
+  --diff-expand-content--: #3c3836;
 }
 
 /* General diff view styling */
@@ -60,42 +62,42 @@
   width: 100%;
 }
 
-/* Scrollbar styling for dark theme */
+/* Gruvbox Dark scrollbar styling */
 .diff-view-wrapper.dark ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 .diff-view-wrapper.dark ::-webkit-scrollbar-track {
-  background: #262626;
+  background: #3c3836;
 }
 
 .diff-view-wrapper.dark ::-webkit-scrollbar-thumb {
-  background: #404040;
+  background: #665c54;
   border-radius: 4px;
 }
 
 .diff-view-wrapper.dark ::-webkit-scrollbar-thumb:hover {
-  background: #525252;
+  background: #7c6f64;
 }
 
-/* Light theme scrollbar */
+/* Gruvbox Light scrollbar */
 .diff-view-wrapper.light ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 .diff-view-wrapper.light ::-webkit-scrollbar-track {
-  background: #f3f4f6;
+  background: #ebdbb2;
 }
 
 .diff-view-wrapper.light ::-webkit-scrollbar-thumb {
-  background: #d1d5db;
+  background: #bdae93;
   border-radius: 4px;
 }
 
 .diff-view-wrapper.light ::-webkit-scrollbar-thumb:hover {
-  background: #9ca3af;
+  background: #a89984;
 }
 
 /* Ensure proper overflow handling */
@@ -108,9 +110,9 @@
 .diff-view-wrapper .diff-view-file-header {
   padding: 8px 12px;
   font-weight: 500;
-  border-bottom: 1px solid var(--divider-color, #e5e7eb);
+  border-bottom: 1px solid var(--divider-color, #d5c4a1);
 }
 
 .diff-view-wrapper.dark .diff-view-file-header {
-  border-bottom-color: #404040;
+  border-bottom-color: #665c54;
 }
