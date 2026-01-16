@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import { Epic, Story, StoryContent, StoryStatus, Agent, ProjectType, AgentHistoryEntry, AITool } from './types'
+import { Epic, Story, StoryContent, StoryStatus, Agent, ProjectType, AgentHistoryEntry, AITool, HumanReviewChecklistItem, StoryReviewState } from './types'
 
 export interface RecentProject {
   path: string
@@ -50,7 +50,7 @@ const electronStorage = {
       const parsed = JSON.parse(value)
       if (parsed.state) {
         // Only save the settings we care about
-        const { themeMode, aiTool, projectPath, projectType, selectedEpicId, collapsedColumnsByEpic, agentHistory, recentProjects, notificationsEnabled } = parsed.state
+        const { themeMode, aiTool, projectPath, projectType, selectedEpicId, collapsedColumnsByEpic, agentHistory, recentProjects, notificationsEnabled, storyOrder, enableHumanReviewColumn, humanReviewChecklist, humanReviewStates, humanReviewStories } = parsed.state
 
         // Don't persist full output - it can contain characters that break JSON
         // Just save metadata and a small summary
@@ -70,7 +70,12 @@ const electronStorage = {
           collapsedColumnsByEpic,
           agentHistory: sanitizedHistory,
           recentProjects: recentProjects || [],
-          notificationsEnabled: notificationsEnabled ?? false
+          notificationsEnabled: notificationsEnabled ?? false,
+          storyOrder: storyOrder || {},
+          enableHumanReviewColumn: enableHumanReviewColumn ?? false,
+          humanReviewChecklist: humanReviewChecklist || [],
+          humanReviewStates: humanReviewStates || {},
+          humanReviewStories: humanReviewStories || []
         })
       }
     } catch (error) {
@@ -87,7 +92,12 @@ const electronStorage = {
       collapsedColumnsByEpic: {},
       agentHistory: [],
       recentProjects: [],
-      notificationsEnabled: false
+      notificationsEnabled: false,
+      storyOrder: {},
+      enableHumanReviewColumn: false,
+      humanReviewChecklist: [],
+      humanReviewStates: {},
+      humanReviewStories: []
     })
   }
 }
@@ -152,6 +162,11 @@ interface AppState {
   toggleColumnCollapse: (status: StoryStatus) => void
   getCollapsedColumns: () => StoryStatus[]
 
+  // Story order (per epic per status)
+  storyOrder: Record<string, Record<string, string[]>>
+  setStoryOrder: (epicId: string, status: string, storyIds: string[]) => void
+  getStoryOrder: (epicId: string, status: string) => string[]
+
   // Story dialog
   selectedStory: Story | null
   storyContent: StoryContent | null
@@ -183,6 +198,20 @@ interface AppState {
   updateHistoryEntry: (id: string, updates: Partial<AgentHistoryEntry>) => void
   clearHistory: () => void
   getHistoryForStory: (storyId: string) => AgentHistoryEntry[]
+
+  // Human Review
+  enableHumanReviewColumn: boolean
+  setEnableHumanReviewColumn: (enabled: boolean) => void
+  humanReviewChecklist: HumanReviewChecklistItem[]
+  humanReviewStates: Record<string, StoryReviewState>
+  toggleReviewItem: (storyId: string, itemId: string) => void
+  isReviewComplete: (storyId: string) => boolean
+  // Human Review status override (app-level, not written to BMAD)
+  humanReviewStories: string[]
+  addToHumanReview: (storyId: string) => void
+  removeFromHumanReview: (storyId: string) => void
+  isInHumanReview: (storyId: string) => boolean
+  getEffectiveStatus: (story: Story) => StoryStatus
 
   // Computed - filtered stories
   getFilteredStories: () => Story[]
@@ -276,6 +305,22 @@ export const useStore = create<AppState>()(
         return state.collapsedColumnsByEpic[epicKey] || []
       },
 
+      // Story order (per epic per status)
+      storyOrder: {},
+      setStoryOrder: (epicId, status, storyIds) => set((state) => ({
+        storyOrder: {
+          ...state.storyOrder,
+          [epicId]: {
+            ...(state.storyOrder[epicId] || {}),
+            [status]: storyIds
+          }
+        }
+      })),
+      getStoryOrder: (epicId, status) => {
+        const state = get()
+        return state.storyOrder[epicId]?.[status] || []
+      },
+
       // Story dialog
       selectedStory: null,
       storyContent: null,
@@ -362,6 +407,57 @@ export const useStore = create<AppState>()(
       getHistoryForStory: (storyId) => {
         const { agentHistory } = get()
         return agentHistory.filter((h) => h.storyId === storyId)
+      },
+
+      // Human Review
+      enableHumanReviewColumn: false,
+      setEnableHumanReviewColumn: (enabled) => set({ enableHumanReviewColumn: enabled }),
+      humanReviewChecklist: [],
+      humanReviewStates: {},
+      toggleReviewItem: (storyId, itemId) => set((state) => {
+        const current = state.humanReviewStates[storyId] || { storyId, checkedItems: [], lastUpdated: 0 }
+        const isChecked = current.checkedItems.includes(itemId)
+        const newCheckedItems = isChecked
+          ? current.checkedItems.filter((id) => id !== itemId)
+          : [...current.checkedItems, itemId]
+
+        return {
+          humanReviewStates: {
+            ...state.humanReviewStates,
+            [storyId]: {
+              storyId,
+              checkedItems: newCheckedItems,
+              lastUpdated: Date.now()
+            }
+          }
+        }
+      }),
+      isReviewComplete: (storyId) => {
+        const { humanReviewStates, humanReviewChecklist } = get()
+        const reviewState = humanReviewStates[storyId]
+        if (!reviewState || humanReviewChecklist.length === 0) return false
+        return reviewState.checkedItems.length === humanReviewChecklist.length
+      },
+      // Human Review status override (app-level, not written to BMAD)
+      humanReviewStories: [],
+      addToHumanReview: (storyId) => set((state) => ({
+        humanReviewStories: state.humanReviewStories.includes(storyId)
+          ? state.humanReviewStories
+          : [...state.humanReviewStories, storyId]
+      })),
+      removeFromHumanReview: (storyId) => set((state) => ({
+        humanReviewStories: state.humanReviewStories.filter((id) => id !== storyId)
+      })),
+      isInHumanReview: (storyId) => {
+        const { humanReviewStories } = get()
+        return humanReviewStories.includes(storyId)
+      },
+      getEffectiveStatus: (story) => {
+        const { humanReviewStories, enableHumanReviewColumn } = get()
+        if (enableHumanReviewColumn && humanReviewStories.includes(story.id)) {
+          return 'human-review'
+        }
+        return story.status
       },
 
       // Computed

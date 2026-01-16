@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Box, Typography, Paper, Chip, IconButton, Tooltip, Popover } from '@mui/material'
 import { useDroppable } from '@dnd-kit/core'
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
@@ -286,31 +287,33 @@ export default function Column({
           }
         }}
       >
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 1.5,
-            minHeight: isOver ? 100 : 0
-          }}
-        >
-          {stories.length === 0 ? (
-            <Box
-              sx={{
-                py: 4,
-                textAlign: 'center'
-              }}
-            >
-              <Typography variant="body2" color="text.secondary">
-                {isOver ? 'Drop here' : 'No stories'}
-              </Typography>
-            </Box>
-          ) : (
-            stories.map((story) => (
-              <StoryCard key={story.id} story={story} />
-            ))
-          )}
-        </Box>
+        <SortableContext items={stories.map(s => s.id)} strategy={verticalListSortingStrategy}>
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 1.5,
+              minHeight: isOver ? 100 : 0
+            }}
+          >
+            {stories.length === 0 ? (
+              <Box
+                sx={{
+                  py: 4,
+                  textAlign: 'center'
+                }}
+              >
+                <Typography variant="body2" color="text.secondary">
+                  {isOver ? 'Drop here' : 'No stories'}
+                </Typography>
+              </Box>
+            ) : (
+              stories.map((story) => (
+                <StoryCard key={story.id} story={story} />
+              ))
+            )}
+          </Box>
+        </SortableContext>
       </Box>
     </Paper>
   )

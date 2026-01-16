@@ -30,6 +30,7 @@ import ViewColumnIcon from '@mui/icons-material/ViewColumn'
 import ViewStreamIcon from '@mui/icons-material/ViewStream'
 import CommitIcon from '@mui/icons-material/Commit'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
+import RefreshIcon from '@mui/icons-material/Refresh'
 import { DiffView, DiffModeEnum } from '@git-diff-view/react'
 import { generateDiffFile } from '@git-diff-view/file'
 import { useStore } from '../../store'
@@ -451,6 +452,7 @@ export default function GitDiffDialog({ open, onClose, branchName }: GitDiffDial
   const themeMode = useStore((state) => state.themeMode)
 
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [changedFiles, setChangedFiles] = useState<GitChangedFile[]>([])
   const [mergeBase, setMergeBase] = useState<string>('')
@@ -468,18 +470,16 @@ export default function GitDiffDialog({ open, onClose, branchName }: GitDiffDial
   useEffect(() => {
     if (open && projectPath) {
       loadChangedFiles()
-
-      // Auto-refresh every 10 seconds while dialog is open
-      const interval = setInterval(loadChangedFiles, 10000)
-      return () => clearInterval(interval)
     }
   }, [open, projectPath, branchName])
 
-  const loadChangedFiles = async (showLoading = true) => {
+  const loadChangedFiles = async (isRefresh = false) => {
     if (!projectPath) return
 
-    // Only show loading on initial load, not on refresh
-    if (showLoading && changedFiles.length === 0) {
+    // Show loading on initial load, refreshing state on manual refresh
+    if (isRefresh) {
+      setRefreshing(true)
+    } else if (changedFiles.length === 0) {
       setLoading(true)
     }
     setError(null)
@@ -509,6 +509,7 @@ export default function GitDiffDialog({ open, onClose, branchName }: GitDiffDial
       setError('Failed to load git diff')
     } finally {
       setLoading(false)
+      setRefreshing(false)
     }
   }
 
@@ -660,6 +661,26 @@ export default function GitDiffDialog({ open, onClose, branchName }: GitDiffDial
             )}
           </Box>
         </Box>
+
+        {/* Refresh button */}
+        <Tooltip title="Refresh changes">
+          <IconButton
+            onClick={() => loadChangedFiles(true)}
+            disabled={loading || refreshing}
+            sx={{ color: 'text.secondary' }}
+          >
+            <RefreshIcon
+              sx={{
+                fontSize: 20,
+                animation: refreshing ? 'spin 1s linear infinite' : 'none',
+                '@keyframes spin': {
+                  '0%': { transform: 'rotate(0deg)' },
+                  '100%': { transform: 'rotate(360deg)' }
+                }
+              }}
+            />
+          </IconButton>
+        </Tooltip>
 
         {/* View mode toggle */}
         <ToggleButtonGroup

@@ -21,6 +21,7 @@ import SettingsIcon from '@mui/icons-material/Settings'
 import KeyboardIcon from '@mui/icons-material/Keyboard'
 import SmartToyIcon from '@mui/icons-material/SmartToy'
 import NotificationsIcon from '@mui/icons-material/Notifications'
+import RateReviewIcon from '@mui/icons-material/RateReview'
 import CloseIcon from '@mui/icons-material/Close'
 import { useStore } from '../../store'
 import { AI_TOOLS, AITool } from '../../types'
@@ -34,6 +35,8 @@ export default function SettingsMenu() {
   const setAITool = useStore((state) => state.setAITool)
   const notificationsEnabled = useStore((state) => state.notificationsEnabled)
   const setNotificationsEnabled = useStore((state) => state.setNotificationsEnabled)
+  const enableHumanReviewColumn = useStore((state) => state.enableHumanReviewColumn)
+  const setEnableHumanReviewColumn = useStore((state) => state.setEnableHumanReviewColumn)
 
   const selectedTool = AI_TOOLS.find((t) => t.id === aiTool) || AI_TOOLS[0]
 
@@ -113,6 +116,21 @@ export default function SettingsMenu() {
           <Switch
             edge="end"
             checked={notificationsEnabled}
+            size="small"
+          />
+        </MenuItem>
+        <MenuItem onClick={() => setEnableHumanReviewColumn(!enableHumanReviewColumn)}>
+          <ListItemIcon>
+            <RateReviewIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText
+            primary="Human Review Column"
+            secondary="Review checklist step"
+            secondaryTypographyProps={{ variant: 'caption' }}
+          />
+          <Switch
+            edge="end"
+            checked={enableHumanReviewColumn}
             size="small"
           />
         </MenuItem>
