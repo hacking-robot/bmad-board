@@ -28,17 +28,12 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useStore } from '../../store'
-import { EPIC_COLORS, STATUS_COLUMNS, AI_TOOLS } from '../../types'
-import { useWorkflow } from '../../hooks/useWorkflow'
+import { EPIC_COLORS, STATUS_COLUMNS } from '../../types'
 
 export default function StoryDialog() {
   const selectedStory = useStore((state) => state.selectedStory)
   const storyContent = useStore((state) => state.storyContent)
   const setSelectedStory = useStore((state) => state.setSelectedStory)
-  const aiTool = useStore((state) => state.aiTool)
-  const selectedTool = AI_TOOLS.find((t) => t.id === aiTool) || AI_TOOLS[0]
-  const { getPrimaryNextStep, getAgentName } = useWorkflow()
-
   const handleClose = () => {
     setSelectedStory(null)
   }
@@ -47,13 +42,6 @@ export default function StoryDialog() {
 
   const epicColor = EPIC_COLORS[(selectedStory.epicId - 1) % EPIC_COLORS.length]
   const statusConfig = STATUS_COLUMNS.find((c) => c.status === selectedStory.status)
-
-  // Get next step hint from flow.json
-  const primaryStep = getPrimaryNextStep(selectedStory.status)
-  const agentInvoke = primaryStep ? `${selectedTool.agentPrefix}${primaryStep.agentId}` : ''
-  const nextStepHint = primaryStep
-    ? `${getAgentName(primaryStep.agentId)} (${agentInvoke})${primaryStep.command ? ` with ${primaryStep.command}` : ''} - ${primaryStep.description}`
-    : 'No next step defined'
 
   return (
     <Dialog
@@ -411,25 +399,6 @@ export default function StoryDialog() {
               </Accordion>
             )}
 
-            {/* Agent Hint */}
-            <Box
-              sx={{
-                p: 2,
-                mx: 3,
-                my: 2,
-                bgcolor: 'primary.main',
-                color: 'primary.contrastText',
-                borderRadius: 1,
-                opacity: 0.9
-              }}
-            >
-              <Typography variant="caption" fontWeight={600} sx={{ display: 'block', mb: 0.5 }}>
-                Next Step
-              </Typography>
-              <Typography variant="body2">
-                {nextStepHint}
-              </Typography>
-            </Box>
           </Box>
         )}
       </DialogContent>

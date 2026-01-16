@@ -7,7 +7,7 @@ import RateReviewIcon from '@mui/icons-material/RateReview'
 import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import PersonIcon from '@mui/icons-material/Person'
-import { Story, EPIC_COLORS, AI_TOOLS } from '../../types'
+import { Story, EPIC_COLORS } from '../../types'
 import { useStore } from '../../store'
 import { useWorkflow } from '../../hooks/useWorkflow'
 
@@ -23,8 +23,6 @@ export default function StoryCard({ story }: StoryCardProps) {
   const setAgentPanelOpen = useStore((state) => state.setAgentPanelOpen)
   const agents = useStore((state) => state.agents)
   const enableAgents = useStore((state) => state.enableAgents)
-  const aiTool = useStore((state) => state.aiTool)
-  const selectedTool = AI_TOOLS.find((t) => t.id === aiTool) || AI_TOOLS[0]
 
   const { getNextSteps, getAgent, getPrimaryNextStep } = useWorkflow()
 
@@ -50,13 +48,19 @@ export default function StoryCard({ story }: StoryCardProps) {
     setMenuAnchor(null)
   }
 
-  const handleCopyCommand = (command: string, agentName: string) => {
-    if (command) {
-      navigator.clipboard.writeText(`${command} ${story.id}`)
-      setSnackbarMessage(`Copied: ${command} ${story.id}`)
-    } else {
-      navigator.clipboard.writeText(agentName)
-      setSnackbarMessage(`Copied: ${agentName}`)
+  const handleCopyCommand = (agentCommand: string | undefined, workflowCommand: string | undefined) => {
+    const parts: string[] = []
+    if (agentCommand) {
+      parts.push(agentCommand)
+    }
+    if (workflowCommand) {
+      parts.push(`${workflowCommand} ${story.id}`)
+    }
+
+    if (parts.length > 0) {
+      const textToCopy = parts.join('\n')
+      navigator.clipboard.writeText(textToCopy)
+      setSnackbarMessage(parts.length > 1 ? 'Copied both commands' : `Copied: ${parts[0]}`)
     }
     setSnackbarOpen(true)
     handleMenuClose()
@@ -258,7 +262,7 @@ export default function StoryCard({ story }: StoryCardProps) {
             Next Steps
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            Click to copy command
+            Click to copy commands
           </Typography>
         </Box>
         {nextSteps.map((step, index) => {
@@ -266,7 +270,7 @@ export default function StoryCard({ story }: StoryCardProps) {
           return (
             <MenuItem
               key={index}
-              onClick={() => handleCopyCommand(step.command, `${agent?.role} (${agent?.name})`)}
+              onClick={() => handleCopyCommand(agent?.commands?.[0], step.command)}
               sx={{ py: 1.5 }}
             >
               <ListItemIcon>
@@ -284,26 +288,58 @@ export default function StoryCard({ story }: StoryCardProps) {
                   </Box>
                 }
                 secondary={
-                  <Box>
-                    <Typography variant="caption" color="text.secondary" component="div">
+                  <Box sx={{ mt: 0.5 }}>
+                    <Typography variant="caption" color="text.secondary" component="div" sx={{ mb: 0.5 }}>
                       {agent?.role} ({agent?.name})
-                      <Typography
-                        component="span"
-                        variant="caption"
-                        sx={{ fontFamily: 'monospace', ml: 0.5, color: agent?.color || 'primary.main' }}
-                      >
-                        {selectedTool.agentPrefix}{step.agentId}
-                      </Typography>
-                      {step.command && (
+                    </Typography>
+                    {/* Agent invocation command */}
+                    {agent?.commands?.[0] && (
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.25 }}>
+                        <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.65rem', minWidth: 16 }}>
+                          1.
+                        </Typography>
                         <Typography
-                          component="span"
                           variant="caption"
-                          sx={{ fontFamily: 'monospace', ml: 0.5, color: 'primary.main' }}
+                          component="span"
+                          sx={{
+                            fontFamily: 'monospace',
+                            fontSize: '0.7rem',
+                            color: agent?.color || 'text.secondary',
+                            bgcolor: 'action.hover',
+                            px: 0.5,
+                            py: 0.125,
+                            borderRadius: 0.5,
+                            wordBreak: 'break-all'
+                          }}
+                        >
+                          {agent.commands[0]}
+                        </Typography>
+                      </Box>
+                    )}
+                    {/* Workflow command */}
+                    {step.command && (
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.65rem', minWidth: 16 }}>
+                          2.
+                        </Typography>
+                        <Typography
+                          variant="caption"
+                          component="span"
+                          sx={{
+                            fontFamily: 'monospace',
+                            fontSize: '0.7rem',
+                            color: 'primary.main',
+                            bgcolor: 'action.hover',
+                            px: 0.5,
+                            py: 0.125,
+                            borderRadius: 0.5,
+                            wordBreak: 'break-all'
+                          }}
                         >
                           {step.command}
                         </Typography>
-                      )}
-                    </Typography>
+                      </Box>
+                    )}
                   </Box>
                 }
               />

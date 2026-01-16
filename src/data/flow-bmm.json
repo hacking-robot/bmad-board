@@ -1,5 +1,6 @@
 {
   "version": "1.0",
+  "projectType": "bmm",
   "statuses": [
     {
       "id": "backlog",
@@ -63,74 +64,74 @@
     "backlog": {
       "nextSteps": [
         {
-          "label": "Refine Story",
+          "label": "Create Story",
           "agentId": "pm",
-          "command": "*story-draft",
-          "description": "Use PM (John) to add acceptance criteria and refine requirements"
+          "command": "/bmad:bmm:workflows:create-story",
+          "description": "Use PM to draft story with acceptance criteria"
         },
         {
-          "label": "Prepare for Dev",
+          "label": "Create Epics & Stories",
+          "agentId": "pm",
+          "command": "/bmad:bmm:workflows:create-epics-and-stories",
+          "description": "Use PM to break work into epics and stories"
+        },
+        {
+          "label": "Check Readiness",
           "agentId": "sm",
-          "command": "*story-prep",
-          "description": "Use SM (Bob) to prepare story details for development"
-        },
-        {
-          "label": "Defer to Optional",
-          "agentId": "pm",
-          "command": "",
-          "description": "Move to Optional if not needed for current release"
+          "command": "/bmad:bmm:workflows:check-implementation-readiness",
+          "description": "Use SM to verify story is ready for development"
         }
       ]
     },
     "ready-for-dev": {
       "nextSteps": [
         {
-          "label": "Start Implementation",
+          "label": "Implement Story",
           "agentId": "dev",
-          "command": "*implement",
-          "description": "Use DEV (Amelia) to implement the story",
+          "command": "/bmad:bmm:workflows:dev-story",
+          "description": "Use DEV to implement the story",
           "primary": true
         },
         {
-          "label": "Quick Implementation",
+          "label": "Quick Dev",
           "agentId": "quick-flow",
-          "command": "*quick-feature",
-          "description": "Use Quick Flow (Barry) for simple stories"
+          "command": "/bmad:bmm:workflows:quick-dev",
+          "description": "Use Quick Flow for rapid implementation"
         },
         {
-          "label": "Review Architecture",
+          "label": "Create Architecture",
           "agentId": "architect",
-          "command": "*arch-create",
-          "description": "Use Architect (Winston) to design approach first"
+          "command": "/bmad:bmm:workflows:create-architecture",
+          "description": "Use Architect to design approach first"
         }
       ]
     },
     "in-progress": {
       "nextSteps": [
         {
-          "label": "Check Progress",
-          "agentId": "sm",
-          "command": "*sprint-status",
-          "description": "Use SM (Bob) to track sprint progress"
-        },
-        {
           "label": "Continue Development",
           "agentId": "dev",
-          "command": "",
-          "description": "Continue working with DEV (Amelia)",
+          "command": "/bmad:bmm:agents:dev",
+          "description": "Continue working with DEV agent",
           "primary": true
         },
         {
-          "label": "Add Tests",
-          "agentId": "tea",
-          "command": "*e2e-gen",
-          "description": "Use TEA (Murat) to generate tests"
+          "label": "Sprint Status",
+          "agentId": "sm",
+          "command": "/bmad:bmm:workflows:sprint-status",
+          "description": "Use SM to check sprint progress"
         },
         {
-          "label": "Move to Review",
+          "label": "Code Review",
           "agentId": "dev",
-          "command": "*code-review",
-          "description": "Implementation complete - request code review"
+          "command": "/bmad:bmm:workflows:code-review",
+          "description": "Request code review when ready"
+        },
+        {
+          "label": "Quick Spec",
+          "agentId": "quick-flow",
+          "command": "/bmad:bmm:workflows:quick-spec",
+          "description": "Use Quick Flow for quick specification"
         }
       ]
     },
@@ -139,53 +140,53 @@
         {
           "label": "Code Review",
           "agentId": "dev",
-          "command": "*code-review",
-          "description": "Use DEV (Amelia) to review code changes",
+          "command": "/bmad:bmm:workflows:code-review",
+          "description": "Use DEV to review code changes",
           "primary": true
         },
         {
-          "label": "Request Changes",
-          "agentId": "dev",
-          "command": "",
-          "description": "Send back to In Progress if changes needed"
+          "label": "Test Review",
+          "agentId": "tea",
+          "command": "/bmad:bmm:workflows:testarch-test-review",
+          "description": "Use TEA to review test coverage"
         },
         {
-          "label": "Approve & Complete",
+          "label": "Correct Course",
           "agentId": "dev",
-          "command": "",
-          "description": "Mark as Done when review passes"
+          "command": "/bmad:bmm:workflows:correct-course",
+          "description": "Send back with corrections needed"
         }
       ]
     },
     "done": {
       "nextSteps": [
         {
-          "label": "Sprint Retrospective",
+          "label": "Retrospective",
           "agentId": "sm",
-          "command": "*retro",
-          "description": "Use SM (Bob) to run retrospective"
+          "command": "/bmad:bmm:workflows:retrospective",
+          "description": "Use SM to run retrospective"
         },
         {
-          "label": "Write Documentation",
-          "agentId": "doc",
-          "command": "*doc-create",
-          "description": "Use Tech Writer (Paige) to document the feature"
+          "label": "Document Project",
+          "agentId": "tech-writer",
+          "command": "/bmad:bmm:workflows:document-project",
+          "description": "Use Tech Writer to document the feature"
         }
       ]
     },
     "optional": {
       "nextSteps": [
         {
-          "label": "Prioritize Story",
+          "label": "Create Story",
           "agentId": "pm",
-          "command": "*story-draft",
-          "description": "Use PM (John) to prioritize and move to backlog"
+          "command": "/bmad:bmm:workflows:create-story",
+          "description": "Use PM to prioritize and refine story"
         },
         {
-          "label": "Quick Fix",
+          "label": "Quick Dev",
           "agentId": "quick-flow",
-          "command": "*quick-fix",
-          "description": "Use Quick Flow (Barry) for quick implementation"
+          "command": "/bmad:bmm:workflows:quick-dev",
+          "description": "Use Quick Flow for quick implementation"
         }
       ]
     }
@@ -198,7 +199,7 @@
       "description": "Business analysis and research specialist. Handles brainstorming, market research, and documenting existing projects.",
       "whenToUse": "At the start of a project to understand requirements, research competitors, or document an existing codebase.",
       "color": "#8B5CF6",
-      "commands": ["*menu", "*brainstorm", "*research"],
+      "commands": ["/bmad:bmm:agents:analyst", "/bmad:bmm:workflows:research"],
       "examplePrompts": [
         "Help me brainstorm features for a task management app",
         "Research the competitive landscape for project management tools",
@@ -212,7 +213,7 @@
       "description": "Product Manager for requirements and planning. Creates PRDs, breaks work into epics and stories, and validates alignment.",
       "whenToUse": "After analysis to define product requirements, create user stories, and plan the project structure.",
       "color": "#3B82F6",
-      "commands": ["*menu", "*prd-create", "*epic-create", "*story-draft"],
+      "commands": ["/bmad:bmm:agents:pm", "/bmad:bmm:workflows:prd", "/bmad:bmm:workflows:create-epics-and-stories", "/bmad:bmm:workflows:create-story"],
       "examplePrompts": [
         "Create a PRD for user authentication",
         "Break this feature into epics and stories",
@@ -226,7 +227,7 @@
       "description": "System architecture and technical design expert. Produces architecture documents and generates technical diagrams.",
       "whenToUse": "After planning to design the system architecture, choose technologies, and create technical specifications.",
       "color": "#10B981",
-      "commands": ["*menu", "*arch-create", "*diagram"],
+      "commands": ["/bmad:bmm:agents:architect", "/bmad:bmm:workflows:create-architecture", "/bmad:bmm:workflows:create-excalidraw-diagram"],
       "examplePrompts": [
         "Design the database schema for user management",
         "Create an architecture diagram for the microservices",
@@ -240,7 +241,7 @@
       "description": "Scrum Master for sprint planning and story preparation. Generates sprint status, creates individual stories, and facilitates retrospectives.",
       "whenToUse": "During sprints to plan work, track progress, prepare stories for development, and run retrospectives.",
       "color": "#F59E0B",
-      "commands": ["*menu", "*sprint-status", "*story-prep", "*retro"],
+      "commands": ["/bmad:bmm:agents:sm", "/bmad:bmm:workflows:sprint-status", "/bmad:bmm:workflows:sprint-planning", "/bmad:bmm:workflows:retrospective"],
       "examplePrompts": [
         "Generate the current sprint status",
         "Prepare story 2.3 for development",
@@ -254,7 +255,7 @@
       "description": "Developer for story implementation and code review. Implements stories with tests and conducts thorough code reviews.",
       "whenToUse": "When stories are ready for development, or when code needs review before merging.",
       "color": "#EF4444",
-      "commands": ["*menu", "*implement", "*code-review", "*test"],
+      "commands": ["/bmad:bmm:agents:dev", "/bmad:bmm:workflows:dev-story", "/bmad:bmm:workflows:code-review"],
       "examplePrompts": [
         "Implement story 1.2 following the acceptance criteria",
         "Review the code changes for the auth feature",
@@ -268,7 +269,7 @@
       "description": "Fast solo developer for small features without handoffs. Combines architectural spec with end-to-end implementation in a streamlined workflow.",
       "whenToUse": "For bug fixes, small features, or quick enhancements that don't need full planning.",
       "color": "#EC4899",
-      "commands": ["*menu", "*quick-fix", "*quick-feature"],
+      "commands": ["/bmad:bmm:agents:quick-flow-solo-dev", "/bmad:bmm:workflows:quick-dev", "/bmad:bmm:workflows:quick-spec"],
       "examplePrompts": [
         "Fix the login button not responding on mobile",
         "Add a dark mode toggle to settings",
@@ -282,7 +283,7 @@
       "description": "Test Architect for quality strategy. Initializes test frameworks, generates E2E tests, automates testing, and validates non-functional requirements.",
       "whenToUse": "When setting up testing infrastructure, writing E2E tests, or validating performance requirements.",
       "color": "#06B6D4",
-      "commands": ["*menu", "*test-init", "*e2e-gen", "*perf-test"],
+      "commands": ["/bmad:bmm:agents:tea", "/bmad:bmm:workflows:testarch-framework", "/bmad:bmm:workflows:testarch-automate", "/bmad:bmm:workflows:testarch-nfr"],
       "examplePrompts": [
         "Set up the E2E testing framework",
         "Generate E2E tests for the checkout flow",
@@ -290,13 +291,13 @@
       ]
     },
     {
-      "id": "ux",
+      "id": "ux-designer",
       "name": "Sally",
       "role": "UX Designer",
       "description": "User experience and UI design specialist. Creates UX deliverables from product requirements and validates specifications.",
       "whenToUse": "When designing user interfaces, creating wireframes, or validating UX requirements.",
       "color": "#A855F7",
-      "commands": ["*menu", "*ux-design", "*wireframe"],
+      "commands": ["/bmad:bmm:agents:ux-designer", "/bmad:bmm:workflows:create-ux-design", "/bmad:bmm:workflows:create-excalidraw-wireframe"],
       "examplePrompts": [
         "Design the user onboarding flow",
         "Create wireframes for the dashboard",
@@ -304,13 +305,13 @@
       ]
     },
     {
-      "id": "doc",
+      "id": "tech-writer",
       "name": "Paige",
-      "role": "Technical Writer",
+      "role": "Tech Writer",
       "description": "Documentation and diagrams specialist. Produces project documentation, flowcharts, and concept explanations.",
       "whenToUse": "When creating documentation, explaining complex concepts, or generating diagrams.",
       "color": "#64748B",
-      "commands": ["*menu", "*doc-create", "*flowchart", "*explain"],
+      "commands": ["/bmad:bmm:agents:tech-writer", "/bmad:bmm:workflows:document-project", "/bmad:bmm:workflows:create-excalidraw-flowchart"],
       "examplePrompts": [
         "Write API documentation for the user endpoints",
         "Create a flowchart for the order process",

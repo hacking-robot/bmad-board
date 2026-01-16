@@ -5,12 +5,14 @@ import {
   Box,
   IconButton,
   Tooltip,
-  Badge
+  Badge,
+  Chip
 } from '@mui/material'
 import DashboardIcon from '@mui/icons-material/Dashboard'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import TerminalIcon from '@mui/icons-material/Terminal'
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
+import SportsEsportsIcon from '@mui/icons-material/SportsEsports'
 import SearchBar from '../SearchBar/SearchBar'
 import EpicFilter from '../EpicFilter/EpicFilter'
 import ThemeToggle from '../ThemeToggle/ThemeToggle'
@@ -26,7 +28,10 @@ export default function Header() {
   const enableAgents = useStore((state) => state.enableAgents)
   const toggleEnableAgents = useStore((state) => state.toggleEnableAgents)
   const setHelpPanelOpen = useStore((state) => state.setHelpPanelOpen)
+  const projectType = useStore((state) => state.projectType)
   const { loadProjectData } = useProjectData()
+
+  const isGameProject = projectType === 'bmgd'
 
   const runningAgentsCount = enableAgents
     ? Object.values(agents).filter((a) => a.status === 'running').length
@@ -88,6 +93,24 @@ export default function Header() {
           >
             BMad Board
           </Typography>
+          {isGameProject && (
+            <Chip
+              icon={<SportsEsportsIcon sx={{ fontSize: 16 }} />}
+              label="Game"
+              size="small"
+              sx={{
+                ml: 1,
+                height: 24,
+                bgcolor: '#8B5CF6',
+                color: 'white',
+                fontWeight: 600,
+                fontSize: '0.7rem',
+                '& .MuiChip-icon': {
+                  color: 'white'
+                }
+              }}
+            />
+          )}
         </Box>
 
         {/* Spacer */}
