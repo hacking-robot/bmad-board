@@ -1,6 +1,6 @@
 # BMadBoard
 
-Electron desktop application for visualizing and managing BMAD sprint projects as a Kanban board.
+Electron desktop application for visualizing and managing BMAD projects as a story board.
 
 ## Tech Stack
 
@@ -23,7 +23,7 @@ npm run typecheck        # TypeScript type checking
 ```
 src/
 ├── components/
-│   ├── Board/           # Kanban board and columns
+│   ├── Board/           # Story board and columns
 │   ├── StoryCard/       # Story card display
 │   ├── StoryDialog/     # Story detail modal
 │   ├── Header/          # App header with controls
@@ -32,7 +32,9 @@ src/
 │   ├── ThemeToggle/     # Light/dark mode
 │   ├── CommandPalette/  # Keyboard-driven command palette
 │   ├── StatusBar/       # Bottom status bar
-│   └── WelcomeDialog/   # Project folder selection
+│   ├── HelpPanel/       # Help documentation panel
+│   ├── WelcomeDialog/   # Project folder selection
+│   └── NewProjectDialog/ # New project guidance
 ├── store.ts             # Zustand state management
 ├── theme.ts             # MUI theme configuration
 ├── types/               # TypeScript type definitions
@@ -43,13 +45,20 @@ electron/
 └── preload.ts           # IPC bridge to renderer
 ```
 
-## BMAD Project Structure
+## BMAD Project Types
 
-The app reads BMAD projects with this structure:
-- `docs/epics/*.md` - Epic definition files
+The app supports two BMAD project types:
+
+**BMM (BMAD Method)** - Standard projects:
+- `docs/planning-artifacts/epics.md` - Epic definitions
+- `docs/planning-artifacts/stories/*.md` - Story files
+- `docs/implementation-artifacts/sprint-status.yaml` - Story status tracking
+
+**BMGD (BMAD Game Dev)** - Game development projects:
+- `epics.md` at project root - Epic definitions
 - `docs/stories/epic-N/*.md` - Story files per epic
 
-Stories have statuses: `backlog`, `ready-for-dev`, `in-progress`, `review`, `done`, `optional`
+Story statuses: `backlog`, `ready-for-dev`, `in-progress`, `review`, `done`, `optional`
 
 <claude-mem-context>
 # Recent Activity

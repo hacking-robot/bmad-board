@@ -67,7 +67,7 @@ export default function WelcomeDialog() {
               BMad Board
             </Typography>
             <Typography variant="body1" color="text.secondary">
-              A beautiful sprint board for your BMAD projects.
+              A beautiful story board for your BMAD projects.
               Select a project folder to get started.
             </Typography>
           </Box>
@@ -127,7 +127,7 @@ export default function WelcomeDialog() {
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
                   Each agent has a specific role: <strong>Analyst</strong> (Mary) handles research,{' '}
                   <strong>PM</strong> (John) creates requirements, <strong>Architect</strong> (Winston)
-                  designs systems, <strong>SM</strong> (Bob) manages sprints, and <strong>DEV</strong> (Amelia)
+                  designs systems, <strong>SM</strong> (Bob) manages stories, and <strong>DEV</strong> (Amelia)
                   implements features.
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>

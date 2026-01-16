@@ -185,6 +185,12 @@ interface AppState {
   setHelpPanelOpen: (open: boolean, tab?: number) => void
   toggleHelpPanel: () => void
 
+  // New Project Dialog
+  newProjectDialogOpen: boolean
+  pendingNewProject: { path: string; projectType: ProjectType } | null
+  setNewProjectDialogOpen: (open: boolean) => void
+  setPendingNewProject: (project: { path: string; projectType: ProjectType } | null) => void
+
   // Agents
   agents: Record<string, Agent>
   activeAgentId: string | null
@@ -344,6 +350,12 @@ export const useStore = create<AppState>()(
       helpPanelTab: 0,
       setHelpPanelOpen: (open, tab = 0) => set({ helpPanelOpen: open, helpPanelTab: tab }),
       toggleHelpPanel: () => set((state) => ({ helpPanelOpen: !state.helpPanelOpen })),
+
+      // New Project Dialog
+      newProjectDialogOpen: false,
+      pendingNewProject: null,
+      setNewProjectDialogOpen: (open) => set({ newProjectDialogOpen: open }),
+      setPendingNewProject: (project) => set({ pendingNewProject: project }),
 
       // Agents
       agents: {},

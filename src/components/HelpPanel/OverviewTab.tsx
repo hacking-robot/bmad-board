@@ -39,7 +39,7 @@ const bmmPhases: Phase[] = [
     icon: <BuildIcon fontSize="small" />,
     title: 'Implementation',
     agent: 'SM (Bob), DEV (Amelia), TEA (Murat)',
-    description: 'Sprint planning, story implementation, code review, and testing. Build and verify features.'
+    description: 'Story planning, implementation, code review, and testing. Build and verify features.'
   }
 ]
 
@@ -67,7 +67,7 @@ const bmgdPhases: Phase[] = [
     icon: <SportsEsportsIcon fontSize="small" />,
     title: 'Development',
     agent: 'Game SM, Game Dev, Game QA',
-    description: 'Sprint planning, game implementation, playtesting, and quality assurance. Build and polish your game.'
+    description: 'Story planning, game implementation, playtesting, and quality assurance. Build and polish your game.'
   }
 ]
 
@@ -137,8 +137,8 @@ export default function OverviewTab() {
       </Typography>
 
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        This application visualizes your BMAD project as a Kanban board, showing stories as they progress
-        through the development lifecycle. Track your sprint status, filter by epic, and monitor progress
+        This application visualizes your BMAD project as a story board, showing stories as they progress
+        through the development lifecycle. Track your story status, filter by epic, and monitor progress
         across all phases.
       </Typography>
 
