@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   Dialog,
   DialogTitle,
@@ -29,6 +29,7 @@ import EditIcon from '@mui/icons-material/Edit'
 import VerifiedIcon from '@mui/icons-material/Verified'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn'
+import CompareArrowsIcon from '@mui/icons-material/CompareArrows'
 import ReactMarkdown, { Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
@@ -36,6 +37,7 @@ import { gruvboxDark, gruvboxLight } from 'react-syntax-highlighter/dist/esm/sty
 import { useStore } from '../../store'
 import { gruvbox } from '../../theme'
 import { EPIC_COLORS, STATUS_COLUMNS } from '../../types'
+import GitDiffDialog from '../GitDiffDialog'
 
 // Factory function to create code component with theme awareness
 const createCodeBlock = (isDark: boolean): Components['code'] => {
@@ -89,8 +91,32 @@ export default function StoryDialog() {
   const humanReviewChecklist = useStore((state) => state.humanReviewChecklist)
   const humanReviewStates = useStore((state) => state.humanReviewStates)
   const toggleReviewItem = useStore((state) => state.toggleReviewItem)
+  const enableHumanReviewColumn = useStore((state) => state.enableHumanReviewColumn)
   const getEffectiveStatus = useStore((state) => state.getEffectiveStatus)
   const themeMode = useStore((state) => state.themeMode)
+  const projectPath = useStore((state) => state.projectPath)
+
+  // Git diff state
+  const [branchExists, setBranchExists] = useState(false)
+  const [diffDialogOpen, setDiffDialogOpen] = useState(false)
+
+  // Check if the story's branch exists
+  useEffect(() => {
+    const checkBranch = async () => {
+      if (!projectPath || !selectedStory) {
+        setBranchExists(false)
+        return
+      }
+      try {
+        const branchName = `${selectedStory.epicId}-${selectedStory.id}`
+        const result = await window.gitAPI.branchExists(projectPath, branchName)
+        setBranchExists(result.exists)
+      } catch {
+        setBranchExists(false)
+      }
+    }
+    checkBranch()
+  }, [projectPath, selectedStory])
 
   // Create theme-aware code block component (memoized to avoid recreation on every render)
   const CodeBlock = React.useMemo(() => createCodeBlock(themeMode === 'dark'), [themeMode])
@@ -101,11 +127,14 @@ export default function StoryDialog() {
 
   if (!selectedStory) return null
 
+  const branchName = `${selectedStory.epicId}-${selectedStory.id}`
+
   const effectiveStatus = getEffectiveStatus(selectedStory)
   const epicColor = EPIC_COLORS[(selectedStory.epicId - 1) % EPIC_COLORS.length]
   const statusConfig = STATUS_COLUMNS.find((c) => c.status === effectiveStatus)
 
   return (
+    <>
     <Dialog
       open={Boolean(selectedStory)}
       onClose={handleClose}
@@ -154,6 +183,23 @@ export default function StoryDialog() {
           </Typography>
         </Box>
 
+        {/* Git Diff button - only shown if branch exists */}
+        {branchExists && (
+          <Tooltip title="View branch diff">
+            <IconButton
+              onClick={() => setDiffDialogOpen(true)}
+              sx={{
+                position: 'absolute',
+                right: 56,
+                top: 16,
+                color: 'success.main'
+              }}
+            >
+              <CompareArrowsIcon />
+            </IconButton>
+          </Tooltip>
+        )}
+
         <IconButton
           onClick={handleClose}
           sx={{
@@ -188,16 +234,41 @@ export default function StoryDialog() {
           </Box>
         ) : (
           <Box>
-            {/* Human Review Checklist - only shows for human-review status */}
-            {effectiveStatus === 'human-review' && humanReviewChecklist.length > 0 && (
+            {/* Story Description */}
+            <Box sx={{ p: 3 }}>
+              <Typography variant="h6" gutterBottom>
+                Story
+              </Typography>
+              <Box
+                sx={{
+                  bgcolor: 'action.hover',
+                  borderRadius: 2,
+                  p: 2,
+                  '& p': { m: 0, mb: 1, '&:last-child': { mb: 0 } },
+                  '& ul, & ol': {
+                    pl: 3,
+                    mb: 1,
+                    '& li': { mb: 0.5 }
+                  }
+                }}
+              >
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: CodeBlock }}>
+                  {storyContent.description}
+                </ReactMarkdown>
+              </Box>
+            </Box>
+
+            {/* Human Review Checklist - shows for human-review status OR done status when human review is enabled */}
+            {(effectiveStatus === 'human-review' || (enableHumanReviewColumn && selectedStory.status === 'done')) && humanReviewChecklist.length > 0 && (
               <>
+                <Divider />
                 <Box sx={{ p: 3, bgcolor: 'action.hover' }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
                     <AssignmentTurnedInIcon color="primary" />
                     <Typography variant="h6">
                       Human Review Checklist ({(humanReviewStates[selectedStory.id]?.checkedItems.length || 0)}/{humanReviewChecklist.length})
                     </Typography>
-                    <Tooltip title="Complete all items before moving to Done" arrow>
+                    <Tooltip title="Check to approve this story" arrow>
                       <InfoOutlinedIcon sx={{ fontSize: 18, color: 'text.disabled', cursor: 'help' }} />
                     </Tooltip>
                   </Box>
@@ -241,39 +312,14 @@ export default function StoryDialog() {
                       fontWeight={500}
                     >
                       {(humanReviewStates[selectedStory.id]?.checkedItems.length || 0) === humanReviewChecklist.length
-                        ? 'All items approved. Ready to move to Done.'
+                        ? 'All items approved. Story review complete.'
                         : `${humanReviewChecklist.length - (humanReviewStates[selectedStory.id]?.checkedItems.length || 0)} item(s) remaining to review.`
                       }
                     </Typography>
                   </Box>
                 </Box>
-                <Divider />
               </>
             )}
-
-            {/* Story Description */}
-            <Box sx={{ p: 3 }}>
-              <Typography variant="h6" gutterBottom>
-                Story
-              </Typography>
-              <Box
-                sx={{
-                  bgcolor: 'action.hover',
-                  borderRadius: 2,
-                  p: 2,
-                  '& p': { m: 0, mb: 1, '&:last-child': { mb: 0 } },
-                  '& ul, & ol': {
-                    pl: 3,
-                    mb: 1,
-                    '& li': { mb: 0.5 }
-                  }
-                }}
-              >
-                <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: CodeBlock }}>
-                  {storyContent.description}
-                </ReactMarkdown>
-              </Box>
-            </Box>
 
             <Divider />
 
@@ -544,5 +590,13 @@ export default function StoryDialog() {
         )}
       </DialogContent>
     </Dialog>
+
+    {/* Git Diff Dialog */}
+    <GitDiffDialog
+      open={diffDialogOpen}
+      onClose={() => setDiffDialogOpen(false)}
+      branchName={branchName}
+    />
+  </>
   )
 }

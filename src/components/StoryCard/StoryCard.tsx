@@ -7,16 +7,15 @@ import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import PersonIcon from '@mui/icons-material/Person'
 import GitHubIcon from '@mui/icons-material/GitHub'
-import CompareArrowsIcon from '@mui/icons-material/CompareArrows'
 import AutorenewIcon from '@mui/icons-material/Autorenew'
 import ChecklistIcon from '@mui/icons-material/Checklist'
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline'
+import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import GroupsIcon from '@mui/icons-material/Groups'
 import { Story, EPIC_COLORS } from '../../types'
 import { useStore } from '../../store'
 import { useWorkflow } from '../../hooks/useWorkflow'
 import { transformCommand } from '../../utils/commandTransform'
-import GitDiffDialog from '../GitDiffDialog'
 
 interface StoryCardProps {
   story: Story
@@ -29,6 +28,7 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
   const agents = useStore((state) => state.agents)
   const humanReviewChecklist = useStore((state) => state.humanReviewChecklist)
   const humanReviewStates = useStore((state) => state.humanReviewStates)
+  const enableHumanReviewColumn = useStore((state) => state.enableHumanReviewColumn)
   const getEffectiveStatus = useStore((state) => state.getEffectiveStatus)
   const aiTool = useStore((state) => state.aiTool)
 
@@ -48,7 +48,6 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
   const [snackbarMessage, setSnackbarMessage] = useState('')
   const [branchExists, setBranchExists] = useState(false)
   const [isActivelyWorking, setIsActivelyWorking] = useState(false)
-  const [diffDialogOpen, setDiffDialogOpen] = useState(false)
   const [committing, setCommitting] = useState(false)
   const [creatingBranch, setCreatingBranch] = useState(false)
 
@@ -379,7 +378,6 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
             </Tooltip>
           )}
 
-
           {/* Human Review Progress Badge - only shows for human-review status */}
           {effectiveStatus === 'human-review' && totalItems > 0 && (
             <Tooltip
@@ -417,6 +415,34 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
             </Tooltip>
           )}
 
+          {/* Skipped Human Review Warning - shows on done cards that never went through human review */}
+          {enableHumanReviewColumn && story.status === 'done' && !allApproved && (
+            <Tooltip
+              title="This story was marked done without completing human review checklist"
+              arrow
+              placement="top"
+            >
+              <Box
+                sx={{
+                  position: 'absolute',
+                  bottom: 8,
+                  right: 8,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 0.5,
+                  bgcolor: 'warning.main',
+                  color: 'white',
+                  px: 0.75,
+                  py: 0.25,
+                  borderRadius: 1,
+                  fontSize: '0.7rem'
+                }}
+              >
+                <WarningAmberIcon sx={{ fontSize: 14 }} />
+              </Box>
+            </Tooltip>
+          )}
+
         </CardContent>
       </Card>
 
@@ -439,33 +465,6 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
             Actions
           </Typography>
         </Box>
-
-        {/* View Branch Diff - only when branch exists */}
-        {branchExists && (
-          <Box
-            onClick={(e) => {
-              e.stopPropagation()
-              setDiffDialogOpen(true)
-              handleMenuClose()
-            }}
-            sx={{
-              px: 2,
-              py: 1.5,
-              borderBottom: 1,
-              borderColor: 'divider',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1,
-              cursor: 'pointer',
-              '&:hover': { bgcolor: 'action.hover' }
-            }}
-          >
-            <CompareArrowsIcon sx={{ fontSize: 18, color: 'success.main' }} />
-            <Typography variant="body2" fontWeight={500}>
-              View Branch Diff
-            </Typography>
-          </Box>
-        )}
 
         {/* Step 1: Git Branch Command - Only for ready-for-dev when branch doesn't exist yet */}
         {effectiveStatus === 'ready-for-dev' && !branchExists && !isOnStoryBranch && (
@@ -708,12 +707,6 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       />
 
-      {/* Git Diff Dialog */}
-      <GitDiffDialog
-        open={diffDialogOpen}
-        onClose={() => setDiffDialogOpen(false)}
-        branchName={branchName}
-      />
     </>
   )
 }

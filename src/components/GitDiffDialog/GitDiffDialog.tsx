@@ -21,7 +21,9 @@ import {
   ListItemText,
   Divider,
   Button,
-  Alert
+  Alert,
+  Checkbox,
+  FormControlLabel
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
@@ -477,6 +479,9 @@ export default function GitDiffDialog({ open, onClose, branchName }: GitDiffDial
   const [committing, setCommitting] = useState(false)
   const [commitError, setCommitError] = useState<string | null>(null)
 
+  // Filter state - hide BMAD folders
+  const [hideBmadFolders, setHideBmadFolders] = useState(true)
+
   // Check if this is the current branch with uncommitted changes
   const isCurrentBranch = branchName === currentBranch
   const canCommit = isCurrentBranch && hasUncommittedChanges
@@ -639,17 +644,23 @@ export default function GitDiffDialog({ open, onClose, branchName }: GitDiffDial
     return null
   }
 
+  // Filter out BMAD folders if enabled
+  const filteredFiles = useMemo(() => {
+    if (!hideBmadFolders) return changedFiles
+    return changedFiles.filter((f) => !f.path.startsWith('_bmad-output/') && !f.path.startsWith('_bmad/'))
+  }, [changedFiles, hideBmadFolders])
+
   // Calculate total stats
   const totalStats = useMemo(() => {
-    const added = changedFiles.filter((f) => f.status === 'A').length
-    const modified = changedFiles.filter((f) => f.status === 'M').length
-    const deleted = changedFiles.filter((f) => f.status === 'D').length
-    return { added, modified, deleted, total: changedFiles.length }
-  }, [changedFiles])
+    const added = filteredFiles.filter((f) => f.status === 'A').length
+    const modified = filteredFiles.filter((f) => f.status === 'M').length
+    const deleted = filteredFiles.filter((f) => f.status === 'D').length
+    return { added, modified, deleted, total: filteredFiles.length }
+  }, [filteredFiles])
 
   // Get most recently modified files (top 5)
   const recentFiles = useMemo(() => {
-    return [...changedFiles]
+    return [...filteredFiles]
       .map(f => ({
         ...f,
         // Use mtime if available (working directory), otherwise lastCommitTime
@@ -658,7 +669,7 @@ export default function GitDiffDialog({ open, onClose, branchName }: GitDiffDial
       .filter(f => f.sortTime > 0)
       .sort((a, b) => b.sortTime - a.sortTime)
       .slice(0, 5)
-  }, [changedFiles])
+  }, [filteredFiles])
 
   // Format relative time
   const formatRelativeTime = (timestamp: number) => {
@@ -717,6 +728,19 @@ export default function GitDiffDialog({ open, onClose, branchName }: GitDiffDial
             )}
           </Box>
         </Box>
+
+        {/* Filter BMAD folders checkbox */}
+        <FormControlLabel
+          control={
+            <Checkbox
+              checked={hideBmadFolders}
+              onChange={(e) => setHideBmadFolders(e.target.checked)}
+              size="small"
+            />
+          }
+          label={<Typography variant="caption">Hide BMAD</Typography>}
+          sx={{ mr: 1 }}
+        />
 
         {/* Commit button - only shown for current branch with changes */}
         {canCommit && (
@@ -805,9 +829,13 @@ export default function GitDiffDialog({ open, onClose, branchName }: GitDiffDial
           <Box sx={{ textAlign: 'center', py: 8 }}>
             <Typography color="error">{error}</Typography>
           </Box>
-        ) : changedFiles.length === 0 ? (
+        ) : filteredFiles.length === 0 ? (
           <Box sx={{ textAlign: 'center', py: 8 }}>
-            <Typography color="text.secondary">No changes found on this branch</Typography>
+            <Typography color="text.secondary">
+              {changedFiles.length > 0 && hideBmadFolders
+                ? 'No changes found (BMAD folders hidden)'
+                : 'No changes found on this branch'}
+            </Typography>
           </Box>
         ) : (
           <Box sx={{ p: 2 }}>
@@ -878,7 +906,7 @@ export default function GitDiffDialog({ open, onClose, branchName }: GitDiffDial
                 )}
 
                 {/* File Diffs */}
-                {changedFiles.map((file) => (
+                {filteredFiles.map((file) => (
                   <FileDiff
                     key={file.path}
                     file={file}
