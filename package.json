@@ -1,6 +1,6 @@
 {
   "name": "bmadboard",
-  "version": "1.0.19",
+  "version": "1.0.20",
   "description": "A beautiful sprint board for BMAD projects",
   "main": "dist-electron/main.js",
   "scripts": {
