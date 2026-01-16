@@ -663,3 +663,246 @@ ipcMain.handle('list-agent-outputs', async () => {
     return []
   }
 })
+
+// Git IPC handlers
+import { execSync } from 'child_process'
+
+// Get current git branch name
+ipcMain.handle('git-current-branch', async (_, projectPath: string) => {
+  try {
+    const branch = execSync('git rev-parse --abbrev-ref HEAD', {
+      cwd: projectPath,
+      encoding: 'utf-8'
+    }).trim()
+    return { branch }
+  } catch (error) {
+    return { error: 'Failed to get current branch' }
+  }
+})
+
+// Check if a branch exists
+ipcMain.handle('git-branch-exists', async (_, projectPath: string, branchName: string) => {
+  try {
+    execSync(`git rev-parse --verify ${branchName}`, {
+      cwd: projectPath,
+      encoding: 'utf-8',
+      stdio: 'pipe'
+    })
+    return { exists: true }
+  } catch {
+    return { exists: false }
+  }
+})
+
+// Check if a branch has recent activity (recently modified files or recent commits)
+ipcMain.handle('git-branch-activity', async (_, projectPath: string, branchName: string) => {
+  try {
+    // Get current branch
+    const currentBranch = execSync('git rev-parse --abbrev-ref HEAD', {
+      cwd: projectPath,
+      encoding: 'utf-8'
+    }).trim()
+
+    const isOnBranch = currentBranch === branchName
+    const oneMinuteAgo = Date.now() - (1 * 60 * 1000)
+
+    // Check for recently modified files (only if we're on the branch)
+    let hasRecentFileChanges = false
+    if (isOnBranch) {
+      // Get list of modified/new files from git status
+      const status = execSync('git status --porcelain', {
+        cwd: projectPath,
+        encoding: 'utf-8'
+      }).trim()
+
+      if (status.length > 0) {
+        // Check modification time of changed files
+        const changedFiles = status.split('\n').map(line => line.substring(3).trim())
+        for (const file of changedFiles) {
+          try {
+            const filePath = join(projectPath, file)
+            if (existsSync(filePath)) {
+              const stats = await stat(filePath)
+              if (stats.mtimeMs > oneMinuteAgo) {
+                hasRecentFileChanges = true
+                break
+              }
+            }
+          } catch {
+            // File might not exist (deleted)
+          }
+        }
+      }
+    }
+
+    // Get the last commit timestamp on the branch
+    let lastCommitTime: number | null = null
+    try {
+      const timestamp = execSync(`git log -1 --format=%ct ${branchName}`, {
+        cwd: projectPath,
+        encoding: 'utf-8'
+      }).trim()
+      lastCommitTime = parseInt(timestamp, 10) * 1000 // Convert to milliseconds
+    } catch {
+      // Branch might not have any commits yet
+    }
+
+    const hasRecentCommit = lastCommitTime !== null && lastCommitTime > oneMinuteAgo
+
+    return {
+      isOnBranch,
+      hasRecentFileChanges,
+      lastCommitTime,
+      hasRecentCommit,
+      isActive: hasRecentFileChanges || hasRecentCommit
+    }
+  } catch (error) {
+    return {
+      isOnBranch: false,
+      hasRecentFileChanges: false,
+      lastCommitTime: null,
+      hasRecentCommit: false,
+      isActive: false
+    }
+  }
+})
+
+// Get the default branch (main or master)
+ipcMain.handle('git-default-branch', async (_, projectPath: string) => {
+  try {
+    // Try to get the default branch from remote
+    const remoteInfo = execSync('git remote show origin', {
+      cwd: projectPath,
+      encoding: 'utf-8'
+    })
+    const match = remoteInfo.match(/HEAD branch: (.+)/)
+    if (match) {
+      return { branch: match[1].trim() }
+    }
+    // Fallback: check if main or master exists
+    try {
+      execSync('git rev-parse --verify main', { cwd: projectPath, encoding: 'utf-8' })
+      return { branch: 'main' }
+    } catch {
+      try {
+        execSync('git rev-parse --verify master', { cwd: projectPath, encoding: 'utf-8' })
+        return { branch: 'master' }
+      } catch {
+        return { error: 'Could not determine default branch' }
+      }
+    }
+  } catch {
+    // Fallback if no remote
+    try {
+      execSync('git rev-parse --verify main', { cwd: projectPath, encoding: 'utf-8' })
+      return { branch: 'main' }
+    } catch {
+      try {
+        execSync('git rev-parse --verify master', { cwd: projectPath, encoding: 'utf-8' })
+        return { branch: 'master' }
+      } catch {
+        return { error: 'Could not determine default branch' }
+      }
+    }
+  }
+})
+
+// Get list of changed files between a feature branch and default branch
+ipcMain.handle('git-changed-files', async (_, projectPath: string, baseBranch: string, featureBranch?: string) => {
+  try {
+    // Use the feature branch if provided, otherwise use HEAD
+    const targetBranch = featureBranch || 'HEAD'
+
+    // Get the merge base to find where branches diverged
+    const mergeBase = execSync(`git merge-base ${baseBranch} ${targetBranch}`, {
+      cwd: projectPath,
+      encoding: 'utf-8'
+    }).trim()
+
+    // Get list of changed files with status
+    const diffOutput = execSync(`git diff --name-status ${mergeBase} ${targetBranch}`, {
+      cwd: projectPath,
+      encoding: 'utf-8'
+    })
+
+    // Get the current branch to check if we can get file mtimes
+    const currentBranch = execSync('git rev-parse --abbrev-ref HEAD', {
+      cwd: projectPath,
+      encoding: 'utf-8'
+    }).trim()
+    const isOnBranch = currentBranch === featureBranch
+
+    const files = await Promise.all(
+      diffOutput.trim().split('\n').filter(Boolean).map(async line => {
+        const [status, ...pathParts] = line.split('\t')
+        const filePath = pathParts.join('\t')
+
+        // Get file modification time if we're on the branch and file exists
+        let mtime: number | null = null
+        if (isOnBranch && status !== 'D') {
+          try {
+            const fullPath = join(projectPath, filePath)
+            if (existsSync(fullPath)) {
+              const stats = await stat(fullPath)
+              mtime = stats.mtimeMs
+            }
+          } catch {
+            // File might not exist
+          }
+        }
+
+        // For commits, get the last commit time for this file on the branch
+        let lastCommitTime: number | null = null
+        try {
+          const commitTime = execSync(`git log -1 --format=%ct ${targetBranch} -- "${filePath}"`, {
+            cwd: projectPath,
+            encoding: 'utf-8'
+          }).trim()
+          if (commitTime) {
+            lastCommitTime = parseInt(commitTime, 10) * 1000
+          }
+        } catch {
+          // Might fail for new files
+        }
+
+        return {
+          status: status as 'A' | 'M' | 'D' | 'R' | 'C',
+          path: filePath,
+          mtime,
+          lastCommitTime
+        }
+      })
+    )
+
+    return { files, mergeBase }
+  } catch (error) {
+    console.error('Failed to get changed files:', error)
+    return { error: 'Failed to get changed files' }
+  }
+})
+
+// Get file content at a specific commit
+ipcMain.handle('git-file-content', async (_, projectPath: string, filePath: string, commit: string) => {
+  try {
+    const content = execSync(`git show ${commit}:${filePath}`, {
+      cwd: projectPath,
+      encoding: 'utf-8',
+      maxBuffer: 10 * 1024 * 1024 // 10MB buffer for large files
+    })
+    return { content }
+  } catch {
+    // File doesn't exist at this commit (new file or deleted)
+    return { content: '' }
+  }
+})
+
+// Get current file content from working directory
+ipcMain.handle('git-working-file-content', async (_, projectPath: string, filePath: string) => {
+  try {
+    const fullPath = join(projectPath, filePath)
+    const content = await readFile(fullPath, 'utf-8')
+    return { content }
+  } catch {
+    return { content: '' }
+  }
+})

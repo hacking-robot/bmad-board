@@ -179,9 +179,20 @@ export default function StoryDialog() {
                       </Typography>
                     </ListItemIcon>
                     <ListItemText
-                      primary={ac.title}
-                      secondary={ac.description}
-                      primaryTypographyProps={{ fontWeight: 500 }}
+                      primary={
+                        <Box sx={{ '& p': { m: 0 }, '& code': { bgcolor: 'action.hover', px: 0.5, borderRadius: 0.5, fontFamily: 'monospace', fontSize: '0.85em' } }}>
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{ac.title}</ReactMarkdown>
+                        </Box>
+                      }
+                      secondary={
+                        ac.description ? (
+                          <Box sx={{ '& p': { m: 0 }, '& code': { bgcolor: 'action.hover', px: 0.5, borderRadius: 0.5, fontFamily: 'monospace', fontSize: '0.85em' } }}>
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{ac.description}</ReactMarkdown>
+                          </Box>
+                        ) : null
+                      }
+                      primaryTypographyProps={{ fontWeight: 500, component: 'div' }}
+                      secondaryTypographyProps={{ component: 'div' }}
                     />
                   </ListItem>
                 ))}
@@ -214,13 +225,16 @@ export default function StoryDialog() {
                             )}
                           </ListItemIcon>
                           <ListItemText
-                            primary={task.title}
-                            primaryTypographyProps={{
-                              fontWeight: 500,
-                              sx: task.completed
-                                ? { textDecoration: 'line-through', color: 'text.secondary' }
-                                : {}
-                            }}
+                            primary={
+                              <Box sx={{
+                                '& p': { m: 0 },
+                                '& code': { bgcolor: 'action.hover', px: 0.5, borderRadius: 0.5, fontFamily: 'monospace', fontSize: '0.85em' },
+                                ...(task.completed ? { textDecoration: 'line-through', color: 'text.secondary' } : {})
+                              }}>
+                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{task.title}</ReactMarkdown>
+                              </Box>
+                            }
+                            primaryTypographyProps={{ fontWeight: 500, component: 'div' }}
                           />
                         </ListItem>
                         {task.subtasks.length > 0 && (
@@ -241,13 +255,17 @@ export default function StoryDialog() {
                                   )}
                                 </ListItemIcon>
                                 <ListItemText
-                                  primary={subtask.title}
-                                  primaryTypographyProps={{
-                                    variant: 'body2',
-                                    sx: subtask.completed
-                                      ? { textDecoration: 'line-through', color: 'text.secondary' }
-                                      : {}
-                                  }}
+                                  primary={
+                                    <Box sx={{
+                                      '& p': { m: 0 },
+                                      '& code': { bgcolor: 'action.hover', px: 0.5, borderRadius: 0.5, fontFamily: 'monospace', fontSize: '0.85em' },
+                                      fontSize: '0.875rem',
+                                      ...(subtask.completed ? { textDecoration: 'line-through', color: 'text.secondary' } : {})
+                                    }}>
+                                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{subtask.title}</ReactMarkdown>
+                                    </Box>
+                                  }
+                                  primaryTypographyProps={{ component: 'div' }}
                                 />
                               </ListItem>
                             ))}
