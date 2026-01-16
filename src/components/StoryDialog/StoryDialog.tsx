@@ -1,3 +1,4 @@
+import React from 'react'
 import {
   Dialog,
   DialogTitle,
@@ -31,50 +32,54 @@ import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn'
 import ReactMarkdown, { Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
-import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import { gruvboxDark, gruvboxLight } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { useStore } from '../../store'
+import { gruvbox } from '../../theme'
 import { EPIC_COLORS, STATUS_COLUMNS } from '../../types'
 
-// Custom code component for syntax highlighting
-const CodeBlock: Components['code'] = ({ className, children, ...props }) => {
-  const match = /language-(\w+)/.exec(className || '')
-  const language = match ? match[1] : ''
-  const codeString = String(children).replace(/\n$/, '')
+// Factory function to create code component with theme awareness
+const createCodeBlock = (isDark: boolean): Components['code'] => {
+  return ({ className, children, ...props }) => {
+    const match = /language-(\w+)/.exec(className || '')
+    const language = match ? match[1] : ''
+    const codeString = String(children).replace(/\n$/, '')
 
-  // Check if this is inline code (no language and short content without newlines)
-  const isInline = !match && !codeString.includes('\n')
+    // Check if this is inline code (no language and short content without newlines)
+    const isInline = !match && !codeString.includes('\n')
 
-  if (isInline) {
+    if (isInline) {
+      return (
+        <code
+          style={{
+            backgroundColor: isDark ? gruvbox.dark2 : gruvbox.light2,
+            color: isDark ? gruvbox.light1 : gruvbox.dark1,
+            padding: '2px 6px',
+            borderRadius: 4,
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+            fontSize: '0.85em'
+          }}
+          {...props}
+        >
+          {children}
+        </code>
+      )
+    }
+
     return (
-      <code
-        style={{
-          backgroundColor: 'rgba(255, 255, 255, 0.1)',
-          padding: '2px 6px',
-          borderRadius: 4,
-          fontFamily: 'monospace',
-          fontSize: '0.85em'
+      <SyntaxHighlighter
+        style={isDark ? gruvboxDark : gruvboxLight}
+        language={language || 'text'}
+        PreTag="div"
+        customStyle={{
+          margin: '8px 0',
+          borderRadius: 8,
+          fontSize: '0.85rem'
         }}
-        {...props}
       >
-        {children}
-      </code>
+        {codeString}
+      </SyntaxHighlighter>
     )
   }
-
-  return (
-    <SyntaxHighlighter
-      style={oneDark}
-      language={language || 'text'}
-      PreTag="div"
-      customStyle={{
-        margin: '8px 0',
-        borderRadius: 8,
-        fontSize: '0.85rem'
-      }}
-    >
-      {codeString}
-    </SyntaxHighlighter>
-  )
 }
 
 export default function StoryDialog() {
@@ -85,6 +90,10 @@ export default function StoryDialog() {
   const humanReviewStates = useStore((state) => state.humanReviewStates)
   const toggleReviewItem = useStore((state) => state.toggleReviewItem)
   const getEffectiveStatus = useStore((state) => state.getEffectiveStatus)
+  const themeMode = useStore((state) => state.themeMode)
+
+  // Create theme-aware code block component (memoized to avoid recreation on every render)
+  const CodeBlock = React.useMemo(() => createCodeBlock(themeMode === 'dark'), [themeMode])
 
   const handleClose = () => {
     setSelectedStory(null)

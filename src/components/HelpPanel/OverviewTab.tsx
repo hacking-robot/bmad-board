@@ -3,9 +3,20 @@ import AutoStoriesIcon from '@mui/icons-material/AutoStories'
 import AnalyticsIcon from '@mui/icons-material/Analytics'
 import ArchitectureIcon from '@mui/icons-material/Architecture'
 import BuildIcon from '@mui/icons-material/Build'
+import SportsEsportsIcon from '@mui/icons-material/SportsEsports'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
+import { useStore } from '../../store'
+import { ProjectType } from '../../types'
 
-const phases = [
+interface Phase {
+  icon: React.ReactNode
+  title: string
+  agent: string
+  description: string
+}
+
+// BMM (BMAD Method) phases
+const bmmPhases: Phase[] = [
   {
     icon: <AutoStoriesIcon fontSize="small" />,
     title: 'Analysis',
@@ -32,13 +43,60 @@ const phases = [
   }
 ]
 
+// BMGD (BMAD Game Dev) phases
+const bmgdPhases: Phase[] = [
+  {
+    icon: <AutoStoriesIcon fontSize="small" />,
+    title: 'Concept',
+    agent: 'Game Designer (GD)',
+    description: 'Brainstorm game ideas, define core mechanics, and establish the creative vision for your game.'
+  },
+  {
+    icon: <AnalyticsIcon fontSize="small" />,
+    title: 'Design',
+    agent: 'Game Designer (GD)',
+    description: 'Create Game Design Documents, define gameplay systems, and plan game features and progression.'
+  },
+  {
+    icon: <ArchitectureIcon fontSize="small" />,
+    title: 'Architecture',
+    agent: 'Game Architect (GA)',
+    description: 'Design game architecture, plan technical systems, and create component diagrams.'
+  },
+  {
+    icon: <SportsEsportsIcon fontSize="small" />,
+    title: 'Development',
+    agent: 'Game SM, Game Dev, Game QA',
+    description: 'Sprint planning, game implementation, playtesting, and quality assurance. Build and polish your game.'
+  }
+]
+
+function getPhases(projectType: ProjectType | null): Phase[] {
+  return projectType === 'bmgd' ? bmgdPhases : bmmPhases
+}
+
+function getDescription(projectType: ProjectType | null): { title: string; description: string } {
+  if (projectType === 'bmgd') {
+    return {
+      title: 'BMAD Game Dev',
+      description: 'BMAD Game Dev is an AI-powered framework for game development. Specialized agents guide you from concept to playable game, covering design, architecture, implementation, and testing.'
+    }
+  }
+  return {
+    title: 'BMAD Method',
+    description: 'BMAD (Breakthrough Method of Agile AI-Driven Development) is an AI-powered framework that uses specialized agents to guide you through software development. Each agent has a specific role, from analysis through implementation.'
+  }
+}
+
 export default function OverviewTab() {
+  const projectType = useStore((state) => state.projectType)
+  const phases = getPhases(projectType)
+  const { title, description } = getDescription(projectType)
+
   return (
     <Box>
       <Typography variant="body1" sx={{ mb: 3 }}>
-        <strong>BMAD</strong> (Breakthrough Method of Agile AI-Driven Development) is an AI-powered framework
-        that uses specialized agents to guide you through software development. Each agent has a specific role,
-        from analysis through implementation.
+        <strong>{title}</strong> - {description}
       </Typography>
 
       <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>

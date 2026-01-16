@@ -137,6 +137,12 @@ interface AppState {
   addRecentProject: (project: RecentProject) => void
   removeRecentProject: (path: string) => void
 
+  // Git state (reactive across components)
+  currentBranch: string | null
+  hasUncommittedChanges: boolean
+  setCurrentBranch: (branch: string | null) => void
+  setHasUncommittedChanges: (hasChanges: boolean) => void
+
   // Data
   epics: Epic[]
   stories: Story[]
@@ -263,6 +269,12 @@ export const useStore = create<AppState>()(
       removeRecentProject: (path) => set((state) => ({
         recentProjects: state.recentProjects.filter((p) => p.path !== path)
       })),
+
+      // Git state (reactive across components)
+      currentBranch: null,
+      hasUncommittedChanges: false,
+      setCurrentBranch: (branch) => set({ currentBranch: branch }),
+      setHasUncommittedChanges: (hasChanges) => set({ hasUncommittedChanges: hasChanges }),
 
       // Data
       epics: [],

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Box, CircularProgress, Typography, Alert, Snackbar } from '@mui/material'
-import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, pointerWithin } from '@dnd-kit/core'
+import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, rectIntersection, closestCorners, CollisionDetection, PointerSensor, useSensor, useSensors, UniqueIdentifier } from '@dnd-kit/core'
 import { arrayMove } from '@dnd-kit/sortable'
 import { useStore } from '../../store'
 import { useProjectData } from '../../hooks/useProjectData'
@@ -9,6 +9,15 @@ import Column from './Column'
 import StoryCard from '../StoryCard/StoryCard'
 
 export default function Board() {
+  // Configure sensors for drag detection
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5 // 5px movement before drag starts - allows clicks to work
+      }
+    })
+  )
+
   const loading = useStore((state) => state.loading)
   const error = useStore((state) => state.error)
   const allStories = useStore((state) => state.stories)
@@ -28,11 +37,66 @@ export default function Board() {
 
   // Drag and drop state
   const [activeStory, setActiveStory] = useState<Story | null>(null)
+  const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null)
+
+  // Custom collision detection:
+  // - Same column: use closestCorners for card-level detection (reordering with preview)
+  // - Different column: use column detection (drop at end)
+  const columnIds = ['backlog', 'ready-for-dev', 'in-progress', 'review', 'done', 'human-review']
+
+  const collisionDetection: CollisionDetection = (args) => {
+    // First, find collisions using rectIntersection
+    const rectCollisions = rectIntersection(args)
+
+    // If no collisions, try closestCorners
+    if (rectCollisions.length === 0) {
+      return closestCorners(args)
+    }
+
+    // Find the dragged story's column
+    const draggedStory = allStories.find(s => s.id === activeId)
+    const draggedStatus = draggedStory ? getEffectiveStatus(draggedStory) : null
+
+    // Check if we have a card collision
+    const cardCollisions = rectCollisions.filter(c => !columnIds.includes(String(c.id)))
+    const columnCollisions = rectCollisions.filter(c => columnIds.includes(String(c.id)))
+
+    if (cardCollisions.length > 0) {
+      // Found a card - check if it's in the same column as dragged item
+      const overStory = allStories.find(s => s.id === cardCollisions[0].id)
+      const overStatus = overStory ? getEffectiveStatus(overStory) : null
+
+      if (draggedStatus && overStatus && draggedStatus === overStatus) {
+        // Same column - return the card for reordering
+        return [cardCollisions[0]]
+      } else {
+        // Different column - return the column instead
+        if (columnCollisions.length > 0) {
+          return [columnCollisions[0]]
+        }
+        // Find the column this card belongs to
+        if (overStatus) {
+          const columnCollision = rectCollisions.find(c => String(c.id) === overStatus)
+          if (columnCollision) {
+            return [columnCollision]
+          }
+        }
+      }
+    }
+
+    // No card collision, return column if available
+    if (columnCollisions.length > 0) {
+      return [columnCollisions[0]]
+    }
+
+    return rectCollisions
+  }
   const [snackbarOpen, setSnackbarOpen] = useState(false)
   const [snackbarMessage, setSnackbarMessage] = useState('')
 
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event
+    setActiveId(active.id)
     const story = allStories.find((s) => s.id === active.id)
     if (story) {
       setActiveStory(story)
@@ -42,6 +106,7 @@ export default function Board() {
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event
     setActiveStory(null)
+    setActiveId(null)
 
     if (!over) return
 
@@ -52,12 +117,12 @@ export default function Board() {
     const overId = over.id as string
     const epicKey = selectedEpicId === null ? 'all' : String(selectedEpicId)
 
-    // Check if we're dropping on another story (reorder within same column)
+    // Check if we're dropping on another story (same column reorder)
     const overStory = allStories.find((s) => s.id === overId)
     const storyEffectiveStatus = getEffectiveStatus(story)
 
-    if (overStory && getEffectiveStatus(overStory) === storyEffectiveStatus) {
-      // Reorder within the same column
+    if (overStory) {
+      // Same column reorder (collision detection ensures this is same column)
       const status = storyEffectiveStatus
       const columnStories = allStories
         .filter((s) => getEffectiveStatus(s) === status)
@@ -82,7 +147,7 @@ export default function Board() {
       return
     }
 
-    // Check if we're dropping on a column (status change)
+    // Check if we're dropping on a column (cross-column move)
     // Only allow dropping on visible columns
     const validStatuses: string[] = STATUS_COLUMNS
       .filter(c => c.status !== 'optional')
@@ -97,6 +162,13 @@ export default function Board() {
       if (newStatus === 'human-review') {
         // Moving TO human-review: just add to app-level list
         addToHumanReview(story.id)
+        // Add to top of human-review column order
+        const targetColumnStories = allStories
+          .filter((s) => getEffectiveStatus(s) === 'human-review')
+          .filter((s) => selectedEpicId === null || s.epicId === selectedEpicId)
+        const currentOrder = storyOrder[epicKey]?.['human-review'] || targetColumnStories.map(s => s.id)
+        const newOrder = [storyId, ...currentOrder.filter(id => id !== storyId)]
+        setStoryOrder(epicKey, 'human-review', newOrder)
         setSnackbarMessage(`Moved "${story.title}" to Human Review`)
         setSnackbarOpen(true)
         return
@@ -108,12 +180,24 @@ export default function Board() {
         removeFromHumanReview(story.id)
       }
 
+      // Add the story to the top of the target column's order
+      const addToColumnOrder = () => {
+        const targetColumnStories = allStories
+          .filter((s) => getEffectiveStatus(s) === newStatus)
+          .filter((s) => selectedEpicId === null || s.epicId === selectedEpicId)
+        const currentOrder = storyOrder[epicKey]?.[newStatus] || targetColumnStories.map(s => s.id)
+        // Remove the story from order if it exists, then add to top
+        const newOrder = [storyId, ...currentOrder.filter(id => id !== storyId)]
+        setStoryOrder(epicKey, newStatus, newOrder)
+      }
+
       // Update the story status in sprint-status.yaml (for real BMAD statuses)
       if (story.filePath) {
         // Set flag to prevent notification for user's own drag action
         setIsUserDragging(true)
         const result = await window.fileAPI.updateStoryStatus(story.filePath, newStatus)
         if (result.success) {
+          addToColumnOrder()
           setSnackbarMessage(`Moved "${story.title}" to ${newStatus}`)
           setSnackbarOpen(true)
           // Refresh stories to reflect the change
@@ -222,9 +306,10 @@ export default function Board() {
 
   return (
     <DndContext
+      sensors={sensors}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
-      collisionDetection={pointerWithin}
+      collisionDetection={collisionDetection}
     >
       <Box
         sx={{

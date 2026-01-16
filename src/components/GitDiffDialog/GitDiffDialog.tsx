@@ -19,7 +19,9 @@ import {
   List,
   ListItemButton,
   ListItemText,
-  Divider
+  Divider,
+  Button,
+  Alert
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
@@ -450,6 +452,10 @@ function CommitFileDiff({
 export default function GitDiffDialog({ open, onClose, branchName }: GitDiffDialogProps) {
   const projectPath = useStore((state) => state.projectPath)
   const themeMode = useStore((state) => state.themeMode)
+  const currentBranch = useStore((state) => state.currentBranch)
+  const hasUncommittedChanges = useStore((state) => state.hasUncommittedChanges)
+  const setHasUncommittedChanges = useStore((state) => state.setHasUncommittedChanges)
+  const stories = useStore((state) => state.stories)
 
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -459,13 +465,63 @@ export default function GitDiffDialog({ open, onClose, branchName }: GitDiffDial
   const [diffMode, setDiffMode] = useState<DiffModeEnum>(DiffModeEnum.Split)
   const [defaultBranch, setDefaultBranch] = useState<string>('')
 
-  // Tab and commit state
+  // Tab and commit history state
   const [activeTab, setActiveTab] = useState(0)
   const [commits, setCommits] = useState<GitCommit[]>([])
   const [commitsLoading, setCommitsLoading] = useState(false)
   const [selectedCommit, setSelectedCommit] = useState<GitCommit | null>(null)
   const [commitFiles, setCommitFiles] = useState<GitCommitFile[]>([])
   const [commitFilesLoading, setCommitFilesLoading] = useState(false)
+
+  // Commit action state
+  const [committing, setCommitting] = useState(false)
+  const [commitError, setCommitError] = useState<string | null>(null)
+
+  // Check if this is the current branch with uncommitted changes
+  const isCurrentBranch = branchName === currentBranch
+  const canCommit = isCurrentBranch && hasUncommittedChanges
+
+  // Find matching story for commit message
+  const getStoryFromBranch = (branch: string) => {
+    for (const story of stories) {
+      const storyBranchPrefix = `${story.epicId}-${story.id}`
+      if (branch === storyBranchPrefix || branch.startsWith(`${storyBranchPrefix}-`)) {
+        return story
+      }
+    }
+    return null
+  }
+
+  const matchingStory = getStoryFromBranch(branchName)
+
+  const getCommitMessage = () => {
+    if (matchingStory) {
+      return `feat(${branchName}): update story ${matchingStory.epicId}.${matchingStory.storyNumber}`
+    }
+    return `chore(${branchName}): update`
+  }
+
+  const handleCommit = async () => {
+    if (!projectPath || !canCommit) return
+
+    setCommitting(true)
+    setCommitError(null)
+
+    try {
+      const result = await window.gitAPI.commit(projectPath, getCommitMessage())
+      if (result.success) {
+        setHasUncommittedChanges(false)
+        // Refresh the diff to show updated state
+        loadChangedFiles(true)
+      } else {
+        setCommitError(result.error || 'Failed to commit')
+      }
+    } catch {
+      setCommitError('Failed to commit changes')
+    } finally {
+      setCommitting(false)
+    }
+  }
 
   useEffect(() => {
     if (open && projectPath) {
@@ -662,6 +718,22 @@ export default function GitDiffDialog({ open, onClose, branchName }: GitDiffDial
           </Box>
         </Box>
 
+        {/* Commit button - only shown for current branch with changes */}
+        {canCommit && (
+          <Tooltip title={`Commit: ${getCommitMessage()}`}>
+            <Button
+              variant="contained"
+              size="small"
+              onClick={handleCommit}
+              disabled={committing}
+              startIcon={committing ? <CircularProgress size={14} color="inherit" /> : <CommitIcon />}
+              sx={{ minWidth: 90 }}
+            >
+              {committing ? 'Committing' : 'Commit'}
+            </Button>
+          </Tooltip>
+        )}
+
         {/* Refresh button */}
         <Tooltip title="Refresh changes">
           <IconButton
@@ -707,6 +779,13 @@ export default function GitDiffDialog({ open, onClose, branchName }: GitDiffDial
       </DialogTitle>
 
       <DialogContent dividers sx={{ p: 0 }}>
+        {/* Commit error alert */}
+        {commitError && (
+          <Alert severity="error" onClose={() => setCommitError(null)} sx={{ m: 2, mb: 0 }}>
+            {commitError}
+          </Alert>
+        )}
+
         {/* Tabs */}
         <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 2 }}>
           <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)}>
