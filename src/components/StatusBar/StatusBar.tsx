@@ -1,8 +1,20 @@
 import { useMemo } from 'react'
-import { Box, Typography, Tooltip } from '@mui/material'
+import { Box, Typography, Tooltip, IconButton } from '@mui/material'
 import CircleIcon from '@mui/icons-material/Circle'
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
 import { useStore } from '../../store'
 import { STATUS_COLUMNS, StoryStatus } from '../../types'
+
+// Status descriptions for tooltips
+const statusDescriptions: Record<StoryStatus, string> = {
+  backlog: 'Stories not yet ready for development',
+  'ready-for-dev': 'Stories ready to implement',
+  'in-progress': 'Currently being developed',
+  review: 'Code complete, awaiting review',
+  'human-review': 'Awaiting human review approval',
+  done: 'Implemented and verified',
+  optional: 'Nice-to-have features'
+}
 
 const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent)
 const modKey = isMac ? '⌘' : 'Ctrl'
@@ -29,6 +41,7 @@ export default function StatusBar() {
   const selectedEpicId = useStore((state) => state.selectedEpicId)
   const lastRefreshed = useStore((state) => state.lastRefreshed)
   const isWatching = useStore((state) => state.isWatching)
+  const setHelpPanelOpen = useStore((state) => state.setHelpPanelOpen)
 
   // Count stories by status
   const statusCounts = useMemo(() => {
@@ -37,6 +50,7 @@ export default function StatusBar() {
       'ready-for-dev': 0,
       'in-progress': 0,
       'review': 0,
+      'human-review': 0,
       'done': 0,
       'optional': 0
     }
@@ -105,8 +119,12 @@ export default function StatusBar() {
         {statusDisplay.length > 0 && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
             {statusDisplay.map((col) => (
-              <Tooltip key={col.status} title={col.label}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Tooltip
+                key={col.status}
+                title={`${col.count} ${col.label}: ${statusDescriptions[col.status]}`}
+                arrow
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'help' }}>
                   <Box
                     sx={{
                       width: 8,
@@ -152,6 +170,21 @@ export default function StatusBar() {
         >
           {modKey}P Command Palette
         </Typography>
+
+        {/* Help button */}
+        <Tooltip title="BMAD Guide (F1)">
+          <IconButton
+            size="small"
+            onClick={() => setHelpPanelOpen(true)}
+            sx={{
+              p: 0.25,
+              color: 'text.disabled',
+              '&:hover': { color: 'text.secondary' }
+            }}
+          >
+            <HelpOutlineIcon sx={{ fontSize: 16 }} />
+          </IconButton>
+        </Tooltip>
       </Box>
     </Box>
   )

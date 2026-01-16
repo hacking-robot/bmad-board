@@ -14,7 +14,10 @@ import {
   ListItem,
   ListItemIcon,
   ListItemText,
-  CircularProgress
+  CircularProgress,
+  Tooltip,
+  Checkbox,
+  FormControlLabel
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
@@ -23,15 +26,65 @@ import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked'
 import AddIcon from '@mui/icons-material/Add'
 import EditIcon from '@mui/icons-material/Edit'
 import VerifiedIcon from '@mui/icons-material/Verified'
-import ReactMarkdown from 'react-markdown'
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
+import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn'
+import ReactMarkdown, { Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { useStore } from '../../store'
 import { EPIC_COLORS, STATUS_COLUMNS } from '../../types'
+
+// Custom code component for syntax highlighting
+const CodeBlock: Components['code'] = ({ className, children, ...props }) => {
+  const match = /language-(\w+)/.exec(className || '')
+  const language = match ? match[1] : ''
+  const codeString = String(children).replace(/\n$/, '')
+
+  // Check if this is inline code (no language and short content without newlines)
+  const isInline = !match && !codeString.includes('\n')
+
+  if (isInline) {
+    return (
+      <code
+        style={{
+          backgroundColor: 'rgba(255, 255, 255, 0.1)',
+          padding: '2px 6px',
+          borderRadius: 4,
+          fontFamily: 'monospace',
+          fontSize: '0.85em'
+        }}
+        {...props}
+      >
+        {children}
+      </code>
+    )
+  }
+
+  return (
+    <SyntaxHighlighter
+      style={oneDark}
+      language={language || 'text'}
+      PreTag="div"
+      customStyle={{
+        margin: '8px 0',
+        borderRadius: 8,
+        fontSize: '0.85rem'
+      }}
+    >
+      {codeString}
+    </SyntaxHighlighter>
+  )
+}
 
 export default function StoryDialog() {
   const selectedStory = useStore((state) => state.selectedStory)
   const storyContent = useStore((state) => state.storyContent)
   const setSelectedStory = useStore((state) => state.setSelectedStory)
+  const humanReviewChecklist = useStore((state) => state.humanReviewChecklist)
+  const humanReviewStates = useStore((state) => state.humanReviewStates)
+  const toggleReviewItem = useStore((state) => state.toggleReviewItem)
+  const getEffectiveStatus = useStore((state) => state.getEffectiveStatus)
 
   const handleClose = () => {
     setSelectedStory(null)
@@ -39,8 +92,9 @@ export default function StoryDialog() {
 
   if (!selectedStory) return null
 
+  const effectiveStatus = getEffectiveStatus(selectedStory)
   const epicColor = EPIC_COLORS[(selectedStory.epicId - 1) % EPIC_COLORS.length]
-  const statusConfig = STATUS_COLUMNS.find((c) => c.status === selectedStory.status)
+  const statusConfig = STATUS_COLUMNS.find((c) => c.status === effectiveStatus)
 
   return (
     <Dialog
@@ -74,7 +128,7 @@ export default function StoryDialog() {
               }}
             />
             <Chip
-              label={statusConfig?.label || selectedStory.status}
+              label={statusConfig?.label || effectiveStatus}
               size="small"
               sx={{
                 bgcolor: statusConfig?.color,
@@ -125,6 +179,69 @@ export default function StoryDialog() {
           </Box>
         ) : (
           <Box>
+            {/* Human Review Checklist - only shows for human-review status */}
+            {effectiveStatus === 'human-review' && humanReviewChecklist.length > 0 && (
+              <>
+                <Box sx={{ p: 3, bgcolor: 'action.hover' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                    <AssignmentTurnedInIcon color="primary" />
+                    <Typography variant="h6">
+                      Human Review Checklist ({(humanReviewStates[selectedStory.id]?.checkedItems.length || 0)}/{humanReviewChecklist.length})
+                    </Typography>
+                    <Tooltip title="Complete all items before moving to Done" arrow>
+                      <InfoOutlinedIcon sx={{ fontSize: 18, color: 'text.disabled', cursor: 'help' }} />
+                    </Tooltip>
+                  </Box>
+                  <List dense disablePadding>
+                    {humanReviewChecklist.map((item) => {
+                      const isChecked = humanReviewStates[selectedStory.id]?.checkedItems.includes(item.id) || false
+                      return (
+                        <ListItem key={item.id} sx={{ px: 0, py: 0.5 }}>
+                          <FormControlLabel
+                            control={
+                              <Checkbox
+                                checked={isChecked}
+                                onChange={() => toggleReviewItem(selectedStory.id, item.id)}
+                                color="success"
+                              />
+                            }
+                            label={
+                              <Box>
+                                <Typography fontWeight={500} sx={{ color: isChecked ? 'text.secondary' : 'text.primary' }}>
+                                  {item.label}
+                                </Typography>
+                                {item.description && (
+                                  <Typography variant="caption" color="text.secondary" display="block">
+                                    {item.description}
+                                  </Typography>
+                                )}
+                              </Box>
+                            }
+                            sx={{ alignItems: 'flex-start', '& .MuiFormControlLabel-label': { pt: 0.5 } }}
+                          />
+                        </ListItem>
+                      )
+                    })}
+                  </List>
+
+                  {/* Progress indicator */}
+                  <Box sx={{ mt: 2, p: 2, bgcolor: 'background.paper', borderRadius: 1, border: 1, borderColor: 'divider' }}>
+                    <Typography
+                      variant="body2"
+                      color={(humanReviewStates[selectedStory.id]?.checkedItems.length || 0) === humanReviewChecklist.length ? 'success.main' : 'text.secondary'}
+                      fontWeight={500}
+                    >
+                      {(humanReviewStates[selectedStory.id]?.checkedItems.length || 0) === humanReviewChecklist.length
+                        ? 'All items approved. Ready to move to Done.'
+                        : `${humanReviewChecklist.length - (humanReviewStates[selectedStory.id]?.checkedItems.length || 0)} item(s) remaining to review.`
+                      }
+                    </Typography>
+                  </Box>
+                </Box>
+                <Divider />
+              </>
+            )}
+
             {/* Story Description */}
             <Box sx={{ p: 3 }}>
               <Typography variant="h6" gutterBottom>
@@ -135,10 +252,15 @@ export default function StoryDialog() {
                   bgcolor: 'action.hover',
                   borderRadius: 2,
                   p: 2,
-                  '& p': { m: 0 }
+                  '& p': { m: 0, mb: 1, '&:last-child': { mb: 0 } },
+                  '& ul, & ol': {
+                    pl: 3,
+                    mb: 1,
+                    '& li': { mb: 0.5 }
+                  }
                 }}
               >
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: CodeBlock }}>
                   {storyContent.description}
                 </ReactMarkdown>
               </Box>
@@ -148,9 +270,14 @@ export default function StoryDialog() {
 
             {/* Acceptance Criteria */}
             <Box sx={{ p: 3 }}>
-              <Typography variant="h6" gutterBottom>
-                Acceptance Criteria ({storyContent.acceptanceCriteria.length})
-              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                <Typography variant="h6">
+                  Acceptance Criteria ({storyContent.acceptanceCriteria.length})
+                </Typography>
+                <Tooltip title="Criteria that must be met for the story to be considered complete. Written by PM (John)." arrow>
+                  <InfoOutlinedIcon sx={{ fontSize: 18, color: 'text.disabled', cursor: 'help' }} />
+                </Tooltip>
+              </Box>
               <List dense disablePadding>
                 {storyContent.acceptanceCriteria.map((ac, index) => (
                   <ListItem key={ac.id} sx={{ px: 0, py: 0.5 }}>
@@ -173,9 +300,20 @@ export default function StoryDialog() {
                       </Typography>
                     </ListItemIcon>
                     <ListItemText
-                      primary={ac.title}
-                      secondary={ac.description}
-                      primaryTypographyProps={{ fontWeight: 500 }}
+                      primary={
+                        <Box sx={{ '& p': { m: 0 } }}>
+                          <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: CodeBlock }}>{ac.title}</ReactMarkdown>
+                        </Box>
+                      }
+                      secondary={
+                        ac.description ? (
+                          <Box sx={{ '& p': { m: 0 } }}>
+                            <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: CodeBlock }}>{ac.description}</ReactMarkdown>
+                          </Box>
+                        ) : null
+                      }
+                      primaryTypographyProps={{ fontWeight: 500, component: 'div' }}
+                      secondaryTypographyProps={{ component: 'div' }}
                     />
                   </ListItem>
                 ))}
@@ -188,9 +326,14 @@ export default function StoryDialog() {
             {storyContent.tasks.length > 0 && (
               <>
                 <Box sx={{ p: 3 }}>
-                  <Typography variant="h6" gutterBottom>
-                    Tasks ({storyContent.tasks.filter((t) => t.completed).length}/{storyContent.tasks.length})
-                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                    <Typography variant="h6">
+                      Tasks ({storyContent.tasks.filter((t) => t.completed).length}/{storyContent.tasks.length})
+                    </Typography>
+                    <Tooltip title="Implementation tasks for DEV (Amelia) to complete. Check them off as you work." arrow>
+                      <InfoOutlinedIcon sx={{ fontSize: 18, color: 'text.disabled', cursor: 'help' }} />
+                    </Tooltip>
+                  </Box>
                   <List dense disablePadding>
                     {storyContent.tasks.map((task) => (
                       <Box key={task.id}>
@@ -203,13 +346,15 @@ export default function StoryDialog() {
                             )}
                           </ListItemIcon>
                           <ListItemText
-                            primary={task.title}
-                            primaryTypographyProps={{
-                              fontWeight: 500,
-                              sx: task.completed
-                                ? { textDecoration: 'line-through', color: 'text.secondary' }
-                                : {}
-                            }}
+                            primary={
+                              <Box sx={{
+                                '& p': { m: 0 },
+                                ...(task.completed ? { textDecoration: 'line-through', color: 'text.secondary' } : {})
+                              }}>
+                                <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: CodeBlock }}>{task.title}</ReactMarkdown>
+                              </Box>
+                            }
+                            primaryTypographyProps={{ fontWeight: 500, component: 'div' }}
                           />
                         </ListItem>
                         {task.subtasks.length > 0 && (
@@ -230,13 +375,16 @@ export default function StoryDialog() {
                                   )}
                                 </ListItemIcon>
                                 <ListItemText
-                                  primary={subtask.title}
-                                  primaryTypographyProps={{
-                                    variant: 'body2',
-                                    sx: subtask.completed
-                                      ? { textDecoration: 'line-through', color: 'text.secondary' }
-                                      : {}
-                                  }}
+                                  primary={
+                                    <Box sx={{
+                                      '& p': { m: 0 },
+                                      fontSize: '0.875rem',
+                                      ...(subtask.completed ? { textDecoration: 'line-through', color: 'text.secondary' } : {})
+                                    }}>
+                                      <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: CodeBlock }}>{subtask.title}</ReactMarkdown>
+                                    </Box>
+                                  }
+                                  primaryTypographyProps={{ component: 'div' }}
                                 />
                               </ListItem>
                             ))}
@@ -268,17 +416,12 @@ export default function StoryDialog() {
                         '&:first-of-type': { mt: 0 }
                       },
                       '& p': { mb: 1 },
-                      '& pre': {
-                        bgcolor: 'action.hover',
-                        p: 2,
-                        borderRadius: 1,
-                        overflow: 'auto'
-                      },
-                      '& code': {
-                        bgcolor: 'action.hover',
-                        px: 0.5,
-                        borderRadius: 0.5,
-                        fontFamily: 'monospace'
+                      '& ul, & ol': {
+                        pl: 3,
+                        mb: 1,
+                        '& li': {
+                          mb: 0.5
+                        }
                       },
                       '& table': {
                         width: '100%',
@@ -295,7 +438,7 @@ export default function StoryDialog() {
                       }
                     }}
                   >
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: CodeBlock }}>
                       {storyContent.devNotes}
                     </ReactMarkdown>
                   </Box>
@@ -387,6 +530,7 @@ export default function StoryDialog() {
                 </AccordionDetails>
               </Accordion>
             )}
+
           </Box>
         )}
       </DialogContent>

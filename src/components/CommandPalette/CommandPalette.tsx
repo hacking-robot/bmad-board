@@ -15,8 +15,16 @@ import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import KeyboardIcon from '@mui/icons-material/Keyboard'
 import CategoryIcon from '@mui/icons-material/Category'
 import AllInclusiveIcon from '@mui/icons-material/AllInclusive'
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
+import GroupIcon from '@mui/icons-material/Group'
+import AccountTreeIcon from '@mui/icons-material/AccountTree'
+import TerminalIcon from '@mui/icons-material/Terminal'
+import OpenInNewIcon from '@mui/icons-material/OpenInNew'
+import DescriptionIcon from '@mui/icons-material/Description'
+import CompareArrowsIcon from '@mui/icons-material/CompareArrows'
 import { useStore } from '../../store'
 import { useProjectData } from '../../hooks/useProjectData'
+import GitDiffDialog from '../GitDiffDialog'
 
 interface CommandItem {
   id: string
@@ -48,9 +56,43 @@ export default function CommandPalette() {
   const projectPath = useStore((state) => state.projectPath)
   const recentProjects = useStore((state) => state.recentProjects)
   const epics = useStore((state) => state.epics)
+  const stories = useStore((state) => state.stories)
   const selectedEpicId = useStore((state) => state.selectedEpicId)
   const setSelectedEpicId = useStore((state) => state.setSelectedEpicId)
+  const setSelectedStory = useStore((state) => state.setSelectedStory)
+  const setHelpPanelOpen = useStore((state) => state.setHelpPanelOpen)
   const { selectProject, switchToProject } = useProjectData()
+
+  // State for diff dialog opened from command palette
+  const [diffDialogBranch, setDiffDialogBranch] = useState<string | null>(null)
+
+  // Track which stories have existing git branches
+  const [storiesWithBranches, setStoriesWithBranches] = useState<Set<string>>(new Set())
+
+  // Check for existing branches when palette opens with diff: prefix
+  useEffect(() => {
+    if (!open || !projectPath || !inputValue.startsWith('diff:')) return
+
+    const checkBranches = async () => {
+      const branchSet = new Set<string>()
+
+      for (const story of stories) {
+        const branchName = `${story.epicId}-${story.id}`
+        try {
+          const result = await window.gitAPI.branchExists(projectPath, branchName)
+          if (result.exists) {
+            branchSet.add(story.id)
+          }
+        } catch {
+          // Skip stories where branch check fails
+        }
+      }
+
+      setStoriesWithBranches(branchSet)
+    }
+
+    checkBranches()
+  }, [open, projectPath, stories, inputValue.startsWith('diff:')])
 
   // Define command types
   const commandTypes: CommandType[] = useMemo(() => [
@@ -125,9 +167,100 @@ export default function CommandPalette() {
       }
     },
     {
+      prefix: 'story:',
+      label: 'Stories',
+      getItems: () => {
+        return stories.map((story) => {
+          const epic = epics.find(e => e.id === story.epicId)
+          return {
+            id: `story:${story.id}`,
+            label: story.title,
+            description: `${epic?.name || `Epic ${story.epicId}`} · ${story.status}`,
+            icon: <DescriptionIcon sx={{ color: 'text.secondary' }} />,
+            action: () => {
+              setSelectedStory(story)
+              setOpen(false)
+            }
+          }
+        })
+      }
+    },
+    {
+      prefix: 'diff:',
+      label: 'Branch Diffs',
+      getItems: () => {
+        // Only show stories that have an existing git branch
+        return stories
+          .filter(story => storiesWithBranches.has(story.id))
+          .map((story) => {
+            const branchName = `${story.epicId}-${story.id}`
+            return {
+              id: `diff:${story.id}`,
+              label: story.title,
+              description: `Branch: ${branchName}`,
+              icon: <CompareArrowsIcon sx={{ color: 'text.secondary' }} />,
+              action: () => {
+                setDiffDialogBranch(branchName)
+                setOpen(false)
+              }
+            }
+          })
+      }
+    },
+    {
       prefix: '>',
       label: 'Commands',
       getItems: () => [
+        {
+          id: 'command:help-overview',
+          label: 'Help: BMAD Overview',
+          description: 'Learn about the BMAD methodology',
+          icon: <HelpOutlineIcon sx={{ color: 'text.secondary' }} />,
+          action: () => {
+            setOpen(false)
+            setHelpPanelOpen(true, 0)
+          }
+        },
+        {
+          id: 'command:help-agents',
+          label: 'Help: Meet the Agents',
+          description: 'Learn about BMAD AI agents and their roles',
+          icon: <GroupIcon sx={{ color: 'text.secondary' }} />,
+          action: () => {
+            setOpen(false)
+            setHelpPanelOpen(true, 1)
+          }
+        },
+        {
+          id: 'command:help-workflow',
+          label: 'Help: Story Workflow',
+          description: 'Understand story statuses and lifecycle',
+          icon: <AccountTreeIcon sx={{ color: 'text.secondary' }} />,
+          action: () => {
+            setOpen(false)
+            setHelpPanelOpen(true, 2)
+          }
+        },
+        {
+          id: 'command:help-commands',
+          label: 'Help: BMAD Commands',
+          description: 'Reference for all BMAD commands',
+          icon: <TerminalIcon sx={{ color: 'text.secondary' }} />,
+          action: () => {
+            setOpen(false)
+            setHelpPanelOpen(true, 3)
+          }
+        },
+        {
+          id: 'command:help-docs',
+          label: 'Help: Open Documentation',
+          description: 'Open BMAD docs in browser',
+          icon: <OpenInNewIcon sx={{ color: 'text.secondary' }} />,
+          action: () => {
+            setOpen(false)
+            window.open('https://docs.bmad-method.org', '_blank')
+          }
+        },
         {
           id: 'command:keyboard-shortcuts',
           label: 'Preferences: Keyboard Shortcuts',
@@ -150,7 +283,7 @@ export default function CommandPalette() {
         }
       ]
     }
-  ], [recentProjects, projectPath, switchToProject, selectProject, epics, selectedEpicId, setSelectedEpicId])
+  ], [recentProjects, projectPath, switchToProject, selectProject, epics, stories, storiesWithBranches, selectedEpicId, setSelectedEpicId, setSelectedStory, setHelpPanelOpen])
 
   // Parse input to get active prefix and search query
   const { activeType, searchQuery } = useMemo(() => {
@@ -275,6 +408,7 @@ export default function CommandPalette() {
   }
 
   return (
+    <>
     <Dialog
       open={open}
       onClose={handleClose}
@@ -436,5 +570,15 @@ export default function CommandPalette() {
         </Box>
       </Box>
     </Dialog>
+
+    {/* Git Diff Dialog opened from command palette */}
+    {diffDialogBranch && (
+      <GitDiffDialog
+        open={!!diffDialogBranch}
+        onClose={() => setDiffDialogBranch(null)}
+        branchName={diffDialogBranch}
+      />
+    )}
+    </>
   )
 }
