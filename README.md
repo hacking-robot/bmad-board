@@ -20,6 +20,15 @@
 - **Collapsible Columns**: Minimize columns to focus on active work
 - **Command Palette**: Quick access to actions with keyboard shortcuts
 
+## Compatibility
+
+| Requirement | Supported |
+|-------------|-----------|
+| BMAD Version | **BMAD 6** |
+| Project Types | BMAD, BMAD Game |
+
+> **Note**: BMad Board has only be tested on **BMAD 6** projects. Earlier versions of BMAD may not work. Only **BMAD** and **BMAD Game** project types have been tested.
+
 ## Download
 
 [![Latest Release](https://img.shields.io/github/v/release/hacking-robot/bmad-board?label=Latest&color=E97451)](https://github.com/hacking-robot/bmad-board/releases/latest)
@@ -50,10 +59,10 @@ npm run build
 ## Usage
 
 1. Launch BMad Board
-2. Select your BMAD project folder (must contain `docs/epics/` and `docs/stories/`)
+2. Select your BMAD or BMAD game project folder
 3. View your stories organized by status
 4. Click a story card to view full details
-5. Use `Cmd+K` to open the command palette for quick actions
+5. Use `Cmd+P` to open the command palette for quick actions
 
 ### Project Structure Requirements
 
