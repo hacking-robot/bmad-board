@@ -1,119 +1,242 @@
-import { Box, Typography, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Chip, Alert } from '@mui/material'
+import { useState } from 'react'
+import { Box, Typography, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Chip, Alert, IconButton, Tooltip, Snackbar } from '@mui/material'
+import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import { useStore } from '../../store'
-import { AI_TOOLS } from '../../types'
+import { AI_TOOLS, AITool, ProjectType } from '../../types'
 
 interface Command {
-  command: string
+  command: string  // Base command without prefix (e.g., 'workflow-init')
   description: string
   agent: string
-  example: string
+  example: string  // Base example without prefix
   category: 'workflow' | 'agent' | 'story' | 'utility'
 }
 
-const commands: Command[] = [
+// Transform command based on AI tool
+// Claude Code uses full paths: /bmad:bmm:workflows:workflow-init
+// Others use simplified: *workflow-init
+function formatCommand(baseCommand: string, aiTool: AITool, projectType: ProjectType | null): string {
+  if (aiTool === 'claude-code') {
+    const pt = projectType || 'bmm'
+    return `/bmad:${pt}:workflows:${baseCommand}`
+  }
+  return `*${baseCommand}`
+}
+
+// Format agent invocation command
+// Claude Code: /bmad:bmm:agents:pm
+// Others: @pm
+function formatAgentInvocation(agentId: string, aiTool: AITool, projectType: ProjectType | null): string {
+  if (aiTool === 'claude-code') {
+    const pt = projectType || 'bmm'
+    return `/bmad:${pt}:agents:${agentId}`
+  }
+  const tool = AI_TOOLS.find(t => t.id === aiTool)
+  return `${tool?.agentPrefix || '@'}${agentId}`
+}
+
+// Commands for BMM (BMAD Method)
+const bmmCommands: Command[] = [
   // Workflow commands
   {
-    command: '*workflow-init',
-    description: 'Analyze project and recommend a development track (Quick Flow, BMad Method, or Enterprise)',
+    command: 'workflow-init',
+    description: 'Analyze project and recommend a development track',
     agent: 'Any',
-    example: 'Run *workflow-init to get started with your project',
+    example: 'workflow-init to get started',
     category: 'workflow'
   },
   // Story commands
   {
-    command: '*story-draft',
+    command: 'create-story',
     description: 'Draft a new user story with acceptance criteria',
     agent: 'PM (John)',
-    example: '*story-draft for user authentication feature',
+    example: 'create-story for user authentication',
     category: 'story'
   },
   {
-    command: '*story-prep',
-    description: 'Prepare a story for development by refining details',
-    agent: 'SM (Bob)',
-    example: '*story-prep for story 2.3',
-    category: 'story'
-  },
-  {
-    command: '*epic-create',
-    description: 'Create a new epic to group related stories',
+    command: 'create-epics-and-stories',
+    description: 'Break work into epics and stories',
     agent: 'PM (John)',
-    example: '*epic-create for payment system',
+    example: 'create-epics-and-stories for payment system',
     category: 'story'
   },
   {
-    command: '*sprint-status',
+    command: 'check-implementation-readiness',
+    description: 'Verify story is ready for development',
+    agent: 'SM (Bob)',
+    example: 'check-implementation-readiness for story 2.3',
+    category: 'story'
+  },
+  {
+    command: 'sprint-status',
     description: 'Generate current sprint status report',
     agent: 'SM (Bob)',
-    example: '*sprint-status to see progress',
+    example: 'sprint-status to see progress',
     category: 'story'
   },
   {
-    command: '*implement',
-    description: 'Start implementing a story following acceptance criteria',
+    command: 'dev-story',
+    description: 'Implement a story following acceptance criteria',
     agent: 'DEV (Amelia)',
-    example: '*implement story 1.2',
+    example: 'dev-story 1.2',
     category: 'story'
   },
   {
-    command: '*code-review',
+    command: 'code-review',
     description: 'Request a code review for completed work',
     agent: 'DEV (Amelia)',
-    example: '*code-review for the auth changes',
+    example: 'code-review for the auth changes',
     category: 'story'
   },
   // Agent commands
   {
-    command: '*menu',
-    description: 'Show the menu of available actions for the current agent',
+    command: 'menu',
+    description: 'Show available actions for the current agent',
     agent: 'All agents',
-    example: '*menu to see what the agent can do',
+    example: 'menu to see options',
     category: 'agent'
   },
   {
-    command: '*dismiss',
+    command: 'dismiss',
     description: 'End the current agent session',
     agent: 'All agents',
-    example: '*dismiss when done with the agent',
+    example: 'dismiss when done',
     category: 'agent'
   },
   {
-    command: '*party-mode',
-    description: 'Enable multi-agent collaboration for complex tasks',
+    command: 'party-mode',
+    description: 'Enable multi-agent collaboration',
     agent: 'All agents',
-    example: '*party-mode for cross-functional work',
+    example: 'party-mode for complex tasks',
     category: 'agent'
   },
   // Utility commands
   {
-    command: '*quick-fix',
-    description: 'Quick bug fix without full planning overhead',
+    command: 'quick-dev',
+    description: 'Quick implementation without full planning',
     agent: 'Quick Flow (Barry)',
-    example: '*quick-fix the login button issue',
+    example: 'quick-dev the login fix',
     category: 'utility'
   },
   {
-    command: '*quick-feature',
-    description: 'Quick feature implementation for small enhancements',
+    command: 'quick-spec',
+    description: 'Quick specification for small features',
     agent: 'Quick Flow (Barry)',
-    example: '*quick-feature add dark mode toggle',
+    example: 'quick-spec add dark mode toggle',
     category: 'utility'
   },
   {
-    command: '*test-init',
+    command: 'testarch-framework',
     description: 'Initialize testing framework for the project',
     agent: 'TEA (Murat)',
-    example: '*test-init to set up E2E tests',
-    category: 'utility'
-  },
-  {
-    command: '*e2e-gen',
-    description: 'Generate E2E tests for a feature or flow',
-    agent: 'TEA (Murat)',
-    example: '*e2e-gen for checkout flow',
+    example: 'testarch-framework to set up E2E tests',
     category: 'utility'
   }
 ]
+
+// Commands for BMGD (BMAD Game Dev)
+const bmgdCommands: Command[] = [
+  // Workflow commands
+  {
+    command: 'workflow-init',
+    description: 'Analyze project and recommend a development track',
+    agent: 'Any',
+    example: 'workflow-init to get started',
+    category: 'workflow'
+  },
+  // Story commands
+  {
+    command: 'brainstorm-game',
+    description: 'Brainstorm game ideas and concepts',
+    agent: 'Game Designer (GD)',
+    example: 'brainstorm-game for puzzle mechanics',
+    category: 'story'
+  },
+  {
+    command: 'create-gdd',
+    description: 'Create a Game Design Document',
+    agent: 'Game Designer (GD)',
+    example: 'create-gdd for platformer game',
+    category: 'story'
+  },
+  {
+    command: 'create-story',
+    description: 'Create a development story with acceptance criteria',
+    agent: 'Game Designer (GD)',
+    example: 'create-story for player movement',
+    category: 'story'
+  },
+  {
+    command: 'sprint-status',
+    description: 'Generate current sprint status report',
+    agent: 'Game SM (GSM)',
+    example: 'sprint-status to see progress',
+    category: 'story'
+  },
+  {
+    command: 'dev-story',
+    description: 'Implement a story following acceptance criteria',
+    agent: 'Game Dev (GDEV)',
+    example: 'dev-story 1.2',
+    category: 'story'
+  },
+  {
+    command: 'code-review',
+    description: 'Request a code review for completed work',
+    agent: 'Game Dev (GDEV)',
+    example: 'code-review for the physics changes',
+    category: 'story'
+  },
+  // Agent commands
+  {
+    command: 'menu',
+    description: 'Show available actions for the current agent',
+    agent: 'All agents',
+    example: 'menu to see options',
+    category: 'agent'
+  },
+  {
+    command: 'dismiss',
+    description: 'End the current agent session',
+    agent: 'All agents',
+    example: 'dismiss when done',
+    category: 'agent'
+  },
+  {
+    command: 'party-mode',
+    description: 'Enable multi-agent collaboration',
+    agent: 'All agents',
+    example: 'party-mode for complex tasks',
+    category: 'agent'
+  },
+  // Utility commands
+  {
+    command: 'quick-dev',
+    description: 'Quick implementation without full planning',
+    agent: 'Game Solo Dev (GSOLO)',
+    example: 'quick-dev the collision fix',
+    category: 'utility'
+  },
+  {
+    command: 'quick-prototype',
+    description: 'Quick prototype for testing game mechanics',
+    agent: 'Game Solo Dev (GSOLO)',
+    example: 'quick-prototype jump mechanic',
+    category: 'utility'
+  },
+  {
+    command: 'gametest-playtest-plan',
+    description: 'Create a playtest plan for the game',
+    agent: 'Game QA (GQA)',
+    example: 'gametest-playtest-plan for level 1',
+    category: 'utility'
+  }
+]
+
+// Get commands based on project type
+function getCommands(projectType: ProjectType | null): Command[] {
+  return projectType === 'bmgd' ? bmgdCommands : bmmCommands
+}
 
 const categoryColors = {
   workflow: '#10B981',
@@ -131,8 +254,16 @@ const categoryLabels = {
 
 export default function CommandsTab() {
   const aiTool = useStore((state) => state.aiTool)
+  const projectType = useStore((state) => state.projectType)
   const selectedTool = AI_TOOLS.find((t) => t.id === aiTool) || AI_TOOLS[0]
+  const [snackbarOpen, setSnackbarOpen] = useState(false)
 
+  const handleCopy = (text: string) => {
+    navigator.clipboard.writeText(text)
+    setSnackbarOpen(true)
+  }
+
+  const commands = getCommands(projectType)
   const groupedCommands = commands.reduce((acc, cmd) => {
     if (!acc[cmd.category]) acc[cmd.category] = []
     acc[cmd.category].push(cmd)
@@ -143,14 +274,16 @@ export default function CommandsTab() {
     <Box>
       <Alert severity="info" sx={{ mb: 2 }}>
         Using <strong>{selectedTool.name}</strong>. To invoke agents, use{' '}
-        <code style={{ fontWeight: 600 }}>{selectedTool.agentPrefix}agent</code> syntax
-        (e.g., <code>{selectedTool.agentPrefix}pm</code>, <code>{selectedTool.agentPrefix}dev</code>).
+        <code style={{ fontWeight: 600 }}>{aiTool === 'claude-code' ? `/bmad:${projectType || 'bmm'}:agents:...` : `${selectedTool.agentPrefix}agent`}</code> syntax
+        (e.g., <code>{formatAgentInvocation('pm', aiTool, projectType)}</code>, <code>{formatAgentInvocation('dev', aiTool, projectType)}</code>).
         Change your tool in Settings.
       </Alert>
 
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Use these <code>*commands</code> to trigger BMAD workflows.
-        Commands starting with <code>*</code> work universally across all AI tools.
+        Use these <code>{aiTool === 'claude-code' ? '/bmad:...' : '*'}commands</code> to trigger BMAD workflows.
+        {aiTool === 'claude-code'
+          ? ' Claude Code uses full path slash commands.'
+          : ' Commands starting with * work universally across AI tools.'}
       </Typography>
 
       {Object.entries(groupedCommands).map(([category, cmds]) => (
@@ -185,16 +318,27 @@ export default function CommandsTab() {
                 {cmds.map((cmd) => (
                   <TableRow key={cmd.command} hover>
                     <TableCell>
-                      <Typography
-                        variant="body2"
-                        sx={{
-                          fontFamily: 'monospace',
-                          fontWeight: 600,
-                          color: categoryColors[category as keyof typeof categoryColors]
-                        }}
-                      >
-                        {cmd.command}
-                      </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            fontFamily: 'monospace',
+                            fontWeight: 600,
+                            color: categoryColors[category as keyof typeof categoryColors]
+                          }}
+                        >
+                          {formatCommand(cmd.command, aiTool, projectType)}
+                        </Typography>
+                        <Tooltip title="Copy">
+                          <IconButton
+                            size="small"
+                            onClick={() => handleCopy(formatCommand(cmd.command, aiTool, projectType))}
+                            sx={{ p: 0.25, color: 'text.disabled', '&:hover': { color: 'primary.main' } }}
+                          >
+                            <ContentCopyIcon sx={{ fontSize: 14 }} />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2">
@@ -215,7 +359,7 @@ export default function CommandsTab() {
                           color: 'text.secondary'
                         }}
                       >
-                        {cmd.example}
+                        {formatCommand(cmd.example, aiTool, projectType)}
                       </Typography>
                     </TableCell>
                   </TableRow>
@@ -239,19 +383,27 @@ export default function CommandsTab() {
         </Typography>
         <Box component="ul" sx={{ m: 0, pl: 2 }}>
           <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-            Start a session with <code>{selectedTool.agentPrefix}pm</code> or <code>{selectedTool.agentPrefix}dev</code> to invoke a BMAD agent
+            Start a session with <code>{formatAgentInvocation('pm', aiTool, projectType)}</code> or <code>{formatAgentInvocation('dev', aiTool, projectType)}</code> to invoke a BMAD agent
           </Typography>
           <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-            Run <code>*workflow-init</code> to let BMAD analyze your project and recommend the best track
+            Run <code>{formatCommand('workflow-init', aiTool, projectType)}</code> to let BMAD analyze your project and recommend the best track
           </Typography>
           <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-            Use <code>*menu</code> with any agent to see their available actions
+            Use <code>{formatCommand('menu', aiTool, projectType)}</code> with any agent to see their available actions
           </Typography>
           <Typography component="li" variant="body2" color="text.secondary">
-            For quick fixes, use <code>{selectedTool.agentPrefix}quick-flow</code> with Barry and <code>*quick-fix</code>
+            For quick fixes, use <code>{formatAgentInvocation('quick-flow', aiTool, projectType)}</code> with Barry and <code>{formatCommand('quick-fix', aiTool, projectType)}</code>
           </Typography>
         </Box>
       </Paper>
+
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={2000}
+        onClose={() => setSnackbarOpen(false)}
+        message="Copied to clipboard"
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      />
     </Box>
   )
 }
