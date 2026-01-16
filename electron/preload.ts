@@ -180,9 +180,48 @@ const agentAPI: AgentAPI = {
 
 contextBridge.exposeInMainWorld('agentAPI', agentAPI)
 
+// Git API types
+export interface GitChangedFile {
+  status: 'A' | 'M' | 'D' | 'R' | 'C'
+  path: string
+  mtime: number | null
+  lastCommitTime: number | null
+}
+
+export interface GitBranchActivity {
+  isOnBranch: boolean
+  hasRecentFileChanges: boolean
+  lastCommitTime: number | null
+  hasRecentCommit: boolean
+  isActive: boolean
+}
+
+export interface GitAPI {
+  getCurrentBranch: (projectPath: string) => Promise<{ branch?: string; error?: string }>
+  branchExists: (projectPath: string, branchName: string) => Promise<{ exists: boolean }>
+  getBranchActivity: (projectPath: string, branchName: string) => Promise<GitBranchActivity>
+  getDefaultBranch: (projectPath: string) => Promise<{ branch?: string; error?: string }>
+  getChangedFiles: (projectPath: string, baseBranch: string, featureBranch?: string) => Promise<{ files?: GitChangedFile[]; mergeBase?: string; error?: string }>
+  getFileContent: (projectPath: string, filePath: string, commitOrBranch: string) => Promise<{ content: string }>
+  getWorkingFileContent: (projectPath: string, filePath: string) => Promise<{ content: string }>
+}
+
+const gitAPI: GitAPI = {
+  getCurrentBranch: (projectPath) => ipcRenderer.invoke('git-current-branch', projectPath),
+  branchExists: (projectPath, branchName) => ipcRenderer.invoke('git-branch-exists', projectPath, branchName),
+  getBranchActivity: (projectPath, branchName) => ipcRenderer.invoke('git-branch-activity', projectPath, branchName),
+  getDefaultBranch: (projectPath) => ipcRenderer.invoke('git-default-branch', projectPath),
+  getChangedFiles: (projectPath, baseBranch, featureBranch) => ipcRenderer.invoke('git-changed-files', projectPath, baseBranch, featureBranch),
+  getFileContent: (projectPath, filePath, commitOrBranch) => ipcRenderer.invoke('git-file-content', projectPath, filePath, commitOrBranch),
+  getWorkingFileContent: (projectPath, filePath) => ipcRenderer.invoke('git-working-file-content', projectPath, filePath)
+}
+
+contextBridge.exposeInMainWorld('gitAPI', gitAPI)
+
 declare global {
   interface Window {
     fileAPI: FileAPI
     agentAPI: AgentAPI
+    gitAPI: GitAPI
   }
 }
