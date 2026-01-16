@@ -174,7 +174,7 @@ export default function CommandPalette() {
           const epic = epics.find(e => e.id === story.epicId)
           return {
             id: `story:${story.id}`,
-            label: story.title,
+            label: `${story.epicId}.${story.storyNumber} - ${story.title}`,
             description: `${epic?.name || `Epic ${story.epicId}`} · ${story.status}`,
             icon: <DescriptionIcon sx={{ color: 'text.secondary' }} />,
             action: () => {
@@ -196,7 +196,7 @@ export default function CommandPalette() {
             const branchName = `${story.epicId}-${story.id}`
             return {
               id: `diff:${story.id}`,
-              label: story.title,
+              label: `${story.epicId}.${story.storyNumber} - ${story.title}`,
               description: `Branch: ${branchName}`,
               icon: <CompareArrowsIcon sx={{ color: 'text.secondary' }} />,
               action: () => {

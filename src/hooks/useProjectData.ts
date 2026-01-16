@@ -140,15 +140,42 @@ export function useProjectData() {
       setStories(stories)
       setLastRefreshed(new Date())
 
-      // Check for status changes and show notifications (only for external changes)
-      if (notificationsEnabled && !isUserDragging && previousStatuses.size > 0) {
+      // Get human review settings
+      const { enableHumanReviewColumn, humanReviewStories, addToHumanReview, isInHumanReview } = useStore.getState()
+
+      // Check for status changes (only for external changes, not user drags)
+      if (!isUserDragging && previousStatuses.size > 0) {
         for (const story of stories) {
           const oldStatus = previousStatuses.get(story.id)
           if (oldStatus && oldStatus !== story.status) {
-            window.fileAPI.showNotification(
-              'Story Status Changed',
-              `"${story.title}" moved from ${oldStatus} to ${story.status}`
-            )
+            // If human review is enabled and story moved to "done" from "review" or was in human-review,
+            // automatically redirect it to human-review instead
+            if (enableHumanReviewColumn && story.status === 'done') {
+              const wasInHumanReview = humanReviewStories.includes(story.id)
+              // Intercept if it was in review OR was already in human-review column
+              if (oldStatus === 'review' || wasInHumanReview) {
+                // Add to human review list if not already there
+                if (!isInHumanReview(story.id)) {
+                  addToHumanReview(story.id)
+                }
+                // Show notification about the interception
+                if (notificationsEnabled) {
+                  window.fileAPI.showNotification(
+                    'Story Ready for Review',
+                    `"${story.title}" moved to Human Review (was marked done by AI)`
+                  )
+                }
+                continue // Skip the normal notification
+              }
+            }
+
+            // Show normal status change notification
+            if (notificationsEnabled) {
+              window.fileAPI.showNotification(
+                'Story Status Changed',
+                `"${story.title}" moved from ${oldStatus} to ${story.status}`
+              )
+            }
           }
         }
       }
@@ -156,8 +183,11 @@ export function useProjectData() {
       setError(err instanceof Error ? err.message : 'Failed to load project data')
     } finally {
       setLoading(false)
-      // Reset user dragging flag after load completes
-      setIsUserDragging(false)
+      // Delay resetting user dragging flag to allow file watcher events to be ignored
+      // File watcher events can be delayed significantly (1-2 seconds)
+      setTimeout(() => {
+        setIsUserDragging(false)
+      }, 2000)
     }
   }, [projectPath, projectType, setEpics, setStories, setLoading, setError, setLastRefreshed])
 
@@ -193,7 +223,11 @@ export function useProjectData() {
 
       // Listen for file changes
       const cleanup = window.fileAPI.onFilesChanged(() => {
-        console.log('Files changed, reloading project data...')
+        // Skip reload if user is currently dragging (they already triggered a reload)
+        const { isUserDragging } = useStore.getState()
+        if (isUserDragging) {
+          return
+        }
         loadProjectData()
         // Also reload story content if a story dialog is open
         // Get current selectedStory from store since it may have changed
