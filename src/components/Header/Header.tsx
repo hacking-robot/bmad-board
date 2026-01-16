@@ -8,7 +8,8 @@ import {
   Badge,
   Chip
 } from '@mui/material'
-import DashboardIcon from '@mui/icons-material/Dashboard'
+import logoDark from '../../assets/logo-dark.svg'
+import logoLight from '../../assets/logo-light.svg'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import TerminalIcon from '@mui/icons-material/Terminal'
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
@@ -29,9 +30,11 @@ export default function Header() {
   const toggleEnableAgents = useStore((state) => state.toggleEnableAgents)
   const setHelpPanelOpen = useStore((state) => state.setHelpPanelOpen)
   const projectType = useStore((state) => state.projectType)
+  const themeMode = useStore((state) => state.themeMode)
   const { loadProjectData } = useProjectData()
 
   const isGameProject = projectType === 'bmgd'
+  const logoSrc = themeMode === 'dark' ? logoDark : logoLight
 
   const runningAgentsCount = enableAgents
     ? Object.values(agents).filter((a) => a.status === 'running').length
@@ -73,18 +76,15 @@ export default function Header() {
           sx={{ display: 'flex', alignItems: 'center', gap: 1.5, cursor: 'default', userSelect: 'none', WebkitAppRegion: 'no-drag' }}
         >
           <Box
+            component="img"
+            src={logoSrc}
+            alt="BMad Board"
             sx={{
               width: 36,
               height: 36,
-              borderRadius: 1.5,
-              bgcolor: 'primary.main',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
+              borderRadius: 1.5
             }}
-          >
-            <DashboardIcon sx={{ fontSize: 22, color: 'white' }} />
-          </Box>
+          />
           <Typography
             variant="subtitle1"
             color="text.secondary"
