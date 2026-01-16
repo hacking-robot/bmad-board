@@ -4,6 +4,8 @@ import CircleIcon from '@mui/icons-material/Circle'
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
 import { useStore } from '../../store'
 import { STATUS_COLUMNS, StoryStatus } from '../../types'
+import BranchSwitcher from '../BranchSwitcher'
+import UncommittedChanges from '../UncommittedChanges'
 
 // Status descriptions for tooltips
 const statusDescriptions: Record<StoryStatus, string> = {
@@ -98,7 +100,7 @@ export default function StatusBar() {
         flexShrink: 0
       }}
     >
-      {/* Left section - File watcher & story counts */}
+      {/* Left section - File watcher, branch switcher & story counts */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
         {/* File watcher status */}
         <Tooltip title={isWatching ? 'Auto-refresh active' : 'Auto-refresh inactive'}>
@@ -114,6 +116,12 @@ export default function StatusBar() {
             </Typography>
           </Box>
         </Tooltip>
+
+        {/* Git branch switcher and uncommitted changes */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <BranchSwitcher />
+          <UncommittedChanges />
+        </Box>
 
         {/* Story counts by status */}
         {statusDisplay.length > 0 && (
