@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, Menu } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, Menu, screen } from 'electron'
 import { join } from 'path'
 import { readFile, readdir, stat, writeFile, mkdir } from 'fs/promises'
 import { existsSync, watch, FSWatcher } from 'fs'
@@ -33,18 +33,31 @@ interface RecentProject {
   name: string
 }
 
+type AITool = 'claude-code' | 'cursor' | 'windsurf' | 'roo-code'
+
+interface WindowBounds {
+  x: number
+  y: number
+  width: number
+  height: number
+  isMaximized?: boolean
+}
+
 interface AppSettings {
   themeMode: 'light' | 'dark'
+  aiTool: AITool
   projectPath: string | null
   projectType: ProjectType | null
   selectedEpicId: number | null
   collapsedColumnsByEpic: Record<string, string[]>
   agentHistory?: AgentHistoryEntry[]
   recentProjects: RecentProject[]
+  windowBounds?: WindowBounds
 }
 
 const defaultSettings: AppSettings = {
   themeMode: 'light',
+  aiTool: 'claude-code',
   projectPath: null,
   projectType: null,
   selectedEpicId: null,
@@ -101,12 +114,127 @@ async function saveSettings(settings: Partial<AppSettings>): Promise<boolean> {
   }
 }
 
-function createWindow() {
+// Minimum window dimensions for usability
+const MIN_WINDOW_WIDTH = 800
+const MIN_WINDOW_HEIGHT = 600
+const DEFAULT_WINDOW_WIDTH = 1400
+const DEFAULT_WINDOW_HEIGHT = 900
+
+// Validate and sanitize window bounds
+function getValidWindowBounds(savedBounds?: WindowBounds): { x?: number; y?: number; width: number; height: number } {
+  const displays = screen.getAllDisplays()
+
+  // Default bounds (centered on primary display)
+  const primaryDisplay = screen.getPrimaryDisplay()
+  const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize
+  const defaultBounds = {
+    width: Math.min(DEFAULT_WINDOW_WIDTH, screenWidth),
+    height: Math.min(DEFAULT_WINDOW_HEIGHT, screenHeight)
+  }
+
+  if (!savedBounds) {
+    return defaultBounds
+  }
+
+  // Validate dimensions - ensure minimum size
+  let width = savedBounds.width
+  let height = savedBounds.height
+
+  if (width < MIN_WINDOW_WIDTH || height < MIN_WINDOW_HEIGHT) {
+    console.log('Window too small, resetting to defaults')
+    return defaultBounds
+  }
+
+  // Check if window is visible on any display
+  const windowRect = {
+    x: savedBounds.x,
+    y: savedBounds.y,
+    width: width,
+    height: height
+  }
+
+  // Window is considered visible if at least 100x100 pixels are on screen
+  const minVisibleArea = 100
+  let isVisible = false
+
+  for (const display of displays) {
+    const { x: displayX, y: displayY, width: displayWidth, height: displayHeight } = display.bounds
+
+    // Calculate overlap
+    const overlapX = Math.max(0, Math.min(windowRect.x + windowRect.width, displayX + displayWidth) - Math.max(windowRect.x, displayX))
+    const overlapY = Math.max(0, Math.min(windowRect.y + windowRect.height, displayY + displayHeight) - Math.max(windowRect.y, displayY))
+
+    if (overlapX >= minVisibleArea && overlapY >= minVisibleArea) {
+      isVisible = true
+      break
+    }
+  }
+
+  if (!isVisible) {
+    console.log('Window off-screen, resetting position')
+    return defaultBounds
+  }
+
+  return {
+    x: savedBounds.x,
+    y: savedBounds.y,
+    width: width,
+    height: height
+  }
+}
+
+// Debounce timer for saving window bounds
+let windowBoundsTimer: NodeJS.Timeout | null = null
+
+// Save window bounds with debounce
+function saveWindowBounds() {
+  if (!mainWindow) return
+
+  if (windowBoundsTimer) {
+    clearTimeout(windowBoundsTimer)
+  }
+
+  windowBoundsTimer = setTimeout(async () => {
+    if (!mainWindow) return
+
+    const isMaximized = mainWindow.isMaximized()
+    const bounds = mainWindow.getBounds()
+
+    // Only save non-maximized bounds (so we restore to the right size when un-maximizing)
+    if (!isMaximized) {
+      await saveSettings({
+        windowBounds: {
+          x: bounds.x,
+          y: bounds.y,
+          width: bounds.width,
+          height: bounds.height,
+          isMaximized: false
+        }
+      })
+    } else {
+      // Just update the maximized flag, keep the previous bounds
+      const settings = await loadSettings()
+      if (settings.windowBounds) {
+        await saveSettings({
+          windowBounds: {
+            ...settings.windowBounds,
+            isMaximized: true
+          }
+        })
+      }
+    }
+  }, 500) // Debounce 500ms
+}
+
+async function createWindow() {
+  // Load saved window bounds
+  const settings = await loadSettings()
+  const validBounds = getValidWindowBounds(settings.windowBounds)
+
   mainWindow = new BrowserWindow({
-    width: 1400,
-    height: 900,
-    minWidth: 800,
-    minHeight: 600,
+    ...validBounds,
+    minWidth: MIN_WINDOW_WIDTH,
+    minHeight: MIN_WINDOW_HEIGHT,
     webPreferences: {
       preload: join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -115,6 +243,17 @@ function createWindow() {
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 15, y: 15 }
   })
+
+  // Restore maximized state if it was saved
+  if (settings.windowBounds?.isMaximized) {
+    mainWindow.maximize()
+  }
+
+  // Listen for window bounds changes
+  mainWindow.on('resize', saveWindowBounds)
+  mainWindow.on('move', saveWindowBounds)
+  mainWindow.on('maximize', saveWindowBounds)
+  mainWindow.on('unmaximize', saveWindowBounds)
 
   // Set main window for agent manager
   agentManager.setMainWindow(mainWindow)

@@ -20,14 +20,26 @@ export interface RecentProject {
   name: string
 }
 
+export type AITool = 'claude-code' | 'cursor' | 'windsurf' | 'roo-code'
+
+export interface WindowBounds {
+  x: number
+  y: number
+  width: number
+  height: number
+  isMaximized?: boolean
+}
+
 export interface AppSettings {
   themeMode: 'light' | 'dark'
+  aiTool: AITool
   projectPath: string | null
   projectType: ProjectType | null
   selectedEpicId: number | null
   collapsedColumnsByEpic: Record<string, string[]>
   agentHistory?: AgentHistoryEntry[]
   recentProjects: RecentProject[]
+  windowBounds?: WindowBounds
 }
 
 export interface FileAPI {

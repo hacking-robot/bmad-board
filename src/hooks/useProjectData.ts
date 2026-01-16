@@ -162,6 +162,12 @@ export function useProjectData() {
       const cleanup = window.fileAPI.onFilesChanged(() => {
         console.log('Files changed, reloading project data...')
         loadProjectData()
+        // Also reload story content if a story dialog is open
+        // Get current selectedStory from store since it may have changed
+        const currentSelectedStory = useStore.getState().selectedStory
+        if (currentSelectedStory?.filePath) {
+          loadStoryContent(currentSelectedStory)
+        }
       })
 
       // Cleanup watcher and listener on unmount or path change
@@ -171,7 +177,7 @@ export function useProjectData() {
         setIsWatching(false)
       }
     }
-  }, [_hasHydrated, projectPath, projectType, loadProjectData, setIsWatching])
+  }, [_hasHydrated, projectPath, projectType, loadProjectData, loadStoryContent, setIsWatching])
 
   // Load story content when selected story changes
   useEffect(() => {

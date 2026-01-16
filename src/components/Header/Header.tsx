@@ -10,6 +10,7 @@ import {
 import DashboardIcon from '@mui/icons-material/Dashboard'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import TerminalIcon from '@mui/icons-material/Terminal'
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
 import SearchBar from '../SearchBar/SearchBar'
 import EpicFilter from '../EpicFilter/EpicFilter'
 import ThemeToggle from '../ThemeToggle/ThemeToggle'
@@ -24,6 +25,7 @@ export default function Header() {
   const toggleAgentPanel = useStore((state) => state.toggleAgentPanel)
   const enableAgents = useStore((state) => state.enableAgents)
   const toggleEnableAgents = useStore((state) => state.toggleEnableAgents)
+  const setHelpPanelOpen = useStore((state) => state.setHelpPanelOpen)
   const { loadProjectData } = useProjectData()
 
   const runningAgentsCount = enableAgents
@@ -118,6 +120,15 @@ export default function Header() {
                 </IconButton>
               </Tooltip>
             )}
+            <Tooltip title="BMAD Guide (F1)">
+              <IconButton
+                onClick={() => setHelpPanelOpen(true)}
+                size="small"
+                sx={{ color: 'text.secondary' }}
+              >
+                <HelpOutlineIcon />
+              </IconButton>
+            </Tooltip>
             <Tooltip title="Refresh">
               <IconButton
                 onClick={loadProjectData}

@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useEffect } from 'react'
 import { ThemeProvider, CssBaseline, Box, CircularProgress } from '@mui/material'
 import { useStore } from './store'
 import { lightTheme, darkTheme } from './theme'
@@ -9,6 +9,7 @@ import WelcomeDialog from './components/WelcomeDialog/WelcomeDialog'
 import AgentPanel from './components/AgentPanel/AgentPanel'
 import CommandPalette from './components/CommandPalette'
 import KeyboardShortcuts from './components/KeyboardShortcuts'
+import HelpPanel from './components/HelpPanel'
 import StatusBar from './components/StatusBar'
 
 const AGENT_PANEL_WIDTH = 500
@@ -19,8 +20,18 @@ export default function App() {
   const projectPath = useStore((state) => state.projectPath)
   const enableAgents = useStore((state) => state.enableAgents)
   const agentPanelOpen = useStore((state) => state.agentPanelOpen)
+  const helpPanelOpen = useStore((state) => state.helpPanelOpen)
+  const helpPanelTab = useStore((state) => state.helpPanelTab)
+  const setHelpPanelOpen = useStore((state) => state.setHelpPanelOpen)
 
   const showAgentPanel = agentPanelOpen && enableAgents
+
+  // Listen for custom event to open help panel
+  useEffect(() => {
+    const handleOpen = () => setHelpPanelOpen(true)
+    window.addEventListener('open-help-panel', handleOpen)
+    return () => window.removeEventListener('open-help-panel', handleOpen)
+  }, [setHelpPanelOpen])
 
   const theme = useMemo(
     () => (themeMode === 'dark' ? darkTheme : lightTheme),
@@ -52,6 +63,11 @@ export default function App() {
       <CssBaseline />
       <CommandPalette />
       <KeyboardShortcuts />
+      <HelpPanel
+        open={helpPanelOpen}
+        onClose={() => setHelpPanelOpen(false)}
+        initialTab={helpPanelTab}
+      />
       <Box
         sx={{
           height: '100vh',

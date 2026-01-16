@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import { Epic, Story, StoryContent, StoryStatus, Agent, ProjectType, AgentHistoryEntry } from './types'
+import { Epic, Story, StoryContent, StoryStatus, Agent, ProjectType, AgentHistoryEntry, AITool } from './types'
 
 export interface RecentProject {
   path: string
@@ -50,7 +50,7 @@ const electronStorage = {
       const parsed = JSON.parse(value)
       if (parsed.state) {
         // Only save the settings we care about
-        const { themeMode, projectPath, projectType, selectedEpicId, collapsedColumnsByEpic, agentHistory, recentProjects } = parsed.state
+        const { themeMode, aiTool, projectPath, projectType, selectedEpicId, collapsedColumnsByEpic, agentHistory, recentProjects } = parsed.state
 
         // Don't persist full output - it can contain characters that break JSON
         // Just save metadata and a small summary
@@ -63,6 +63,7 @@ const electronStorage = {
         // Note: enableAgents is intentionally NOT persisted - must re-enable each session
         debouncedSave({
           themeMode,
+          aiTool: aiTool || 'claude-code',
           projectPath,
           projectType,
           selectedEpicId,
@@ -78,6 +79,7 @@ const electronStorage = {
   removeItem: async (_name: string): Promise<void> => {
     await window.fileAPI.saveSettings({
       themeMode: 'light',
+      aiTool: 'claude-code',
       projectPath: null,
       projectType: null,
       selectedEpicId: null,
@@ -101,6 +103,10 @@ interface AppState {
   themeMode: 'light' | 'dark'
   setThemeMode: (mode: 'light' | 'dark') => void
   toggleTheme: () => void
+
+  // AI Tool
+  aiTool: AITool
+  setAITool: (tool: AITool) => void
 
   // Project
   projectPath: string | null
@@ -144,6 +150,12 @@ interface AppState {
   setSelectedStory: (story: Story | null) => void
   setStoryContent: (content: StoryContent | null) => void
 
+  // Help Panel
+  helpPanelOpen: boolean
+  helpPanelTab: number
+  setHelpPanelOpen: (open: boolean, tab?: number) => void
+  toggleHelpPanel: () => void
+
   // Agents
   agents: Record<string, Agent>
   activeAgentId: string | null
@@ -185,6 +197,10 @@ export const useStore = create<AppState>()(
       toggleTheme: () => set((state) => ({
         themeMode: state.themeMode === 'light' ? 'dark' : 'light'
       })),
+
+      // AI Tool
+      aiTool: 'claude-code',
+      setAITool: (tool) => set({ aiTool: tool }),
 
       // Project
       projectPath: null,
@@ -251,6 +267,12 @@ export const useStore = create<AppState>()(
       storyContent: null,
       setSelectedStory: (story) => set({ selectedStory: story }),
       setStoryContent: (content) => set({ storyContent: content }),
+
+      // Help Panel
+      helpPanelOpen: false,
+      helpPanelTab: 0,
+      setHelpPanelOpen: (open, tab = 0) => set({ helpPanelOpen: open, helpPanelTab: tab }),
+      toggleHelpPanel: () => set((state) => ({ helpPanelOpen: !state.helpPanelOpen })),
 
       // Agents
       agents: {},
