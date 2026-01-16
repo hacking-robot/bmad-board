@@ -1,19 +1,41 @@
-import { Box, Typography, Paper, Stack, Chip, Divider, Alert } from '@mui/material'
+import { useState } from 'react'
+import { Box, Typography, Paper, Stack, Chip, Divider, Alert, IconButton, Tooltip, Snackbar } from '@mui/material'
 import PersonIcon from '@mui/icons-material/Person'
+import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import { useStore } from '../../store'
-import { AI_TOOLS } from '../../types'
+import { AI_TOOLS, AITool, ProjectType } from '../../types'
 import { useWorkflow } from '../../hooks/useWorkflow'
+import { transformCommand } from '../../utils/commandTransform'
+
+// Format agent invocation command based on AI tool
+// Claude Code: /bmad:bmm:agents:pm
+// Others: @pm
+function formatAgentInvocation(agentId: string, aiTool: AITool, projectType: ProjectType | null): string {
+  if (aiTool === 'claude-code') {
+    const pt = projectType || 'bmm'
+    return `/bmad:${pt}:agents:${agentId}`
+  }
+  const tool = AI_TOOLS.find(t => t.id === aiTool)
+  return `${tool?.agentPrefix || '@'}${agentId}`
+}
 
 export default function AgentsTab() {
   const aiTool = useStore((state) => state.aiTool)
+  const projectType = useStore((state) => state.projectType)
   const selectedTool = AI_TOOLS.find((t) => t.id === aiTool) || AI_TOOLS[0]
   const { agents } = useWorkflow()
+  const [snackbarOpen, setSnackbarOpen] = useState(false)
+
+  const handleCopy = (text: string) => {
+    navigator.clipboard.writeText(text)
+    setSnackbarOpen(true)
+  }
 
   return (
     <Box>
       <Alert severity="info" sx={{ mb: 2 }}>
         Commands shown for <strong>{selectedTool.name}</strong>. Agent invocations use{' '}
-        <code style={{ fontWeight: 600 }}>{selectedTool.agentPrefix}agent</code> syntax.
+        <code style={{ fontWeight: 600 }}>{aiTool === 'claude-code' ? `/bmad:${projectType || 'bmm'}:agents:...` : `${selectedTool.agentPrefix}agent`}</code> syntax.
         Change your tool in Settings.
       </Alert>
 
@@ -48,18 +70,29 @@ export default function AgentsTab() {
                   height: 22
                 }}
               />
-              <Chip
-                label={`${selectedTool.agentPrefix}${agent.id}`}
-                size="small"
-                variant="outlined"
-                sx={{
-                  fontFamily: 'monospace',
-                  fontSize: '0.75rem',
-                  height: 22,
-                  borderColor: agent.color,
-                  color: agent.color
-                }}
-              />
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
+                <Chip
+                  label={formatAgentInvocation(agent.id, aiTool, projectType)}
+                  size="small"
+                  variant="outlined"
+                  sx={{
+                    fontFamily: 'monospace',
+                    fontSize: '0.75rem',
+                    height: 22,
+                    borderColor: agent.color,
+                    color: agent.color
+                  }}
+                />
+                <Tooltip title="Copy">
+                  <IconButton
+                    size="small"
+                    onClick={() => handleCopy(formatAgentInvocation(agent.id, aiTool, projectType))}
+                    sx={{ p: 0.25, color: 'text.disabled', '&:hover': { color: agent.color } }}
+                  >
+                    <ContentCopyIcon sx={{ fontSize: 14 }} />
+                  </IconButton>
+                </Tooltip>
+              </Box>
             </Box>
 
             <Typography variant="body2" sx={{ mb: 1.5 }}>
@@ -101,22 +134,40 @@ export default function AgentsTab() {
             </Typography>
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
               {agent.commands.map((cmd) => (
-                <Chip
-                  key={cmd}
-                  label={cmd}
-                  size="small"
-                  variant="outlined"
-                  sx={{
-                    fontFamily: 'monospace',
-                    fontSize: '0.75rem',
-                    height: 24
-                  }}
-                />
+                <Box key={cmd} sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
+                  <Chip
+                    label={transformCommand(cmd, aiTool)}
+                    size="small"
+                    variant="outlined"
+                    sx={{
+                      fontFamily: 'monospace',
+                      fontSize: '0.75rem',
+                      height: 24
+                    }}
+                  />
+                  <Tooltip title="Copy">
+                    <IconButton
+                      size="small"
+                      onClick={() => handleCopy(transformCommand(cmd, aiTool))}
+                      sx={{ p: 0.25, color: 'text.disabled', '&:hover': { color: 'primary.main' } }}
+                    >
+                      <ContentCopyIcon sx={{ fontSize: 14 }} />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
               ))}
             </Box>
           </Paper>
         ))}
       </Stack>
+
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={2000}
+        onClose={() => setSnackbarOpen(false)}
+        message="Copied to clipboard"
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      />
     </Box>
   )
 }

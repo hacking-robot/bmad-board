@@ -3,21 +3,19 @@ import { Card, CardContent, Typography, Box, Chip, Button, CircularProgress, Too
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import DescriptionIcon from '@mui/icons-material/Description'
-import PlayArrowIcon from '@mui/icons-material/PlayArrow'
-import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline'
-import RateReviewIcon from '@mui/icons-material/RateReview'
-import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight'
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import PersonIcon from '@mui/icons-material/Person'
 import GitHubIcon from '@mui/icons-material/GitHub'
 import CompareArrowsIcon from '@mui/icons-material/CompareArrows'
 import AutorenewIcon from '@mui/icons-material/Autorenew'
-import DragIndicatorIcon from '@mui/icons-material/DragIndicator'
 import ChecklistIcon from '@mui/icons-material/Checklist'
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline'
+import GroupsIcon from '@mui/icons-material/Groups'
 import { Story, EPIC_COLORS } from '../../types'
 import { useStore } from '../../store'
 import { useWorkflow } from '../../hooks/useWorkflow'
+import { transformCommand } from '../../utils/commandTransform'
 import GitDiffDialog from '../GitDiffDialog'
 
 interface StoryCardProps {
@@ -28,29 +26,13 @@ interface StoryCardProps {
 export default function StoryCard({ story, isDragging = false }: StoryCardProps) {
   const setSelectedStory = useStore((state) => state.setSelectedStory)
   const projectPath = useStore((state) => state.projectPath)
-  const addAgent = useStore((state) => state.addAgent)
-  const setActiveAgent = useStore((state) => state.setActiveAgent)
-  const setAgentPanelOpen = useStore((state) => state.setAgentPanelOpen)
   const agents = useStore((state) => state.agents)
-  const enableAgents = useStore((state) => state.enableAgents)
   const humanReviewChecklist = useStore((state) => state.humanReviewChecklist)
   const humanReviewStates = useStore((state) => state.humanReviewStates)
   const getEffectiveStatus = useStore((state) => state.getEffectiveStatus)
   const aiTool = useStore((state) => state.aiTool)
 
-  // Transform command based on selected AI tool
-  // Claude Code uses /command, others use *command (universal)
-  const transformCommand = (command: string | null | undefined): string => {
-    if (!command) return ''
-    if (aiTool === 'claude-code') {
-      // Claude Code uses slash commands as-is
-      return command
-    }
-    // For other tools, replace leading / with * (universal command syntax)
-    return command.replace(/^\//, '*')
-  }
-
-  const { getNextSteps, getAgent, getPrimaryNextStep } = useWorkflow()
+  const { getNextSteps, getAgent } = useWorkflow()
 
   // Get effective status (may be overridden to 'human-review' at app level)
   const effectiveStatus = getEffectiveStatus(story)
@@ -67,6 +49,22 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
   const [branchExists, setBranchExists] = useState(false)
   const [isActivelyWorking, setIsActivelyWorking] = useState(false)
   const [diffDialogOpen, setDiffDialogOpen] = useState(false)
+  const [committing, setCommitting] = useState(false)
+  const [creatingBranch, setCreatingBranch] = useState(false)
+
+  // Get git state from store (reactive)
+  const currentBranch = useStore((state) => state.currentBranch)
+  const hasUncommittedChanges = useStore((state) => state.hasUncommittedChanges)
+  const setHasUncommittedChanges = useStore((state) => state.setHasUncommittedChanges)
+  const setCurrentBranch = useStore((state) => state.setCurrentBranch)
+
+  // Compute if we're on this story's branch (derived from store state)
+  const storyBranchName = `${story.epicId}-${story.id}`
+  const isOnStoryBranch = currentBranch === storyBranchName
+
+  // Check if we're on the epic branch (required for creating story branch)
+  const epicBranchPrefix = `epic-${story.epicId}-`
+  const isOnEpicBranch = currentBranch?.startsWith(epicBranchPrefix) || false
 
   // Make card sortable (draggable + reorderable)
   const { attributes, listeners, setNodeRef, transform, transition, isDragging: isBeingDragged } = useSortable({
@@ -76,6 +74,11 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
     transform: CSS.Transform.toString(transform),
     transition,
     zIndex: isBeingDragged ? 1000 : undefined
+  }
+
+  // Stop propagation on interactive elements to prevent drag from starting
+  const preventDragOnInteractive = (e: React.PointerEvent) => {
+    e.stopPropagation()
   }
 
   // Check if the story's branch exists and has recent activity
@@ -119,11 +122,10 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
     return () => {
       if (interval) clearInterval(interval)
     }
-  }, [projectPath, story.id, story.status])
+  }, [projectPath, story.epicId, story.id, story.status])
 
   const epicColor = EPIC_COLORS[(story.epicId - 1) % EPIC_COLORS.length]
   const nextSteps = getNextSteps(effectiveStatus)
-  const primaryStep = getPrimaryNextStep(effectiveStatus)
   const runningAgent = Object.values(agents).find((a) => a.storyId === story.id && a.status === 'running')
 
   const handleClick = () => {
@@ -153,9 +155,73 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
   const gitBranchCommand = `git checkout -b "${branchName}"`
 
   // Git commands for committing (combined add + commit)
-  const gitCommitImplementation = `git add . && git commit -m "feat(${branchName}): implement story ${story.epicId}.${story.storyNumber}"`
-  const gitCommitComplete = `git add . && git commit -m "feat(${branchName}): complete story ${story.epicId}.${story.storyNumber}"`
-  const gitCommitCommand = effectiveStatus === 'review' ? gitCommitImplementation : gitCommitComplete
+  const gitCommitMessageImpl = `feat(${branchName}): implement story ${story.epicId}.${story.storyNumber}`
+  const gitCommitMessageComplete = `feat(${branchName}): complete story ${story.epicId}.${story.storyNumber}`
+  const gitCommitMessage = effectiveStatus === 'review' ? gitCommitMessageImpl : gitCommitMessageComplete
+  const gitCommitCommand = `git add . && git commit -m "${gitCommitMessage}"`
+
+  // Handle commit action
+  const handleCommit = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!projectPath) return
+
+    setCommitting(true)
+    try {
+      const result = await window.gitAPI.commit(projectPath, gitCommitMessage)
+      if (result.success) {
+        setHasUncommittedChanges(false)
+        setSnackbarMessage('Changes committed successfully')
+        setSnackbarOpen(true)
+        handleMenuClose()
+      } else {
+        setSnackbarMessage(result.error || 'Failed to commit')
+        setSnackbarOpen(true)
+      }
+    } catch {
+      setSnackbarMessage('Failed to commit changes')
+      setSnackbarOpen(true)
+    } finally {
+      setCommitting(false)
+    }
+  }
+
+  // Handle create branch action
+  const handleCreateBranch = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!projectPath) return
+
+    setCreatingBranch(true)
+    try {
+      const result = await window.gitAPI.createBranch(projectPath, branchName)
+      if (result.success) {
+        setBranchExists(true)
+        setCurrentBranch(branchName)
+        setSnackbarMessage(`Created and switched to branch: ${branchName}`)
+        setSnackbarOpen(true)
+        handleMenuClose()
+      } else if (result.alreadyExists) {
+        // Branch already exists, try to switch to it
+        const checkoutResult = await window.gitAPI.checkoutBranch(projectPath, branchName)
+        if (checkoutResult.success) {
+          setCurrentBranch(branchName)
+          setSnackbarMessage(`Switched to existing branch: ${branchName}`)
+          setSnackbarOpen(true)
+          handleMenuClose()
+        } else {
+          setSnackbarMessage(checkoutResult.error || 'Failed to switch branch')
+          setSnackbarOpen(true)
+        }
+      } else {
+        setSnackbarMessage(result.error || 'Failed to create branch')
+        setSnackbarOpen(true)
+      }
+    } catch {
+      setSnackbarMessage('Failed to create branch')
+      setSnackbarOpen(true)
+    } finally {
+      setCreatingBranch(false)
+    }
+  }
 
   // Generate git commit command based on command name
   const getAgentGitCommand = (command: string): string => {
@@ -182,70 +248,19 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
     return `git add . && git commit -m "${commitType}(${branchName}): ${actionPart} story ${story.epicId}.${story.storyNumber}"`
   }
 
-  const handleAgentAction = async (e: React.MouseEvent) => {
-    e.stopPropagation()
-
-    if (!projectPath || !primaryStep) {
-      return
-    }
-
-    // If agent is already running for this story, just show it
-    if (runningAgent) {
-      setActiveAgent(runningAgent.id)
-      setAgentPanelOpen(true)
-      return
-    }
-
-    try {
-      const result = await window.agentAPI.spawnAgent({
-        storyId: story.id,
-        storyTitle: story.title,
-        projectPath,
-        initialPrompt: primaryStep.command ? `${primaryStep.command} ${story.id}` : ''
-      })
-
-      if (result.success && result.agentId) {
-        addAgent({
-          id: result.agentId,
-          storyId: story.id,
-          storyTitle: story.title,
-          command: primaryStep.command,
-          status: 'running',
-          output: [],
-          startTime: Date.now()
-        })
-
-        setActiveAgent(result.agentId)
-        setAgentPanelOpen(true)
-      }
-    } catch (error) {
-      console.error('Failed to spawn agent:', error)
-    }
-  }
-
-  const getActionIcon = (iconType?: string) => {
-    switch (iconType) {
-      case 'play':
-        return <PlayArrowIcon sx={{ fontSize: 16 }} />
-      case 'continue':
-        return <PlayCircleOutlineIcon sx={{ fontSize: 16 }} />
-      case 'review':
-        return <RateReviewIcon sx={{ fontSize: 16 }} />
-      default:
-        return <PlayArrowIcon sx={{ fontSize: 16 }} />
-    }
-  }
-
   return (
     <>
       <Card
         ref={setNodeRef}
+        {...attributes}
+        {...listeners}
         elevation={0}
         sx={{
           border: 1,
           borderColor: runningAgent ? 'success.main' : isDragging ? 'primary.main' : 'divider',
           position: 'relative',
-          cursor: isDragging ? 'grabbing' : 'pointer',
+          cursor: isDragging ? 'grabbing' : 'grab',
+          userSelect: 'none', // Prevent text selection during drag
           // Hide the original card when being dragged (DragOverlay shows the copy)
           opacity: isBeingDragged ? 0.3 : isDragging ? 0.9 : 1,
           boxShadow: isDragging ? '0 8px 20px rgba(0,0,0,0.2)' : 'none',
@@ -256,35 +271,19 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
           },
           ...dragStyle,
           // Override transition for non-drag states to keep hover effects smooth
-          transition: isBeingDragged ? dragStyle.transition : 'all 0.15s ease'
+          transition: isBeingDragged ? dragStyle.transition : 'all 0.15s ease',
+          touchAction: 'none' // Required for pointer events to work properly on touch devices
         }}
         onClick={handleClick}
       >
         <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
           {/* Header: Epic Badge + Story ID + Quick Actions Menu */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-            {/* Drag Handle */}
-            <Box
-              {...attributes}
-              {...listeners}
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                cursor: 'grab',
-                color: 'text.disabled',
-                ml: -0.5,
-                mr: -0.5,
-                '&:hover': { color: 'text.secondary' },
-                '&:active': { cursor: 'grabbing' }
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <DragIndicatorIcon sx={{ fontSize: 18 }} />
-            </Box>
             <Tooltip title="Epics group related stories into a theme" arrow placement="top">
               <Chip
                 label={`Epic ${story.epicId}`}
                 size="small"
+                onPointerDown={preventDragOnInteractive}
                 sx={{
                   height: 20,
                   fontSize: '0.7rem',
@@ -325,25 +324,23 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
               </Box>
             </Tooltip>
 
-            {/* Quick Actions Menu Button */}
+            {/* Quick Actions Menu Button - Three-dot menu */}
             {nextSteps.length > 0 && (
-              <Tooltip title="Next steps" arrow placement="top">
-                <IconButton
-                  size="small"
-                  onClick={handleMenuOpen}
-                  sx={{
-                    p: 0.25,
-                    bgcolor: 'primary.main',
-                    color: 'white',
-                    borderRadius: 1,
-                    '&:hover': {
-                      bgcolor: 'primary.dark'
-                    }
-                  }}
-                >
-                  <KeyboardArrowRightIcon sx={{ fontSize: 16 }} />
-                </IconButton>
-              </Tooltip>
+              <IconButton
+                size="small"
+                onClick={handleMenuOpen}
+                onPointerDown={preventDragOnInteractive}
+                sx={{
+                  p: 0.25,
+                  color: 'text.disabled',
+                  '&:hover': {
+                    color: 'text.primary',
+                    bgcolor: 'action.hover'
+                  }
+                }}
+              >
+                <AutoAwesomeIcon sx={{ fontSize: 16 }} />
+              </IconButton>
             )}
           </Box>
 
@@ -382,26 +379,6 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
             </Tooltip>
           )}
 
-          {/* Agent Action Button (only when agents enabled) */}
-          {enableAgents && primaryStep && (
-            <Box sx={{ mt: 1.5 }}>
-              <Button
-                size="small"
-                variant={runningAgent ? 'contained' : 'outlined'}
-                color={runningAgent ? 'success' : 'primary'}
-                onClick={handleAgentAction}
-                startIcon={runningAgent ? <CircularProgress size={14} color="inherit" /> : getActionIcon()}
-                sx={{
-                  fontSize: '0.75rem',
-                  py: 0.5,
-                  px: 1.5,
-                  textTransform: 'none'
-                }}
-              >
-                {runningAgent ? 'View Agent' : primaryStep.label}
-              </Button>
-            </Box>
-          )}
 
           {/* Human Review Progress Badge - only shows for human-review status */}
           {effectiveStatus === 'human-review' && totalItems > 0 && (
@@ -414,7 +391,7 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
                 sx={{
                   position: 'absolute',
                   bottom: 8,
-                  right: branchExists ? 36 : 8,
+                  right: 8,
                   display: 'flex',
                   alignItems: 'center',
                   gap: 0.5,
@@ -440,31 +417,6 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
             </Tooltip>
           )}
 
-          {/* Git Diff Icon - only shows when story's branch exists */}
-          {branchExists && (
-            <Tooltip title="View branch diff" arrow placement="top">
-              <IconButton
-                size="small"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setDiffDialogOpen(true)
-                }}
-                sx={{
-                  position: 'absolute',
-                  bottom: 8,
-                  right: 8,
-                  bgcolor: 'success.main',
-                  color: 'white',
-                  p: 0.5,
-                  '&:hover': {
-                    bgcolor: 'success.dark'
-                  }
-                }}
-              >
-                <CompareArrowsIcon sx={{ fontSize: 16 }} />
-              </IconButton>
-            </Tooltip>
-          )}
         </CardContent>
       </Card>
 
@@ -484,21 +436,60 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
       >
         <Box sx={{ px: 2, py: 1, borderBottom: 1, borderColor: 'divider' }}>
           <Typography variant="subtitle2" fontWeight={600}>
-            Next Steps
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            Click copy buttons individually
+            Actions
           </Typography>
         </Box>
 
-        {/* Git Branch Command - Only for ready-for-dev */}
-        {effectiveStatus === 'ready-for-dev' && (
+        {/* View Branch Diff - only when branch exists */}
+        {branchExists && (
+          <Box
+            onClick={(e) => {
+              e.stopPropagation()
+              setDiffDialogOpen(true)
+              handleMenuClose()
+            }}
+            sx={{
+              px: 2,
+              py: 1.5,
+              borderBottom: 1,
+              borderColor: 'divider',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              cursor: 'pointer',
+              '&:hover': { bgcolor: 'action.hover' }
+            }}
+          >
+            <CompareArrowsIcon sx={{ fontSize: 18, color: 'success.main' }} />
+            <Typography variant="body2" fontWeight={500}>
+              View Branch Diff
+            </Typography>
+          </Box>
+        )}
+
+        {/* Step 1: Git Branch Command - Only for ready-for-dev when branch doesn't exist yet */}
+        {effectiveStatus === 'ready-for-dev' && !branchExists && !isOnStoryBranch && (
           <Box sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: 'divider', bgcolor: 'action.hover' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+              <Chip label="Step 1" size="small" sx={{ height: 18, fontSize: '0.65rem', fontWeight: 600, bgcolor: 'primary.main', color: 'white' }} />
               <GitHubIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
-              <Typography variant="body2" fontWeight={500}>
+              <Typography variant="body2" fontWeight={500} sx={{ flex: 1 }}>
                 Create Branch
               </Typography>
+              <Tooltip title={!isOnEpicBranch ? `Switch to epic-${story.epicId} branch first` : ''}>
+                <span>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    onClick={handleCreateBranch}
+                    disabled={creatingBranch || !isOnEpicBranch}
+                    startIcon={creatingBranch ? <CircularProgress size={12} color="inherit" /> : undefined}
+                    sx={{ fontSize: '0.7rem', py: 0.25, px: 1, minWidth: 0 }}
+                  >
+                    {creatingBranch ? 'Creating...' : 'Create'}
+                  </Button>
+                </span>
+              </Tooltip>
             </Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Typography
@@ -519,25 +510,43 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
               >
                 {gitBranchCommand}
               </Typography>
-              <IconButton
-                size="small"
-                onClick={(e) => handleCopySingle(gitBranchCommand, e)}
-                sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}
-              >
-                <ContentCopyIcon sx={{ fontSize: 16 }} />
-              </IconButton>
+              <Tooltip title="Copy command">
+                <IconButton
+                  size="small"
+                  onClick={(e) => handleCopySingle(gitBranchCommand, e)}
+                  sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}
+                >
+                  <ContentCopyIcon sx={{ fontSize: 16 }} />
+                </IconButton>
+              </Tooltip>
             </Box>
+            {!isOnEpicBranch && (
+              <Typography variant="caption" color="warning.main" sx={{ mt: 0.5, display: 'block' }}>
+                Switch to epic-{story.epicId} branch first
+              </Typography>
+            )}
           </Box>
         )}
 
-        {/* Git Commit Command - For review (commit implementation) and done (complete) */}
-        {(effectiveStatus === 'review' || effectiveStatus === 'done') && (
+        {/* Step 1: Git Commit Command - For review (commit implementation) and done (complete) - only when on story branch with uncommitted changes */}
+        {(effectiveStatus === 'review' || effectiveStatus === 'done') && isOnStoryBranch && hasUncommittedChanges && (
           <Box sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: 'divider', bgcolor: 'action.hover' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+              <Chip label="Step 1" size="small" sx={{ height: 18, fontSize: '0.65rem', fontWeight: 600, bgcolor: 'primary.main', color: 'white' }} />
               <GitHubIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
-              <Typography variant="body2" fontWeight={500}>
+              <Typography variant="body2" fontWeight={500} sx={{ flex: 1 }}>
                 {effectiveStatus === 'review' ? 'Commit Implementation' : 'Commit & Complete'}
               </Typography>
+              <Button
+                size="small"
+                variant="contained"
+                onClick={handleCommit}
+                disabled={committing}
+                startIcon={committing ? <CircularProgress size={12} color="inherit" /> : undefined}
+                sx={{ fontSize: '0.7rem', py: 0.25, px: 1, minWidth: 0 }}
+              >
+                {committing ? 'Committing...' : 'Commit'}
+              </Button>
             </Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Typography
@@ -558,13 +567,34 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
               >
                 {gitCommitCommand}
               </Typography>
-              <IconButton
-                size="small"
-                onClick={(e) => handleCopySingle(gitCommitCommand, e)}
-                sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}
-              >
-                <ContentCopyIcon sx={{ fontSize: 16 }} />
-              </IconButton>
+              <Tooltip title="Copy command">
+                <IconButton
+                  size="small"
+                  onClick={(e) => handleCopySingle(gitCommitCommand, e)}
+                  sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}
+                >
+                  <ContentCopyIcon sx={{ fontSize: 16 }} />
+                </IconButton>
+              </Tooltip>
+            </Box>
+          </Box>
+        )}
+
+        {/* Talk to Agents - show Step 2 only when there's a git step first */}
+        {nextSteps.length > 0 && (
+          <Box sx={{ px: 2, py: 1, borderBottom: 1, borderColor: 'divider', bgcolor: 'action.selected' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              {((effectiveStatus === 'ready-for-dev' && !branchExists && !isOnStoryBranch) || ((effectiveStatus === 'review' || effectiveStatus === 'done') && isOnStoryBranch && hasUncommittedChanges)) && (
+                <Chip
+                  label="Step 2"
+                  size="small"
+                  sx={{ height: 18, fontSize: '0.65rem', fontWeight: 600, bgcolor: 'secondary.main', color: 'white' }}
+                />
+              )}
+              <GroupsIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+              <Typography variant="body2" fontWeight={500}>
+                Talk to Agents ({aiTool === 'claude-code' ? 'Claude Code' : aiTool === 'cursor' ? 'Cursor' : aiTool === 'windsurf' ? 'Windsurf' : 'Other'})
+              </Typography>
             </Box>
           </Box>
         )}
@@ -576,7 +606,7 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
               key={index}
               sx={{ px: 2, py: 1.5, borderBottom: index < nextSteps.length - 1 ? 1 : 0, borderColor: 'divider' }}
             >
-              {/* Step Header */}
+              {/* Agent Step Header */}
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                 <PersonIcon sx={{ fontSize: 18, color: agent?.color || 'text.secondary' }} />
                 <Typography variant="body2" fontWeight={500} sx={{ flex: 1 }}>
@@ -585,8 +615,8 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
                 {step.primary && (
                   <Chip label="Primary" size="small" sx={{ height: 18, fontSize: '0.65rem' }} />
                 )}
-                {step.command && (
-                  <Tooltip title={`Copy git commit for ${transformCommand(step.command)}`}>
+                {step.command && isOnStoryBranch && hasUncommittedChanges && (
+                  <Tooltip title={`Copy git commit for ${transformCommand(step.command, aiTool)}`}>
                     <IconButton
                       size="small"
                       onClick={(e) => handleCopySingle(getAgentGitCommand(step.command), e)}
@@ -621,11 +651,11 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
                       wordBreak: 'break-all'
                     }}
                   >
-                    {transformCommand(agent.commands[0])}
+                    {transformCommand(agent.commands[0], aiTool)}
                   </Typography>
                   <IconButton
                     size="small"
-                    onClick={(e) => handleCopySingle(transformCommand(agent.commands[0]), e)}
+                    onClick={(e) => handleCopySingle(transformCommand(agent.commands[0], aiTool), e)}
                     sx={{ p: 0.25, color: 'text.disabled', '&:hover': { color: 'primary.main' } }}
                   >
                     <ContentCopyIcon sx={{ fontSize: 14 }} />
@@ -653,11 +683,11 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
                       wordBreak: 'break-all'
                     }}
                   >
-                    {transformCommand(step.command)} {story.id}
+                    {transformCommand(step.command, aiTool)} {story.id}
                   </Typography>
                   <IconButton
                     size="small"
-                    onClick={(e) => handleCopySingle(`${transformCommand(step.command)} ${story.id}`, e)}
+                    onClick={(e) => handleCopySingle(`${transformCommand(step.command, aiTool)} ${story.id}`, e)}
                     sx={{ p: 0.25, color: 'text.disabled', '&:hover': { color: 'primary.main' } }}
                   >
                     <ContentCopyIcon sx={{ fontSize: 14 }} />
