@@ -1,8 +1,9 @@
-import { useMemo, useState, useRef } from 'react'
-import { Box, CircularProgress, Typography, Alert, Snackbar } from '@mui/material'
+import { useMemo, useState, useRef, useCallback } from 'react'
+import { Box, CircularProgress, Typography, Alert, Snackbar, Chip } from '@mui/material'
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, rectIntersection, closestCorners, CollisionDetection, PointerSensor, useSensor, useSensors, UniqueIdentifier } from '@dnd-kit/core'
 import { arrayMove } from '@dnd-kit/sortable'
 import MergeIcon from '@mui/icons-material/Merge'
+import AccountTreeIcon from '@mui/icons-material/AccountTree'
 import { useStore } from '../../store'
 import { useProjectData } from '../../hooks/useProjectData'
 import { useWorkflow } from '../../hooks/useWorkflow'
@@ -11,14 +12,67 @@ import type { AgentDefinition } from '../../types/flow'
 import Column from './Column'
 import StoryCard from '../StoryCard/StoryCard'
 
+// Branch type detection
+type BranchType = 'main' | 'epic' | 'story'
+
+interface BranchInfo {
+  type: BranchType
+  epicId?: number
+  storyId?: string // Full story ID like "1-6-load-chips"
+}
+
+function parseBranchInfo(branchName: string | null): BranchInfo {
+  if (!branchName) return { type: 'main' }
+
+  // Main/master branches
+  if (branchName === 'main' || branchName === 'master') {
+    return { type: 'main' }
+  }
+
+  // Epic branch: epic-N-name (e.g., "epic-1-setup")
+  const epicMatch = branchName.match(/^epic-(\d+)-/)
+  if (epicMatch) {
+    return { type: 'epic', epicId: parseInt(epicMatch[1], 10) }
+  }
+
+  // Story branch: epicId-storyId (e.g., "1-1-6-load-chips")
+  // Story ID format: epicId-storyNumber-slug
+  // So branch format is: epicId-epicId-storyNumber-slug (first epicId is branch prefix)
+  // Actually looking at StoryCard: storyBranchName = `${story.epicId}-${story.id}`
+  // And story.id is like "1-6-load-built-in-chips" (epicId-storyNumber-slug)
+  // So full branch name is like "1-1-6-load-built-in-chips"
+  const storyMatch = branchName.match(/^(\d+)-(\d+-\d+-.+)$/)
+  if (storyMatch) {
+    return {
+      type: 'story',
+      epicId: parseInt(storyMatch[1], 10),
+      storyId: storyMatch[2] // e.g., "1-6-load-chips"
+    }
+  }
+
+  // Unknown branch format - treat as main (full access)
+  return { type: 'main' }
+}
+
 export default function Board() {
   // Compute read-only state from store values (reactive)
   const currentBranch = useStore((state) => state.currentBranch)
   const epicMergeStatusChecked = useStore((state) => state.epicMergeStatusChecked)
   const unmergedStoryBranches = useStore((state) => state.unmergedStoryBranches)
 
-  const isEpicBranch = currentBranch?.match(/^epic-\d+-/)
-  const readOnly = Boolean(isEpicBranch && (!epicMergeStatusChecked || unmergedStoryBranches.length > 0))
+  // Parse current branch to determine type and scope
+  const branchInfo = useMemo(() => parseBranchInfo(currentBranch), [currentBranch])
+
+  const isEpicBranch = branchInfo.type === 'epic'
+  const isStoryBranch = branchInfo.type === 'story'
+
+  // Read-only mode for epic branches with unmerged story branches
+  const epicReadOnly = Boolean(isEpicBranch && (!epicMergeStatusChecked || unmergedStoryBranches.length > 0))
+
+  // For story branches, board is editable but only for the matching story
+  // For epic branches (when not epicReadOnly), only stories in that epic are editable
+  // For main/master, everything is editable
+  const readOnly = epicReadOnly
 
   // Configure sensors for drag detection - empty when read-only to disable dragging
   const sensors = useSensors(
@@ -48,6 +102,39 @@ export default function Board() {
   const chatThreads = useStore((state) => state.chatThreads)
   const { loadProjectData } = useProjectData()
   const { agents: bmadAgents } = useWorkflow()
+
+  // Determine if a story is editable based on current branch
+  const isStoryEditable = useCallback((story: Story): boolean => {
+    // If in epic read-only mode (unmerged branches), nothing is editable
+    if (epicReadOnly) return false
+
+    switch (branchInfo.type) {
+      case 'main':
+        // On main/master, everything is editable
+        return true
+      case 'epic':
+        // On epic branch, only stories in this epic are editable
+        return story.epicId === branchInfo.epicId
+      case 'story':
+        // On story branch, only the matching story is editable
+        return story.id === branchInfo.storyId
+      default:
+        return true
+    }
+  }, [branchInfo, epicReadOnly])
+
+  // Get set of locked story IDs for efficient lookup
+  const lockedStoryIds = useMemo(() => {
+    if (branchInfo.type === 'main' && !epicReadOnly) return new Set<string>()
+
+    const locked = new Set<string>()
+    for (const story of allStories) {
+      if (!isStoryEditable(story)) {
+        locked.add(story.id)
+      }
+    }
+    return locked
+  }, [allStories, branchInfo, epicReadOnly, isStoryEditable])
 
   // Compute working teammates map at Board level to avoid per-card subscriptions
   const workingTeammatesByBranch = useMemo(() => {
@@ -128,10 +215,16 @@ export default function Board() {
 
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event
+    const story = allStories.find((s) => s.id === active.id)
+
+    // Block drag if story is locked (shouldn't happen due to disabled prop, but safety check)
+    if (story && lockedStoryIds.has(story.id)) {
+      return
+    }
+
     // Save scroll position when drag starts
     savedScrollPositionRef.current = scrollContainerRef.current?.scrollLeft || 0
     setActiveId(active.id)
-    const story = allStories.find((s) => s.id === active.id)
     if (story) {
       setActiveStory(story)
     }
@@ -163,6 +256,17 @@ export default function Board() {
     const storyId = active.id as string
     const story = allStories.find((s) => s.id === storyId)
     if (!story) return
+
+    // Block if story is locked due to branch scope
+    if (lockedStoryIds.has(story.id)) {
+      if (isStoryBranch) {
+        setSnackbarMessage(`Switch to this story's branch to update its status`)
+      } else if (isEpicBranch) {
+        setSnackbarMessage(`This story belongs to a different epic`)
+      }
+      setSnackbarOpen(true)
+      return
+    }
 
     const overId = over.id as string
     const epicKey = selectedEpicId === null ? 'all' : String(selectedEpicId)
@@ -387,6 +491,55 @@ export default function Board() {
           flexDirection: 'column'
         }}
       >
+        {/* Story branch context banner - show when on a story branch */}
+        {isStoryBranch && branchInfo.storyId && (
+          <Alert
+            severity="info"
+            icon={<AccountTreeIcon />}
+            sx={{
+              mx: 2,
+              mt: 2,
+              mb: 0,
+              py: 0.5,
+              '& .MuiAlert-message': { py: 0.5, display: 'flex', alignItems: 'center', gap: 1 }
+            }}
+          >
+            <Typography variant="body2" component="span">
+              <strong>Story branch:</strong> Only this story can be updated.
+            </Typography>
+            <Chip
+              label={branchInfo.storyId}
+              size="small"
+              sx={{ height: 20, fontSize: '0.7rem', fontWeight: 500 }}
+            />
+            <Typography variant="body2" component="span" color="text.secondary">
+              Other stories are view-only.
+            </Typography>
+          </Alert>
+        )}
+
+        {/* Epic branch context banner - show when on an epic branch (not in read-only merge mode) */}
+        {isEpicBranch && !readOnly && branchInfo.epicId && (
+          <Alert
+            severity="info"
+            icon={<AccountTreeIcon />}
+            sx={{
+              mx: 2,
+              mt: 2,
+              mb: 0,
+              py: 0.5,
+              '& .MuiAlert-message': { py: 0.5, display: 'flex', alignItems: 'center', gap: 1 }
+            }}
+          >
+            <Typography variant="body2" component="span">
+              <strong>Epic branch:</strong> Only Epic {branchInfo.epicId} stories can be updated.
+            </Typography>
+            <Typography variant="body2" component="span" color="text.secondary">
+              Stories from other epics are view-only.
+            </Typography>
+          </Alert>
+        )}
+
         {/* Read-only banner when on epic with unmerged story branches */}
         {readOnly && (
           <Alert
@@ -449,6 +602,7 @@ export default function Board() {
                 isCollapsed={collapsedColumns.includes(column.status)}
                 onToggleCollapse={() => toggleColumnCollapse(column.status)}
                 disableDrag={readOnly}
+                lockedStoryIds={lockedStoryIds}
                 workingTeammatesByBranch={workingTeammatesByBranch}
               />
             )
