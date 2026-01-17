@@ -37,6 +37,7 @@ import { gruvboxDark, gruvboxLight } from 'react-syntax-highlighter/dist/esm/sty
 import { useStore } from '../../store'
 import { gruvbox } from '../../theme'
 import { EPIC_COLORS, STATUS_COLUMNS } from '../../types'
+import { useWorkflow } from '../../hooks/useWorkflow'
 import GitDiffDialog from '../GitDiffDialog'
 
 // Factory function to create code component with theme awareness
@@ -95,6 +96,10 @@ export default function StoryDialog() {
   const getEffectiveStatus = useStore((state) => state.getEffectiveStatus)
   const themeMode = useStore((state) => state.themeMode)
   const projectPath = useStore((state) => state.projectPath)
+  const chatThreads = useStore((state) => state.chatThreads)
+
+  // Get agents from workflow
+  const { agents } = useWorkflow()
 
   // Git diff state
   const [branchExists, setBranchExists] = useState(false)
@@ -128,6 +133,19 @@ export default function StoryDialog() {
   if (!selectedStory) return null
 
   const branchName = `${selectedStory.epicId}-${selectedStory.id}`
+
+  // Find if a chat teammate is working on this story's branch
+  const workingTeammate = (() => {
+    for (const thread of Object.values(chatThreads)) {
+      if (thread.isTyping && thread.branchName === branchName) {
+        const agentInfo = agents.find((a) => a.id === thread.agentId)
+        if (agentInfo) {
+          return agentInfo
+        }
+      }
+    }
+    return null
+  })()
 
   const effectiveStatus = getEffectiveStatus(selectedStory)
   const epicColor = EPIC_COLORS[(selectedStory.epicId - 1) % EPIC_COLORS.length]
@@ -174,6 +192,22 @@ export default function StoryDialog() {
                 fontWeight: 600
               }}
             />
+            {workingTeammate && (
+              <Chip
+                label={`${workingTeammate.name} working`}
+                size="small"
+                sx={{
+                  bgcolor: 'success.main',
+                  color: 'white',
+                  fontWeight: 600,
+                  animation: 'pulse 2s ease-in-out infinite',
+                  '@keyframes pulse': {
+                    '0%, 100%': { opacity: 1 },
+                    '50%': { opacity: 0.7 }
+                  }
+                }}
+              />
+            )}
             <Typography variant="body2" color="text.secondary">
               Story {selectedStory.epicId}.{selectedStory.storyNumber}
             </Typography>

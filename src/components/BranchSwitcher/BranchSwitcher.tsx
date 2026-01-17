@@ -1,10 +1,27 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { Box, Typography, Tooltip, CircularProgress } from '@mui/material'
+import { Box, Typography, Tooltip, CircularProgress, IconButton, Chip } from '@mui/material'
 import ForkRightIcon from '@mui/icons-material/ForkRight'
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
+import CheckCircleIcon from '@mui/icons-material/CheckCircle'
+import MergeIcon from '@mui/icons-material/Merge'
+import AccountTreeIcon from '@mui/icons-material/AccountTree'
+import SubdirectoryArrowRightIcon from '@mui/icons-material/SubdirectoryArrowRight'
 import SearchableDropdown, { SearchableDropdownItem } from '../common/SearchableDropdown'
 import { useStore } from '../../store'
 import { useProjectData } from '../../hooks/useProjectData'
+
+// Parse epic ID from branch name (e.g., "epic-1-core-features" -> "1")
+function parseEpicFromBranch(branch: string): string | null {
+  const match = branch.match(/^epic-(\d+)-/)
+  return match ? match[1] : null
+}
+
+interface BranchMergeStatus {
+  [branch: string]: {
+    merged: boolean
+    loading: boolean
+  }
+}
 
 export default function BranchSwitcher() {
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
@@ -12,16 +29,25 @@ export default function BranchSwitcher() {
   const [loading, setLoading] = useState(false)
   const [checkoutLoading, setCheckoutLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [mergeStatus, setMergeStatus] = useState<BranchMergeStatus>({})
+  const [mergingBranch, setMergingBranch] = useState<string | null>(null)
   const triggerRef = useRef<HTMLDivElement>(null)
 
   const projectPath = useStore((state) => state.projectPath)
   const currentBranch = useStore((state) => state.currentBranch)
   const setCurrentBranch = useStore((state) => state.setCurrentBranch)
+  const setUnmergedStoryBranches = useStore((state) => state.setUnmergedStoryBranches)
   const epics = useStore((state) => state.epics)
   const stories = useStore((state) => state.stories)
   const { loadProjectData } = useProjectData()
 
   const open = Boolean(anchorEl)
+
+  // Detect if current branch is an epic branch
+  const currentEpicId = useMemo(() => {
+    return currentBranch ? parseEpicFromBranch(currentBranch) : null
+  }, [currentBranch])
+
 
   // Load branches when dropdown opens
   const loadBranches = useCallback(async () => {
@@ -29,15 +55,6 @@ export default function BranchSwitcher() {
 
     setLoading(true)
     try {
-      // Check for uncommitted changes first
-      const changesResult = await window.gitAPI.hasChanges(projectPath)
-      if (changesResult.hasChanges) {
-        setError('Commit changes before switching branches')
-        setBranches([])
-        setLoading(false)
-        return
-      }
-
       const result = await window.gitAPI.listBranches(projectPath)
       if (result.error) {
         setError(result.error)
@@ -54,6 +71,60 @@ export default function BranchSwitcher() {
     }
   }, [projectPath])
 
+  // Load merge status for story branches when on an epic branch
+  const loadMergeStatus = useCallback(async (branchList: string[], epicId: string, updateStore = false) => {
+    if (!projectPath || !currentBranch) {
+      if (updateStore) setUnmergedStoryBranches([])
+      return
+    }
+
+    // Only consider branches that match actual stories (not just any branch starting with epicId-)
+    const storyPrefixes = stories
+      .filter(s => String(s.epicId) === epicId)
+      .map(s => `${s.epicId}-${s.id}`)
+
+    const storyBranches = branchList.filter(branch =>
+      storyPrefixes.some(prefix => branch === prefix || branch.startsWith(`${prefix}-`))
+    )
+
+    // Initialize loading state for all story branches
+    setMergeStatus(prev => {
+      const newStatus = { ...prev }
+      for (const branch of storyBranches) {
+        if (!newStatus[branch]) {
+          newStatus[branch] = { merged: false, loading: true }
+        }
+      }
+      return newStatus
+    })
+
+    // Check merge status for each story branch and track unmerged ones
+    const unmerged: string[] = []
+    for (const branch of storyBranches) {
+      try {
+        const result = await window.gitAPI.isBranchMerged(projectPath, branch, currentBranch)
+        setMergeStatus(prev => ({
+          ...prev,
+          [branch]: { merged: result.merged, loading: false }
+        }))
+        if (!result.merged) {
+          unmerged.push(branch)
+        }
+      } catch {
+        setMergeStatus(prev => ({
+          ...prev,
+          [branch]: { merged: false, loading: false }
+        }))
+        unmerged.push(branch) // Assume unmerged on error
+      }
+    }
+
+    // Update store with unmerged branches (for read-only mode)
+    if (updateStore) {
+      setUnmergedStoryBranches(unmerged)
+    }
+  }, [projectPath, currentBranch, setUnmergedStoryBranches, stories])
+
   // Load branches when dropdown opens
   useEffect(() => {
     if (open) {
@@ -61,8 +132,37 @@ export default function BranchSwitcher() {
     }
   }, [open, loadBranches])
 
+  // Load merge status when we have branches and are on an epic (for dropdown display)
+  useEffect(() => {
+    if (open && branches.length > 0 && currentEpicId) {
+      loadMergeStatus(branches, currentEpicId, false)
+    }
+  }, [open, branches, currentEpicId, loadMergeStatus])
+
+  // Check merge status when switching to an epic branch (for read-only mode)
+  useEffect(() => {
+    const checkEpicMergeStatus = async () => {
+      if (!projectPath || !currentEpicId || !currentBranch) {
+        setUnmergedStoryBranches([])
+        return
+      }
+
+      // Fetch all branches to check merge status
+      const result = await window.gitAPI.listBranches(projectPath)
+
+      if (result.error || result.branches.length === 0) {
+        // No branches or error - mark as checked with no unmerged
+        setUnmergedStoryBranches([])
+        return
+      }
+
+      loadMergeStatus(result.branches, currentEpicId, true)
+    }
+
+    checkEpicMergeStatus()
+  }, [projectPath, currentBranch, currentEpicId, loadMergeStatus, setUnmergedStoryBranches])
+
   // Filter branches to only show relevant ones (epics, stories, main/master)
-  // Must be before early return to follow Rules of Hooks
   const filteredBranches = useMemo(() => {
     // Build set of valid branch prefixes
     const epicPrefixes = epics.map(e => `epic-${e.id}-`)
@@ -81,6 +181,112 @@ export default function BranchSwitcher() {
       return false
     })
   }, [branches, epics, stories])
+
+  // Group branches into tree structure: main, then epics with their stories nested
+  const groupedBranches = useMemo(() => {
+    type BranchItem = {
+      id: string
+      label: string
+      isEpicBranch: boolean
+      isStoryBranch: boolean
+      epicId: string | null
+      mergeStatus: { merged: boolean; loading: boolean } | null
+    }
+
+    const result: BranchItem[] = []
+
+    // Separate branches by type
+    const mainBranches: string[] = []
+    const epicBranchMap: Map<string, { epicBranch: string; storyBranches: string[] }> = new Map()
+
+    for (const branch of filteredBranches) {
+      if (branch === 'main' || branch === 'master') {
+        mainBranches.push(branch)
+        continue
+      }
+
+      // Check if it's an epic branch
+      const epicMatch = branch.match(/^epic-(\d+)-/)
+      if (epicMatch) {
+        const epicId = epicMatch[1]
+        if (!epicBranchMap.has(epicId)) {
+          epicBranchMap.set(epicId, { epicBranch: branch, storyBranches: [] })
+        } else {
+          epicBranchMap.get(epicId)!.epicBranch = branch
+        }
+        continue
+      }
+
+      // Check if it's a story branch
+      const storyMatch = branch.match(/^(\d+)-\d+/)
+      if (storyMatch) {
+        const epicId = storyMatch[1]
+        if (!epicBranchMap.has(epicId)) {
+          epicBranchMap.set(epicId, { epicBranch: '', storyBranches: [branch] })
+        } else {
+          epicBranchMap.get(epicId)!.storyBranches.push(branch)
+        }
+      }
+    }
+
+    // Add main branches first
+    for (const branch of mainBranches) {
+      result.push({
+        id: branch,
+        label: branch,
+        isEpicBranch: false,
+        isStoryBranch: false,
+        epicId: null,
+        mergeStatus: null
+      })
+    }
+
+    // Sort epic IDs numerically
+    const sortedEpicIds = Array.from(epicBranchMap.keys()).sort((a, b) => parseInt(a) - parseInt(b))
+
+    // Add epics with their story branches
+    for (const epicId of sortedEpicIds) {
+      const { epicBranch, storyBranches } = epicBranchMap.get(epicId)!
+
+      // Add epic branch if it exists
+      if (epicBranch) {
+        result.push({
+          id: epicBranch,
+          label: epicBranch,
+          isEpicBranch: true,
+          isStoryBranch: false,
+          epicId,
+          mergeStatus: null
+        })
+      }
+
+      // Sort story branches naturally
+      storyBranches.sort((a, b) => {
+        const aMatch = a.match(/^(\d+)-(\d+)/)
+        const bMatch = b.match(/^(\d+)-(\d+)/)
+        if (aMatch && bMatch) {
+          return parseInt(aMatch[2]) - parseInt(bMatch[2])
+        }
+        return a.localeCompare(b)
+      })
+
+      // Add story branches (indented under epic)
+      // Only show merge status if we're on this epic's branch
+      const showMergeStatus = currentEpicId === epicId
+      for (const branch of storyBranches) {
+        result.push({
+          id: branch,
+          label: branch,
+          isEpicBranch: false,
+          isStoryBranch: true,
+          epicId,
+          mergeStatus: showMergeStatus ? (mergeStatus[branch] || { merged: false, loading: true }) : null
+        })
+      }
+    }
+
+    return result
+  }, [filteredBranches, currentEpicId, mergeStatus])
 
   const handleClick = () => {
     if (!projectPath || !currentBranch) return
@@ -127,45 +333,148 @@ export default function BranchSwitcher() {
     }
   }
 
+  const handleMergeBranch = async (branchToMerge: string, e: React.MouseEvent) => {
+    e.stopPropagation() // Don't trigger branch selection
+    if (!projectPath || mergingBranch) return
+
+    setMergingBranch(branchToMerge)
+    setError(null)
+
+    try {
+      const result = await window.gitAPI.mergeBranch(projectPath, branchToMerge)
+      if (!result.success) {
+        setError(result.error || 'Merge failed')
+        return
+      }
+
+      // Update merge status to show as merged
+      setMergeStatus(prev => ({
+        ...prev,
+        [branchToMerge]: { merged: true, loading: false }
+      }))
+
+      // Update store to remove this branch from unmerged list
+      const currentUnmerged = useStore.getState().unmergedStoryBranches
+      setUnmergedStoryBranches(currentUnmerged.filter(b => b !== branchToMerge))
+
+      // Refresh project data after merge
+      loadProjectData()
+    } catch {
+      setError('Failed to merge branch')
+    } finally {
+      setMergingBranch(null)
+    }
+  }
+
   // Don't render if not in a git repo
   if (!projectPath || !currentBranch) {
     return null
   }
 
-  // Convert branches to dropdown items
-  const branchItems: SearchableDropdownItem[] = filteredBranches.map((branch) => ({
-    id: branch,
-    label: branch
-  }))
+  // Convert branches to dropdown items with custom rendering
+  const branchItems: SearchableDropdownItem[] = groupedBranches.map((branch) => {
+    // Epic branch - show with tree icon
+    if (branch.isEpicBranch) {
+      return {
+        id: branch.id,
+        label: branch.label,
+        customRender: (
+          <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', gap: 1 }}>
+            <AccountTreeIcon sx={{ fontSize: 16, color: 'primary.main' }} />
+            <Typography
+              variant="body2"
+              sx={{
+                flex: 1,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                fontWeight: branch.id === currentBranch ? 600 : 400
+              }}
+            >
+              {branch.label}
+            </Typography>
+          </Box>
+        )
+      }
+    }
+
+    // Story branch - show indented with merge status (if on parent epic)
+    if (branch.isStoryBranch) {
+      return {
+        id: branch.id,
+        label: branch.label,
+        customRender: (
+          <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', gap: 0.5 }}>
+            <SubdirectoryArrowRightIcon sx={{ fontSize: 14, color: 'text.disabled', ml: 1 }} />
+            <Typography
+              variant="body2"
+              sx={{
+                flex: 1,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                fontWeight: branch.id === currentBranch ? 600 : 400
+              }}
+            >
+              {branch.label}
+            </Typography>
+            {/* Only show merge status when on the parent epic */}
+            {branch.mergeStatus && (
+              branch.mergeStatus.loading ? (
+                <CircularProgress size={14} sx={{ color: 'text.disabled' }} />
+              ) : branch.mergeStatus.merged ? (
+                <Tooltip title="Merged into epic">
+                  <CheckCircleIcon sx={{ fontSize: 16, color: 'success.main' }} />
+                </Tooltip>
+              ) : (
+                <Tooltip title="Merge into epic">
+                  <IconButton
+                    size="small"
+                    onClick={(e) => handleMergeBranch(branch.id, e)}
+                    disabled={mergingBranch !== null}
+                    sx={{
+                      p: 0.25,
+                      '&:hover': { bgcolor: 'action.hover' }
+                    }}
+                  >
+                    {mergingBranch === branch.id ? (
+                      <CircularProgress size={14} sx={{ color: 'primary.main' }} />
+                    ) : (
+                      <MergeIcon sx={{ fontSize: 16, color: 'primary.main' }} />
+                    )}
+                  </IconButton>
+                </Tooltip>
+              )
+            )}
+          </Box>
+        )
+      }
+    }
+
+    // Main/master or other branches - no custom render
+    return {
+      id: branch.id,
+      label: branch.label
+    }
+  })
 
   return (
-    <Tooltip
-      title={error || 'Switch git branch'}
-      placement="top"
-      open={open ? false : undefined}
-      disableHoverListener={open}
-      componentsProps={{
-        tooltip: {
-          sx: error ? { bgcolor: 'error.main' } : {}
+    <Box
+      ref={triggerRef}
+      onClick={handleClick}
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 0.5,
+        cursor: 'pointer',
+        px: 0.5,
+        py: 0.25,
+        borderRadius: 0.5,
+        '&:hover': {
+          bgcolor: 'action.hover'
         }
       }}
     >
-      <Box
-        ref={triggerRef}
-        onClick={handleClick}
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 0.5,
-          cursor: 'pointer',
-          px: 0.5,
-          py: 0.25,
-          borderRadius: 0.5,
-          '&:hover': {
-            bgcolor: 'action.hover'
-          }
-        }}
-      >
         {checkoutLoading ? (
           <CircularProgress size={12} sx={{ color: 'text.secondary' }} />
         ) : (
@@ -183,6 +492,19 @@ export default function BranchSwitcher() {
         >
           {currentBranch}
         </Typography>
+        {currentEpicId && (
+          <Chip
+            label={`Epic ${currentEpicId}`}
+            size="small"
+            sx={{
+              height: 16,
+              fontSize: '0.65rem',
+              bgcolor: 'primary.main',
+              color: 'primary.contrastText',
+              '& .MuiChip-label': { px: 0.75, py: 0 }
+            }}
+          />
+        )}
         <KeyboardArrowUpIcon
           sx={{
             fontSize: 14,
@@ -201,9 +523,8 @@ export default function BranchSwitcher() {
           open={open}
           onClose={handleClose}
           loading={loading}
-          emptyMessage="No branches found"
+          emptyMessage={error || "No branches found"}
         />
       </Box>
-    </Tooltip>
   )
 }

@@ -12,7 +12,9 @@ import ChecklistIcon from '@mui/icons-material/Checklist'
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline'
 import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import GroupsIcon from '@mui/icons-material/Groups'
+import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline'
 import { Story, EPIC_COLORS } from '../../types'
+import type { AgentDefinition } from '../../types/flow'
 import { useStore } from '../../store'
 import { useWorkflow } from '../../hooks/useWorkflow'
 import { transformCommand } from '../../utils/commandTransform'
@@ -20,9 +22,11 @@ import { transformCommand } from '../../utils/commandTransform'
 interface StoryCardProps {
   story: Story
   isDragging?: boolean
+  disableDrag?: boolean
+  workingTeammate?: AgentDefinition
 }
 
-export default function StoryCard({ story, isDragging = false }: StoryCardProps) {
+export default function StoryCard({ story, isDragging = false, disableDrag = false, workingTeammate }: StoryCardProps) {
   const setSelectedStory = useStore((state) => state.setSelectedStory)
   const projectPath = useStore((state) => state.projectPath)
   const agents = useStore((state) => state.agents)
@@ -31,6 +35,11 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
   const enableHumanReviewColumn = useStore((state) => state.enableHumanReviewColumn)
   const getEffectiveStatus = useStore((state) => state.getEffectiveStatus)
   const aiTool = useStore((state) => state.aiTool)
+  const setViewMode = useStore((state) => state.setViewMode)
+  const setSelectedChatAgent = useStore((state) => state.setSelectedChatAgent)
+  const setPendingChatMessage = useStore((state) => state.setPendingChatMessage)
+  const clearChatThread = useStore((state) => state.clearChatThread)
+  const chatThreads = useStore((state) => state.chatThreads)
 
   const { getNextSteps, getAgent } = useWorkflow()
 
@@ -67,7 +76,8 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
 
   // Make card sortable (draggable + reorderable)
   const { attributes, listeners, setNodeRef, transform, transition, isDragging: isBeingDragged } = useSortable({
-    id: story.id
+    id: story.id,
+    disabled: disableDrag
   })
   const dragStyle = {
     transform: CSS.Transform.toString(transform),
@@ -247,6 +257,27 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
     return `git add . && git commit -m "${commitType}(${branchName}): ${actionPart} story ${story.epicId}.${story.storyNumber}"`
   }
 
+  // Handle sending command to chat interface
+  const handleSendToChat = (agentIdParam: string, command: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    // Close the menu
+    handleMenuClose()
+    // Clear the chat thread for a fresh start
+    clearChatThread(agentIdParam)
+    // Switch to chat view
+    setViewMode('chat')
+    // Select the agent
+    setSelectedChatAgent(agentIdParam)
+    // Set the pending message (the command with story id and context)
+    const fullCommand = `${transformCommand(command, aiTool)} ${story.id}`
+    setPendingChatMessage({
+      agentId: agentIdParam,
+      message: fullCommand,
+      storyId: story.id,
+      branchName: storyBranchName
+    })
+  }
+
   return (
     <>
       <Card
@@ -304,20 +335,31 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
                 >
                   {story.epicId}.{story.storyNumber}
                 </Typography>
-                {/* Spinning icon: shows for in-progress/review when agent running OR recent git activity (last 1 min) */}
-                {(effectiveStatus === 'in-progress' || effectiveStatus === 'review') && (runningAgent || isActivelyWorking) && (
-                  <Tooltip title={runningAgent ? 'Agent running' : 'Recent git activity'} arrow placement="top">
-                    <AutorenewIcon
-                      sx={{
-                        fontSize: 14,
-                        color: runningAgent ? 'success.main' : effectiveStatus === 'review' ? 'info.main' : 'warning.main',
-                        animation: 'spin 2s linear infinite',
-                        '@keyframes spin': {
-                          '0%': { transform: 'rotate(0deg)' },
-                          '100%': { transform: 'rotate(360deg)' }
-                        }
-                      }}
-                    />
+                {/* Spinning icon: shows when teammate working OR for in-progress/review with git activity */}
+                {(workingTeammate || ((effectiveStatus === 'in-progress' || effectiveStatus === 'review') && (runningAgent || isActivelyWorking))) && (
+                  <Tooltip
+                    title={workingTeammate ? `${workingTeammate.name} working` : runningAgent ? 'Teammate working' : 'Recent git activity'}
+                    arrow
+                    placement="top"
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <AutorenewIcon
+                        sx={{
+                          fontSize: 14,
+                          color: workingTeammate || runningAgent ? 'success.main' : effectiveStatus === 'review' ? 'info.main' : 'warning.main',
+                          animation: 'spin 2s linear infinite',
+                          '@keyframes spin': {
+                            '0%': { transform: 'rotate(0deg)' },
+                            '100%': { transform: 'rotate(360deg)' }
+                          }
+                        }}
+                      />
+                      {workingTeammate && (
+                        <Typography variant="caption" sx={{ fontSize: '0.65rem', color: 'success.main', fontWeight: 600 }}>
+                          {workingTeammate.name}
+                        </Typography>
+                      )}
+                    </Box>
                   </Tooltip>
                 )}
               </Box>
@@ -592,7 +634,7 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
               )}
               <GroupsIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
               <Typography variant="body2" fontWeight={500}>
-                Talk to Agents ({aiTool === 'claude-code' ? 'Claude Code' : aiTool === 'cursor' ? 'Cursor' : aiTool === 'windsurf' ? 'Windsurf' : 'Other'})
+                Talk to Teammates ({aiTool === 'claude-code' ? 'Claude Code' : aiTool === 'cursor' ? 'Cursor' : aiTool === 'windsurf' ? 'Windsurf' : 'Other'})
               </Typography>
             </Box>
           </Box>
@@ -608,9 +650,33 @@ export default function StoryCard({ story, isDragging = false }: StoryCardProps)
               {/* Agent Step Header */}
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                 <PersonIcon sx={{ fontSize: 18, color: agent?.color || 'text.secondary' }} />
-                <Typography variant="body2" fontWeight={500} sx={{ flex: 1 }}>
+                <Typography variant="body2" fontWeight={500}>
                   {step.label}
                 </Typography>
+                {step.command && (() => {
+                  const isAgentWorking = chatThreads[step.agentId]?.isTyping || false
+                  const isDisabled = !isOnStoryBranch || isAgentWorking
+                  const tooltipTitle = isAgentWorking
+                    ? 'Teammate is currently working'
+                    : isOnStoryBranch
+                      ? 'Send to chat'
+                      : `Switch to branch ${storyBranchName} first`
+                  return (
+                    <Tooltip title={tooltipTitle}>
+                      <span>
+                        <IconButton
+                          size="small"
+                          disabled={isDisabled}
+                          onClick={(e) => handleSendToChat(step.agentId, step.command, e)}
+                          sx={{ p: 0.25, color: 'text.disabled', '&:hover': { color: 'success.main' } }}
+                        >
+                          <ChatBubbleOutlineIcon sx={{ fontSize: 16 }} />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  )
+                })()}
+                <Box sx={{ flex: 1 }} />
                 {step.primary && (
                   <Chip label="Primary" size="small" sx={{ height: 18, fontSize: '0.65rem' }} />
                 )}

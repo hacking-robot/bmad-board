@@ -38,6 +38,7 @@ import RefreshIcon from '@mui/icons-material/Refresh'
 import { DiffView, DiffModeEnum } from '@git-diff-view/react'
 import { generateDiffFile } from '@git-diff-view/file'
 import { useStore } from '../../store'
+import { useWorkflow } from '../../hooks/useWorkflow'
 import '@git-diff-view/react/styles/diff-view.css'
 import './diff-styles.css'
 
@@ -458,6 +459,10 @@ export default function GitDiffDialog({ open, onClose, branchName }: GitDiffDial
   const hasUncommittedChanges = useStore((state) => state.hasUncommittedChanges)
   const setHasUncommittedChanges = useStore((state) => state.setHasUncommittedChanges)
   const stories = useStore((state) => state.stories)
+  const chatThreads = useStore((state) => state.chatThreads)
+
+  // Get agents from workflow
+  const { agents } = useWorkflow()
 
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -485,6 +490,19 @@ export default function GitDiffDialog({ open, onClose, branchName }: GitDiffDial
   // Check if this is the current branch with uncommitted changes
   const isCurrentBranch = branchName === currentBranch
   const canCommit = isCurrentBranch && hasUncommittedChanges
+
+  // Find if a chat teammate is working on this branch
+  const workingTeammate = (() => {
+    for (const thread of Object.values(chatThreads)) {
+      if (thread.isTyping && thread.branchName === branchName) {
+        const agentInfo = agents.find((a) => a.id === thread.agentId)
+        if (agentInfo) {
+          return agentInfo
+        }
+      }
+    }
+    return null
+  })()
 
   // Find matching story for commit message
   const getStoryFromBranch = (branch: string) => {
@@ -725,6 +743,24 @@ export default function GitDiffDialog({ open, onClose, branchName }: GitDiffDial
             )}
             {totalStats.deleted > 0 && (
               <Chip label={`-${totalStats.deleted}`} size="small" sx={{ height: 20, bgcolor: '#EF4444', color: 'white', fontSize: '0.7rem' }} />
+            )}
+            {workingTeammate && (
+              <Chip
+                label={`${workingTeammate.name} working`}
+                size="small"
+                sx={{
+                  height: 20,
+                  bgcolor: 'success.main',
+                  color: 'white',
+                  fontSize: '0.7rem',
+                  fontWeight: 600,
+                  animation: 'pulse 2s ease-in-out infinite',
+                  '@keyframes pulse': {
+                    '0%, 100%': { opacity: 1 },
+                    '50%': { opacity: 0.7 }
+                  }
+                }}
+              />
             )}
           </Box>
         </Box>
@@ -1000,7 +1036,7 @@ export default function GitDiffDialog({ open, onClose, branchName }: GitDiffDial
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mr: 2 }}>
                             <CommitIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
                             {agent && (
-                              <Tooltip title={`${agent.name} agent work`}>
+                              <Tooltip title={`${agent.name} teammate work`}>
                                 <Chip
                                   label={agent.name}
                                   size="small"

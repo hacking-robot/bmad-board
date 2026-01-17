@@ -30,6 +30,7 @@ export interface AgentDefinition {
   id: string
   name: string
   role: string
+  avatar: string
   description: string
   whenToUse: string
   color: string

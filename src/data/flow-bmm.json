@@ -105,7 +105,7 @@
         },
         {
           "label": "Quick Dev",
-          "agentId": "quick-flow",
+          "agentId": "barry",
           "command": "/bmad:bmm:workflows:quick-dev",
           "description": "Use Quick Flow for rapid implementation"
         },
@@ -140,7 +140,7 @@
         },
         {
           "label": "Quick Spec",
-          "agentId": "quick-flow",
+          "agentId": "barry",
           "command": "/bmad:bmm:workflows:quick-spec",
           "description": "Use Quick Flow for quick specification"
         }
@@ -218,7 +218,7 @@
         },
         {
           "label": "Quick Dev",
-          "agentId": "quick-flow",
+          "agentId": "barry",
           "command": "/bmad:bmm:workflows:quick-dev",
           "description": "Use Quick Flow for quick implementation"
         }
@@ -230,6 +230,7 @@
       "id": "analyst",
       "name": "Mary",
       "role": "Analyst",
+      "avatar": "BA",
       "description": "Business analysis and research specialist. Handles brainstorming, market research, and documenting existing projects.",
       "whenToUse": "At the start of a project to understand requirements, research competitors, or document an existing codebase.",
       "color": "#8B5CF6",
@@ -244,6 +245,7 @@
       "id": "pm",
       "name": "John",
       "role": "PM",
+      "avatar": "PM",
       "description": "Product Manager for requirements and planning. Creates PRDs, breaks work into epics and stories, and validates alignment.",
       "whenToUse": "After analysis to define product requirements, create user stories, and plan the project structure.",
       "color": "#3B82F6",
@@ -258,6 +260,7 @@
       "id": "architect",
       "name": "Winston",
       "role": "Architect",
+      "avatar": "AR",
       "description": "System architecture and technical design expert. Produces architecture documents and generates technical diagrams.",
       "whenToUse": "After planning to design the system architecture, choose technologies, and create technical specifications.",
       "color": "#10B981",
@@ -272,6 +275,7 @@
       "id": "sm",
       "name": "Bob",
       "role": "SM",
+      "avatar": "SM",
       "description": "Scrum Master for sprint planning and story preparation. Generates sprint status, creates individual stories, and facilitates retrospectives.",
       "whenToUse": "During sprints to plan work, track progress, prepare stories for development, and run retrospectives.",
       "color": "#F59E0B",
@@ -286,6 +290,7 @@
       "id": "dev",
       "name": "Amelia",
       "role": "DEV",
+      "avatar": "DE",
       "description": "Developer for story implementation and code review. Implements stories with tests and conducts thorough code reviews.",
       "whenToUse": "When stories are ready for development, or when code needs review before merging.",
       "color": "#EF4444",
@@ -297,9 +302,10 @@
       ]
     },
     {
-      "id": "quick-flow",
+      "id": "barry",
       "name": "Barry",
-      "role": "Quick Flow",
+      "role": "Solo Dev",
+      "avatar": "SD",
       "description": "Fast solo developer for small features without handoffs. Combines architectural spec with end-to-end implementation in a streamlined workflow.",
       "whenToUse": "For bug fixes, small features, or quick enhancements that don't need full planning.",
       "color": "#EC4899",
@@ -314,6 +320,7 @@
       "id": "tea",
       "name": "Murat",
       "role": "TEA",
+      "avatar": "TE",
       "description": "Test Architect for quality strategy. Initializes test frameworks, generates E2E tests, automates testing, and validates non-functional requirements.",
       "whenToUse": "When setting up testing infrastructure, writing E2E tests, or validating performance requirements.",
       "color": "#06B6D4",
@@ -328,6 +335,7 @@
       "id": "ux-designer",
       "name": "Sally",
       "role": "UX Designer",
+      "avatar": "UX",
       "description": "User experience and UI design specialist. Creates UX deliverables from product requirements and validates specifications.",
       "whenToUse": "When designing user interfaces, creating wireframes, or validating UX requirements.",
       "color": "#A855F7",
@@ -342,6 +350,7 @@
       "id": "tech-writer",
       "name": "Paige",
       "role": "Tech Writer",
+      "avatar": "TW",
       "description": "Documentation and diagrams specialist. Produces project documentation, flowcharts, and concept explanations.",
       "whenToUse": "When creating documentation, explaining complex concepts, or generating diagrams.",
       "color": "#64748B",

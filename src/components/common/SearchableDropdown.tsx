@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, ReactNode } from 'react'
 import {
   Box,
   Menu,
@@ -11,6 +11,7 @@ import {
 export interface SearchableDropdownItem {
   id: string
   label: string
+  customRender?: ReactNode
 }
 
 interface SearchableDropdownProps {
@@ -170,16 +171,18 @@ export default function SearchableDropdown({
             }}
             onMouseEnter={() => setPreSelectedIndex(index)}
           >
-            <Typography
-              variant="body2"
-              sx={{
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              {item.label}
-            </Typography>
+            {item.customRender || (
+              <Typography
+                variant="body2"
+                sx={{
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                {item.label}
+              </Typography>
+            )}
           </MenuItem>
         ))
       )}

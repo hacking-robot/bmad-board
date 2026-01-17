@@ -122,10 +122,10 @@ export default function WelcomeDialog() {
               >
                 <Typography variant="body2" sx={{ mb: 1.5 }}>
                   <strong>BMAD</strong> (Breakthrough Method of Agile AI-Driven Development) is an AI-powered
-                  framework that uses specialized agents to guide you through software development.
+                  framework that uses specialized teammates to guide you through software development.
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                  Each agent has a specific role: <strong>Analyst</strong> (Mary) handles research,{' '}
+                  Each teammate has a specific role: <strong>Analyst</strong> (Mary) handles research,{' '}
                   <strong>PM</strong> (John) creates requirements, <strong>Architect</strong> (Winston)
                   designs systems, <strong>SM</strong> (Bob) manages stories, and <strong>DEV</strong> (Amelia)
                   implements features.

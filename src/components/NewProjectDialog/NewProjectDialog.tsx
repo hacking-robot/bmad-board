@@ -73,7 +73,7 @@ export default function NewProjectDialog() {
           </Alert>
 
           <Typography variant="body2" color="text.secondary">
-            This project is missing the required BMAD artifacts. Use the BMAD agents
+            This project is missing the required BMAD artifacts. Use the BMAD teammates
             to initialize your project, then open it in BMad Board to visualize your
             development progress.
           </Typography>
