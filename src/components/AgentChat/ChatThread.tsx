@@ -1,9 +1,11 @@
 import { useEffect, useRef, useCallback } from 'react'
 import { Box } from '@mui/material'
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso'
+import { v4 as uuidv4 } from 'uuid'
 import { useStore } from '../../store'
 import { useWorkflow } from '../../hooks/useWorkflow'
 import type { AgentDefinition } from '../../types/flow'
+import type { StoryChatHistory, StoryChatSession, ChatMessage as ChatMessageType } from '../../types'
 import ChatMessage from './ChatMessage'
 import ChatInput from './ChatInput'
 import TypingIndicator from './TypingIndicator'
@@ -38,6 +40,83 @@ function debouncedSaveThread(agentId: string, thread: unknown) {
   saveTimeout = setTimeout(() => {
     window.chatAPI.saveThread(agentId, thread as Parameters<typeof window.chatAPI.saveThread>[1])
   }, 1000)
+}
+
+// Debounce utility for saving story chat history (2s debounce)
+let storyChatSaveTimeout: NodeJS.Timeout | null = null
+const SESSION_MERGE_THRESHOLD_MS = 30 * 60 * 1000 // 30 minutes
+
+async function debouncedSaveStoryChatHistory(
+  projectPath: string,
+  storyId: string,
+  storyTitle: string,
+  agentId: string,
+  agentName: string,
+  messages: ChatMessageType[],
+  branchName?: string
+) {
+  if (storyChatSaveTimeout) clearTimeout(storyChatSaveTimeout)
+  storyChatSaveTimeout = setTimeout(async () => {
+    try {
+      // Load existing history
+      let history: StoryChatHistory | null = await window.chatAPI.loadStoryChatHistory(projectPath, storyId)
+      const now = Date.now()
+
+      if (!history) {
+        // Create new history
+        history = {
+          storyId,
+          storyTitle,
+          sessions: [],
+          lastUpdated: now
+        }
+      }
+
+      // Find the most recent session for this agent
+      const recentSession = history.sessions
+        .filter(s => s.agentId === agentId)
+        .sort((a, b) => (b.endTime || b.startTime) - (a.endTime || a.startTime))[0]
+
+      // Check if we should merge into existing session (within 30 minutes)
+      const withinTimeWindow = recentSession &&
+        (now - (recentSession.endTime || recentSession.startTime)) < SESSION_MERGE_THRESHOLD_MS
+
+      // Check if current messages are a continuation of the stored session
+      // If stored session has messages not in current thread, chat was cleared - don't merge
+      const isContinuation = recentSession && recentSession.messages.length > 0 && messages.length > 0 &&
+        recentSession.messages.some(storedMsg =>
+          messages.some(currentMsg => currentMsg.id === storedMsg.id)
+        )
+
+      const shouldMerge = withinTimeWindow && isContinuation
+
+      if (shouldMerge && recentSession) {
+        // Update existing session with current messages (which includes old + new)
+        recentSession.messages = messages
+        recentSession.endTime = now
+        recentSession.branchName = branchName
+      } else {
+        // Create new session
+        const newSession: StoryChatSession = {
+          sessionId: uuidv4(),
+          agentId,
+          agentName,
+          messages,
+          startTime: messages.length > 0 ? messages[0].timestamp : now,
+          endTime: now,
+          branchName
+        }
+        history.sessions.push(newSession)
+      }
+
+      history.lastUpdated = now
+
+      // Save to both locations
+      await window.chatAPI.saveStoryChatHistory(projectPath, storyId, history)
+    } catch (error) {
+      console.error('Failed to save story chat history:', error)
+    }
+  }, 2000)
 }
 
 // Map Claude tool names to human-readable activity descriptions
@@ -108,8 +187,26 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
   useEffect(() => {
     if (thread && thread.messages.length > 0) {
       debouncedSaveThread(agentId, thread)
+
+      // Also save to story chat history if this thread is linked to a story
+      if (thread.storyId && projectPath && agent) {
+        // Get the story title from the store
+        const stories = useStore.getState().stories
+        const story = stories.find(s => s.id === thread.storyId)
+        const storyTitle = story?.title || thread.storyId
+
+        debouncedSaveStoryChatHistory(
+          projectPath,
+          thread.storyId,
+          storyTitle,
+          agentId,
+          agent.name,
+          thread.messages,
+          thread.branchName
+        )
+      }
     }
-  }, [agentId, thread])
+  }, [agentId, thread, projectPath, agent])
 
   // Helper to create a new assistant message for a new response turn
   const createNewAssistantMessage = useCallback(() => {
