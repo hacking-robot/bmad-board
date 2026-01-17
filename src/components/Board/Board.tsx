@@ -317,7 +317,7 @@ export default function Board() {
         // Moving TO human-review: just add to app-level list
         addToHumanReview(story.id)
         // Record the status change
-        recordStatusChange(story.id, story.title, currentEffectiveStatus, 'human-review', 'user')
+        recordStatusChange(story.id, story.title, story.epicId, story.storyNumber, currentEffectiveStatus, 'human-review', 'user')
         // Add to top of human-review column order
         const targetColumnStories = allStories
           .filter((s) => getEffectiveStatus(s) === 'human-review')
@@ -356,7 +356,7 @@ export default function Board() {
           // Record the status change (use story.status as old, since we're moving from BMAD status)
           // If was in human-review, the effective status was 'human-review', otherwise it's the story's actual status
           const oldStatus = wasInHumanReview ? 'human-review' : story.status
-          recordStatusChange(story.id, story.title, oldStatus, newStatus, 'user')
+          recordStatusChange(story.id, story.title, story.epicId, story.storyNumber, oldStatus, newStatus, 'user')
           addToColumnOrder()
           setSnackbarMessage(`Moved "${story.title}" to ${newStatus}`)
           setSnackbarOpen(true)
