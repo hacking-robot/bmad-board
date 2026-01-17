@@ -138,6 +138,11 @@ function ChatSession({ session, isDark }: { session: StoryChatSession; isDark: b
         <ChatIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
         <Typography fontWeight={500} sx={{ flex: 1 }}>
           {session.agentName}
+          {session.agentRole && (
+            <Typography component="span" color="text.secondary" sx={{ ml: 0.5, fontWeight: 400 }}>
+              ({session.agentRole})
+            </Typography>
+          )}
         </Typography>
         <Chip
           label={`${userMessageCount} message${userMessageCount !== 1 ? 's' : ''}`}
@@ -184,7 +189,16 @@ function ChatSession({ session, isDark }: { session: StoryChatSession; isDark: b
                     color: message.role === 'user' ? 'primary.main' : 'success.main'
                   }}
                 >
-                  {message.role === 'user' ? 'You' : session.agentName}
+                  {message.role === 'user' ? 'You' : (
+                    <>
+                      {session.agentName}
+                      {session.agentRole && (
+                        <Typography component="span" variant="caption" color="text.secondary" sx={{ fontWeight: 400 }}>
+                          {' '}({session.agentRole})
+                        </Typography>
+                      )}
+                    </>
+                  )}
                 </Typography>
                 <Typography variant="caption" color="text.disabled">
                   {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

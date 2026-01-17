@@ -69,6 +69,9 @@ export interface AppSettings {
   windowBounds?: WindowBounds
   notificationsEnabled: boolean
   storyOrder: Record<string, Record<string, string[]>> // { [epicId]: { [status]: [storyIds...] } }
+  // Git settings
+  principalBranch: 'main' | 'master' | 'develop'
+  allowDirectEpicMerge: boolean // Allow merging epic branches to principal without PR
   // Human Review feature
   enableHumanReviewColumn: boolean
   humanReviewChecklist: HumanReviewChecklistItem[]
@@ -347,6 +350,7 @@ export interface StoryChatSession {
   sessionId: string
   agentId: string
   agentName: string
+  agentRole?: string
   messages: ChatMessage[]
   startTime: number
   endTime?: number
