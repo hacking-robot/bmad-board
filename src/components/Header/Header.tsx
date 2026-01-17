@@ -6,7 +6,7 @@ import {
   IconButton,
   Tooltip,
   Badge,
-  Chip
+  Chip,
 } from '@mui/material'
 import logoDark from '../../assets/logo-dark.svg'
 import logoLight from '../../assets/logo-light.svg'
@@ -31,7 +31,15 @@ export default function Header() {
   const setHelpPanelOpen = useStore((state) => state.setHelpPanelOpen)
   const projectType = useStore((state) => state.projectType)
   const themeMode = useStore((state) => state.themeMode)
+  const viewMode = useStore((state) => state.viewMode)
+  const chatThreads = useStore((state) => state.chatThreads)
   const { loadProjectData } = useProjectData()
+
+  // Count chat agents currently running (isTyping)
+  const runningChatAgents = Object.values(chatThreads).filter(
+    (thread) => thread?.isTyping
+  ).length
+
 
   const isGameProject = projectType === 'bmgd'
   const logoSrc = themeMode === 'dark' ? logoDark : logoLight
@@ -111,6 +119,28 @@ export default function Header() {
               }}
             />
           )}
+
+
+          {/* Running Agents Indicator */}
+          {runningChatAgents > 0 && (
+            <Chip
+              label={`${runningChatAgents} teammate${runningChatAgents > 1 ? 's' : ''} working`}
+              size="small"
+              sx={{
+                ml: 1,
+                height: 22,
+                bgcolor: 'success.main',
+                color: 'white',
+                fontWeight: 500,
+                fontSize: '0.7rem',
+                animation: 'pulse 1.5s ease-in-out infinite',
+                '@keyframes pulse': {
+                  '0%, 100%': { opacity: 1 },
+                  '50%': { opacity: 0.6 }
+                }
+              }}
+            />
+          )}
         </Box>
 
         {/* Spacer */}
@@ -121,11 +151,11 @@ export default function Header() {
 
         {/* Right section - Search, Filter, Actions */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <SearchBar />
-          <EpicFilter />
+          {viewMode === 'board' && <SearchBar />}
+          {viewMode === 'board' && <EpicFilter />}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            {enableAgents && (
-              <Tooltip title={agentPanelOpen ? 'Hide Agents' : 'Show Agents'}>
+            {enableAgents && viewMode === 'board' && (
+              <Tooltip title={agentPanelOpen ? 'Hide Teammates' : 'Show Teammates'}>
                 <IconButton
                   onClick={toggleAgentPanel}
                   size="small"
@@ -152,15 +182,17 @@ export default function Header() {
                 <HelpOutlineIcon />
               </IconButton>
             </Tooltip>
-            <Tooltip title="Refresh">
-              <IconButton
-                onClick={loadProjectData}
-                size="small"
-                sx={{ color: 'text.secondary' }}
-              >
-                <RefreshIcon />
-              </IconButton>
-            </Tooltip>
+            {viewMode === 'board' && (
+              <Tooltip title="Refresh">
+                <IconButton
+                  onClick={loadProjectData}
+                  size="small"
+                  sx={{ color: 'text.secondary' }}
+                >
+                  <RefreshIcon />
+                </IconButton>
+              </Tooltip>
+            )}
             <ThemeToggle />
             <SettingsMenu />
           </Box>

@@ -128,7 +128,7 @@
         },
         {
           "label": "Sprint Status",
-          "agentId": "game-sm",
+          "agentId": "game-scrum-master",
           "command": "/bmad:bmgd:workflows:sprint-status",
           "description": "Use Game SM to check sprint progress"
         },
@@ -208,7 +208,7 @@
       "nextSteps": [
         {
           "label": "Retrospective",
-          "agentId": "game-sm",
+          "agentId": "game-scrum-master",
           "command": "/bmad:bmgd:workflows:retrospective",
           "description": "Use Game SM to run retrospective"
         },
@@ -240,9 +240,10 @@
   "agents": [
     {
       "id": "game-designer",
-      "name": "GD",
+      "name": "Samus Shepard",
       "role": "Game Designer",
-      "description": "Game design specialist. Creates Game Design Documents, defines mechanics, systems, and game-type-specific features.",
+      "avatar": "GD",
+      "description": "Lead Game Designer and Creative Vision Architect. Creates Game Design Documents, defines mechanics, systems, and game-type-specific features.",
       "whenToUse": "At the start of a game project to define mechanics, create GDDs, and design game systems.",
       "color": "#8B5CF6",
       "commands": ["/bmad:bmgd:agents:game-designer", "/bmad:bmgd:workflows:create-gdd", "/bmad:bmgd:workflows:create-story", "/bmad:bmgd:workflows:narrative"],
@@ -254,9 +255,10 @@
     },
     {
       "id": "game-architect",
-      "name": "GA",
+      "name": "Cloud Dragonborn",
       "role": "Game Architect",
-      "description": "Technical architecture for games. Handles engine selection, system architecture, and technical specifications.",
+      "avatar": "GA",
+      "description": "Principal Game Systems Architect and Technical Director. Handles engine selection, system architecture, and technical specifications.",
       "whenToUse": "After game design to select engine (Unity, Unreal, Godot), design architecture, and create technical specs.",
       "color": "#10B981",
       "commands": ["/bmad:bmgd:agents:game-architect", "/bmad:bmgd:workflows:game-architecture"],
@@ -267,10 +269,11 @@
       ]
     },
     {
-      "id": "game-sm",
-      "name": "GSM",
-      "role": "Game SM",
-      "description": "Scrum Master for game development. Tracks milestones, manages sprints, and facilitates retrospectives.",
+      "id": "game-scrum-master",
+      "name": "Max",
+      "role": "Game Scrum Master",
+      "avatar": "GS",
+      "description": "Game Development Scrum Master and Sprint Orchestrator. Tracks milestones, manages sprints, and facilitates retrospectives.",
       "whenToUse": "During production to plan sprints, track progress, prepare stories, and run retrospectives.",
       "color": "#F59E0B",
       "commands": ["/bmad:bmgd:agents:game-scrum-master", "/bmad:bmgd:workflows:sprint-status", "/bmad:bmgd:workflows:sprint-planning", "/bmad:bmgd:workflows:retrospective"],
@@ -282,9 +285,10 @@
     },
     {
       "id": "game-dev",
-      "name": "GDev",
-      "role": "Game Dev",
-      "description": "Game implementation specialist. Implements game features, systems, and mechanics following the GDD and architecture.",
+      "name": "Link Freeman",
+      "role": "Game Developer",
+      "avatar": "GV",
+      "description": "Senior Game Developer and Technical Implementation Specialist. Implements game features, systems, and mechanics following the GDD and architecture.",
       "whenToUse": "When game stories are ready for development, or when code needs review.",
       "color": "#EF4444",
       "commands": ["/bmad:bmgd:agents:game-dev", "/bmad:bmgd:workflows:dev-story", "/bmad:bmgd:workflows:code-review"],
@@ -298,7 +302,8 @@
       "id": "game-solo-dev",
       "name": "Indie",
       "role": "Game Solo Dev",
-      "description": "Rapid prototyping and iteration specialist for solo developers. Combines quick prototyping with flexible development for small teams.",
+      "avatar": "SD",
+      "description": "Elite Indie Game Developer and Quick Flow Specialist. Combines rapid prototyping with flexible development for solo developers and small teams.",
       "whenToUse": "For quick prototypes, rapid iteration, or when working solo without full planning overhead.",
       "color": "#EC4899",
       "commands": ["/bmad:bmgd:agents:game-solo-dev", "/bmad:bmgd:workflows:quick-prototype", "/bmad:bmgd:workflows:quick-dev", "/bmad:bmgd:workflows:quick-spec"],
@@ -310,9 +315,10 @@
     },
     {
       "id": "game-qa",
-      "name": "GQA",
+      "name": "GLaDOS",
       "role": "Game QA",
-      "description": "Game testing and quality assurance specialist. Creates test frameworks, playtest plans, and validates performance requirements.",
+      "avatar": "GQ",
+      "description": "Game QA Architect and Test Automation Specialist. Creates test frameworks, playtest plans, and validates performance requirements.",
       "whenToUse": "When setting up testing infrastructure, creating playtest plans, or validating game performance.",
       "color": "#06B6D4",
       "commands": ["/bmad:bmgd:agents:game-qa", "/bmad:bmgd:workflows:gametest-framework", "/bmad:bmgd:workflows:gametest-playtest-plan", "/bmad:bmgd:workflows:gametest-performance"],

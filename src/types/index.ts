@@ -130,3 +130,29 @@ export interface AgentHistoryEntry {
 
 // NOTE: Agent actions are now defined in src/data/flow.json
 // Use the useWorkflow hook to access workflow data
+
+// Chat interface types
+export interface ChatMessage {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  timestamp: number
+  status: 'pending' | 'streaming' | 'complete' | 'error'
+}
+
+export interface AgentThread {
+  agentId: string
+  messages: ChatMessage[]
+  lastActivity: number
+  unreadCount: number
+  isTyping: boolean
+  isInitialized: boolean // Whether the BMAD agent has been loaded in the session
+  sessionId?: string // Claude conversation session ID for --resume
+  thinkingActivity?: string // What Claude is currently doing (e.g., "Reading file...", "Searching...")
+  storyId?: string // The story this thread is working on
+  branchName?: string // The branch this thread is working on
+}
+
+// NOTE: BMAD agent definitions are now in src/data/flow-bmm.json and src/data/flow-bmgd.json
+// Use the useWorkflow hook to access agent data
+
