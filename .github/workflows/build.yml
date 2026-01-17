@@ -27,6 +27,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+      - name: Pull latest changes
+        run: git pull origin ${{ github.ref_name }} --rebase
+
       - name: Bump version
         id: bump
         run: |
@@ -70,10 +73,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: master  # Get the version-bumped commit
+          ref: ${{ github.ref_name }}  # Get the version-bumped commit
 
       - name: Pull latest changes
-        run: git pull origin master
+        run: git pull origin ${{ github.ref_name }}
 
       - name: Setup Python (for node-gyp)
         uses: actions/setup-python@v5
