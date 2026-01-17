@@ -93,6 +93,11 @@ function StatusChangeRow({ entry, onStoryClick }: { entry: StatusChangeEntry; on
           }}
           onClick={() => onStoryClick?.(entry.storyId)}
         >
+          {entry.epicId !== undefined && entry.storyNumber !== undefined && (
+            <Box component="span" sx={{ color: 'text.secondary', fontWeight: 400 }}>
+              {entry.epicId}.{entry.storyNumber}{' '}
+            </Box>
+          )}
           {entry.storyTitle}
         </Typography>
         <Typography variant="caption" color="text.secondary">
