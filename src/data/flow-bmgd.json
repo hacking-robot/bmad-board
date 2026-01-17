@@ -76,9 +76,9 @@
       "nextSteps": [
         {
           "label": "Create Story",
-          "agentId": "game-designer",
+          "agentId": "game-scrum-master",
           "command": "/bmad:bmgd:workflows:create-story",
-          "description": "Use Game Designer to draft story with mechanics"
+          "description": "Use Game Scrum Master to draft story for development"
         },
         {
           "label": "Create GDD",
@@ -224,9 +224,9 @@
       "nextSteps": [
         {
           "label": "Create Story",
-          "agentId": "game-designer",
+          "agentId": "game-scrum-master",
           "command": "/bmad:bmgd:workflows:create-story",
-          "description": "Use Game Designer to prioritize and refine story"
+          "description": "Use Game Scrum Master to prioritize and refine story"
         },
         {
           "label": "Quick Prototype",
@@ -246,7 +246,7 @@
       "description": "Lead Game Designer and Creative Vision Architect. Creates Game Design Documents, defines mechanics, systems, and game-type-specific features.",
       "whenToUse": "At the start of a game project to define mechanics, create GDDs, and design game systems.",
       "color": "#8B5CF6",
-      "commands": ["/bmad:bmgd:agents:game-designer", "/bmad:bmgd:workflows:create-gdd", "/bmad:bmgd:workflows:create-story", "/bmad:bmgd:workflows:narrative"],
+      "commands": ["/bmad:bmgd:agents:game-designer", "/bmad:bmgd:workflows:create-gdd", "/bmad:bmgd:workflows:narrative", "/bmad:bmgd:workflows:brainstorm-game"],
       "examplePrompts": [
         "Create a GDD for a 2D platformer",
         "Design the combat mechanics for the RPG",
@@ -276,7 +276,7 @@
       "description": "Game Development Scrum Master and Sprint Orchestrator. Tracks milestones, manages sprints, and facilitates retrospectives.",
       "whenToUse": "During production to plan sprints, track progress, prepare stories, and run retrospectives.",
       "color": "#F59E0B",
-      "commands": ["/bmad:bmgd:agents:game-scrum-master", "/bmad:bmgd:workflows:sprint-status", "/bmad:bmgd:workflows:sprint-planning", "/bmad:bmgd:workflows:retrospective"],
+      "commands": ["/bmad:bmgd:agents:game-scrum-master", "/bmad:bmgd:workflows:create-story", "/bmad:bmgd:workflows:sprint-status", "/bmad:bmgd:workflows:sprint-planning", "/bmad:bmgd:workflows:retrospective"],
       "examplePrompts": [
         "Generate the current sprint status",
         "Prepare story 2.3 for development",

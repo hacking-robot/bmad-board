@@ -76,9 +76,9 @@
       "nextSteps": [
         {
           "label": "Create Story",
-          "agentId": "pm",
+          "agentId": "sm",
           "command": "/bmad:bmm:workflows:create-story",
-          "description": "Use PM to draft story with acceptance criteria"
+          "description": "Use SM to draft story with acceptance criteria"
         },
         {
           "label": "Create Epics & Stories",
@@ -212,9 +212,9 @@
       "nextSteps": [
         {
           "label": "Create Story",
-          "agentId": "pm",
+          "agentId": "sm",
           "command": "/bmad:bmm:workflows:create-story",
-          "description": "Use PM to prioritize and refine story"
+          "description": "Use SM to prioritize and refine story"
         },
         {
           "label": "Quick Dev",
@@ -249,7 +249,7 @@
       "description": "Product Manager for requirements and planning. Creates PRDs, breaks work into epics and stories, and validates alignment.",
       "whenToUse": "After analysis to define product requirements, create user stories, and plan the project structure.",
       "color": "#3B82F6",
-      "commands": ["/bmad:bmm:agents:pm", "/bmad:bmm:workflows:prd", "/bmad:bmm:workflows:create-epics-and-stories", "/bmad:bmm:workflows:create-story"],
+      "commands": ["/bmad:bmm:agents:pm", "/bmad:bmm:workflows:prd", "/bmad:bmm:workflows:create-epics-and-stories", "/bmad:bmm:workflows:check-implementation-readiness"],
       "examplePrompts": [
         "Create a PRD for user authentication",
         "Break this feature into epics and stories",
@@ -279,7 +279,7 @@
       "description": "Scrum Master for sprint planning and story preparation. Generates sprint status, creates individual stories, and facilitates retrospectives.",
       "whenToUse": "During sprints to plan work, track progress, prepare stories for development, and run retrospectives.",
       "color": "#F59E0B",
-      "commands": ["/bmad:bmm:agents:sm", "/bmad:bmm:workflows:sprint-status", "/bmad:bmm:workflows:sprint-planning", "/bmad:bmm:workflows:retrospective"],
+      "commands": ["/bmad:bmm:agents:sm", "/bmad:bmm:workflows:create-story", "/bmad:bmm:workflows:sprint-status", "/bmad:bmm:workflows:sprint-planning", "/bmad:bmm:workflows:retrospective"],
       "examplePrompts": [
         "Generate the current sprint status",
         "Prepare story 2.3 for development",
