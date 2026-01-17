@@ -158,6 +158,7 @@ export interface StoryChatSession {
   sessionId: string          // UUID for this session
   agentId: string            // e.g., "dev", "pm"
   agentName: string          // Human-readable name
+  agentRole?: string         // Agent role (e.g., "PM", "DEV")
   messages: ChatMessage[]    // Conversation messages
   startTime: number
   endTime?: number
