@@ -140,8 +140,8 @@ export function useProjectData() {
       setStories(stories)
       setLastRefreshed(new Date())
 
-      // Get human review settings
-      const { enableHumanReviewColumn, humanReviewStories, addToHumanReview, isInHumanReview } = useStore.getState()
+      // Get human review settings and status change recording
+      const { enableHumanReviewColumn, humanReviewStories, addToHumanReview, isInHumanReview, recordStatusChange } = useStore.getState()
 
       // Check for status changes (only for external changes, not user drags)
       if (!isUserDragging && previousStatuses.size > 0) {
@@ -158,6 +158,8 @@ export function useProjectData() {
                 if (!isInHumanReview(story.id)) {
                   addToHumanReview(story.id)
                 }
+                // Record the status change (from old status to human-review, since that's the effective status)
+                recordStatusChange(story.id, story.title, oldStatus, 'human-review', 'external')
                 // Show notification about the interception
                 if (notificationsEnabled) {
                   window.fileAPI.showNotification(
@@ -169,6 +171,8 @@ export function useProjectData() {
               }
             }
 
+            // Record the external status change
+            recordStatusChange(story.id, story.title, oldStatus, story.status, 'external')
             // Show normal status change notification
             if (notificationsEnabled) {
               window.fileAPI.showNotification(
