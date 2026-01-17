@@ -248,7 +248,7 @@ const categoryColors = {
 const categoryLabels = {
   workflow: 'Workflow',
   story: 'Story Management',
-  agent: 'Agent Control',
+  agent: 'Teammate Control',
   utility: 'Utility'
 }
 
@@ -273,7 +273,7 @@ export default function CommandsTab() {
   return (
     <Box>
       <Alert severity="info" sx={{ mb: 2 }}>
-        Using <strong>{selectedTool.name}</strong>. To invoke agents, use{' '}
+        Using <strong>{selectedTool.name}</strong>. To invoke teammates, use{' '}
         <code style={{ fontWeight: 600 }}>{aiTool === 'claude-code' ? `/bmad:${projectType || 'bmm'}:agents:...` : `${selectedTool.agentPrefix}agent`}</code> syntax
         (e.g., <code>{formatAgentInvocation('pm', aiTool, projectType)}</code>, <code>{formatAgentInvocation('dev', aiTool, projectType)}</code>).
         Change your tool in Settings.
@@ -310,7 +310,7 @@ export default function CommandsTab() {
                 <TableRow sx={{ bgcolor: 'action.hover' }}>
                   <TableCell sx={{ fontWeight: 600, width: '25%' }}>Command</TableCell>
                   <TableCell sx={{ fontWeight: 600, width: '35%' }}>Description</TableCell>
-                  <TableCell sx={{ fontWeight: 600, width: '20%' }}>Agent</TableCell>
+                  <TableCell sx={{ fontWeight: 600, width: '20%' }}>Teammate</TableCell>
                   <TableCell sx={{ fontWeight: 600, width: '20%' }}>Example</TableCell>
                 </TableRow>
               </TableHead>
@@ -383,13 +383,13 @@ export default function CommandsTab() {
         </Typography>
         <Box component="ul" sx={{ m: 0, pl: 2 }}>
           <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-            Start a session with <code>{formatAgentInvocation('pm', aiTool, projectType)}</code> or <code>{formatAgentInvocation('dev', aiTool, projectType)}</code> to invoke a BMAD agent
+            Start a session with <code>{formatAgentInvocation('pm', aiTool, projectType)}</code> or <code>{formatAgentInvocation('dev', aiTool, projectType)}</code> to invoke a BMAD teammate
           </Typography>
           <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
             Run <code>{formatCommand('workflow-init', aiTool, projectType)}</code> to let BMAD analyze your project and recommend the best track
           </Typography>
           <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-            Use <code>{formatCommand('menu', aiTool, projectType)}</code> with any agent to see their available actions
+            Use <code>{formatCommand('menu', aiTool, projectType)}</code> with any teammate to see their available actions
           </Typography>
           <Typography component="li" variant="body2" color="text.secondary">
             For quick fixes, use <code>{formatAgentInvocation('quick-flow', aiTool, projectType)}</code> with Barry and <code>{formatCommand('quick-fix', aiTool, projectType)}</code>

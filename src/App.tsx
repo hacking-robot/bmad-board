@@ -1,5 +1,7 @@
 import { useMemo, useEffect } from 'react'
-import { ThemeProvider, CssBaseline, Box, CircularProgress } from '@mui/material'
+import { ThemeProvider, CssBaseline, Box, CircularProgress, IconButton, Tooltip } from '@mui/material'
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
+import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import { useStore } from './store'
 import { lightTheme, darkTheme } from './theme'
 import Header from './components/Header/Header'
@@ -12,6 +14,7 @@ import CommandPalette from './components/CommandPalette'
 import KeyboardShortcuts from './components/KeyboardShortcuts'
 import HelpPanel from './components/HelpPanel'
 import StatusBar from './components/StatusBar'
+import { AgentChat } from './components/AgentChat'
 
 const AGENT_PANEL_WIDTH = 500
 
@@ -24,8 +27,23 @@ export default function App() {
   const helpPanelOpen = useStore((state) => state.helpPanelOpen)
   const helpPanelTab = useStore((state) => state.helpPanelTab)
   const setHelpPanelOpen = useStore((state) => state.setHelpPanelOpen)
+  const viewMode = useStore((state) => state.viewMode)
+  const toggleViewMode = useStore((state) => state.toggleViewMode)
 
-  const showAgentPanel = agentPanelOpen && enableAgents
+  const showAgentPanel = agentPanelOpen && enableAgents && viewMode === 'board'
+  const showChatView = viewMode === 'chat'
+
+  // Keyboard shortcut for view toggle (Cmd+Shift+A)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'a') {
+        e.preventDefault()
+        toggleViewMode()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [toggleViewMode])
 
   // Listen for custom event to open help panel
   useEffect(() => {
@@ -94,10 +112,110 @@ export default function App() {
               }}
             >
               <Header />
-              <Board />
-              <StatusBar />
+              {/* Board with chat sidebar overlay */}
+              <Box sx={{ flex: 1, position: 'relative', overflow: 'hidden', minHeight: 0 }}>
+                {/* Board view - always full width */}
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    inset: 0,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    overflow: 'hidden'
+                  }}
+                >
+                  <Board />
+                  <StatusBar />
+                </Box>
+
+                {/* Backdrop to close sidebar on click outside */}
+                {showChatView && (
+                  <Box
+                    onClick={toggleViewMode}
+                    sx={{
+                      position: 'absolute',
+                      inset: 0,
+                      bgcolor: 'rgba(0, 0, 0, 0.3)',
+                      zIndex: 9,
+                      cursor: 'pointer'
+                    }}
+                  />
+                )}
+
+                {/* Chat sidebar - slides over from left */}
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    bottom: 0,
+                    width: '75%',
+                    maxWidth: 1200,
+                    transform: showChatView ? 'translateX(0)' : 'translateX(-100%)',
+                    transition: 'transform 225ms cubic-bezier(0, 0, 0.2, 1)',
+                    bgcolor: 'background.paper',
+                    borderRight: 1,
+                    borderColor: 'divider',
+                    display: 'flex',
+                    boxShadow: showChatView ? 8 : 0,
+                    zIndex: 10
+                  }}
+                >
+                  <AgentChat />
+                  {/* Close button on right edge of sidebar */}
+                  {showChatView && (
+                    <Tooltip title="Close chat (⌘⇧A)" placement="right">
+                      <IconButton
+                        onClick={toggleViewMode}
+                        sx={{
+                          position: 'absolute',
+                          right: -32,
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          bgcolor: 'background.paper',
+                          border: 1,
+                          borderColor: 'divider',
+                          borderLeft: 0,
+                          borderRadius: '0 8px 8px 0',
+                          width: 32,
+                          height: 64,
+                          '&:hover': { bgcolor: 'action.hover' }
+                        }}
+                      >
+                        <ChevronLeftIcon sx={{ fontSize: 20 }} />
+                      </IconButton>
+                    </Tooltip>
+                  )}
+                </Box>
+
+                {/* Toggle button when chat is closed */}
+                {!showChatView && (
+                  <Tooltip title="Open teammates chat (⌘⇧A)" placement="right">
+                    <IconButton
+                      onClick={toggleViewMode}
+                      sx={{
+                        position: 'absolute',
+                        left: 0,
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        bgcolor: 'background.paper',
+                        border: 1,
+                        borderColor: 'divider',
+                        borderLeft: 0,
+                        borderRadius: '0 8px 8px 0',
+                        width: 32,
+                        height: 64,
+                        zIndex: 5,
+                        '&:hover': { bgcolor: 'action.hover' }
+                      }}
+                    >
+                      <ChevronRightIcon sx={{ fontSize: 20 }} />
+                    </IconButton>
+                  </Tooltip>
+                )}
+              </Box>
             </Box>
-            {enableAgents && <AgentPanel />}
+            {enableAgents && !showChatView && <AgentPanel />}
             <StoryDialog />
           </>
         )}

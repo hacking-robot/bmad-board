@@ -19,6 +19,11 @@
 - **Auto-Refresh**: File watching detects changes to story files
 - **Collapsible Columns**: Minimize columns to focus on active work
 - **Command Palette**: Quick access to actions with keyboard shortcuts
+- **AI Agent Integration**: See which AI teammates are working on stories with real-time indicators
+- **Agent Chat Sidebar**: Sliding chat panel to communicate with AI agents (`Cmd+Shift+A`)
+- **Git Integration**: View uncommitted changes, switch branches, and see git diffs for stories
+- **Project Switcher**: Quickly switch between multiple BMAD projects
+- **Keyboard Shortcuts**: Comprehensive shortcuts for efficient navigation
 
 ## Compatibility
 

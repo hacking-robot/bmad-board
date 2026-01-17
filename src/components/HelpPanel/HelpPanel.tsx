@@ -130,7 +130,7 @@ export default function HelpPanel({ open, onClose, initialTab = 0 }: HelpPanelPr
           <Tab
             icon={<GroupIcon />}
             iconPosition="start"
-            label="Agents"
+            label="Teammates"
             sx={{ minHeight: 48 }}
           />
           <Tab
