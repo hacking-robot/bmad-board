@@ -39,6 +39,8 @@ import { gruvbox } from '../../theme'
 import { EPIC_COLORS, STATUS_COLUMNS } from '../../types'
 import { useWorkflow } from '../../hooks/useWorkflow'
 import GitDiffDialog from '../GitDiffDialog'
+import ChatHistorySection from './ChatHistorySection'
+import StatusHistorySection from './StatusHistorySection'
 
 // Factory function to create code component with theme awareness
 const createCodeBlock = (isDark: boolean): Components['code'] => {
@@ -619,6 +621,12 @@ export default function StoryDialog() {
                 </AccordionDetails>
               </Accordion>
             )}
+
+            {/* Chat History (Collapsible) */}
+            <ChatHistorySection storyId={selectedStory.id} />
+
+            {/* Status History (Collapsible) */}
+            <StatusHistorySection storyId={selectedStory.id} />
 
           </Box>
         )}

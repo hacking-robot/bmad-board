@@ -1,9 +1,11 @@
-import { useEffect } from 'react'
+import { useEffect, useCallback } from 'react'
 import { Box, Typography, IconButton, Tooltip } from '@mui/material'
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
+import { v4 as uuidv4 } from 'uuid'
 import { useStore } from '../../store'
 import { useWorkflow } from '../../hooks/useWorkflow'
+import type { StoryChatHistory, StoryChatSession } from '../../types'
 import AgentSidebar from './AgentSidebar'
 import ChatThread from './ChatThread'
 
@@ -15,17 +17,62 @@ export default function AgentChat() {
   const chatThreads = useStore((state) => state.chatThreads)
   const clearChatThread = useStore((state) => state.clearChatThread)
   const setHelpPanelOpen = useStore((state) => state.setHelpPanelOpen)
+  const projectPath = useStore((state) => state.projectPath)
+  const stories = useStore((state) => state.stories)
 
   // Get agents from workflow (based on current project type)
   const { agents } = useWorkflow()
 
-  const handleClearChat = () => {
-    if (selectedChatAgent) {
-      clearChatThread(selectedChatAgent)
-      // Also clear persisted thread
-      window.chatAPI.clearThread(selectedChatAgent)
+  const handleClearChat = useCallback(async () => {
+    if (!selectedChatAgent) return
+
+    const thread = chatThreads[selectedChatAgent]
+    const agent = agents.find(a => a.id === selectedChatAgent)
+
+    // If thread has messages and is linked to a story, save to story history first
+    if (thread && thread.messages.length > 0 && thread.storyId && projectPath && agent) {
+      try {
+        const story = stories.find(s => s.id === thread.storyId)
+        const storyTitle = story?.title || thread.storyId
+
+        // Load existing history
+        let history: StoryChatHistory | null = await window.chatAPI.loadStoryChatHistory(projectPath, thread.storyId)
+        const now = Date.now()
+
+        if (!history) {
+          history = {
+            storyId: thread.storyId,
+            storyTitle,
+            sessions: [],
+            lastUpdated: now
+          }
+        }
+
+        // Create a new finalized session for this cleared chat
+        const newSession: StoryChatSession = {
+          sessionId: uuidv4(),
+          agentId: selectedChatAgent,
+          agentName: agent.name,
+          messages: thread.messages,
+          startTime: thread.messages[0].timestamp,
+          endTime: now,
+          branchName: thread.branchName
+        }
+        history.sessions.push(newSession)
+        history.lastUpdated = now
+
+        // Save to story history
+        await window.chatAPI.saveStoryChatHistory(projectPath, thread.storyId, history)
+        console.log('Saved chat session to story history before clearing:', thread.storyId)
+      } catch (error) {
+        console.error('Failed to save chat session before clearing:', error)
+      }
     }
-  }
+
+    // Clear the thread
+    clearChatThread(selectedChatAgent)
+    window.chatAPI.clearThread(selectedChatAgent)
+  }, [selectedChatAgent, chatThreads, agents, projectPath, stories, clearChatThread])
 
   // Select first agent if none selected or current selection invalid for project type
   useEffect(() => {

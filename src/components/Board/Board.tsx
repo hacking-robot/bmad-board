@@ -44,6 +44,7 @@ export default function Board() {
   const addToHumanReview = useStore((state) => state.addToHumanReview)
   const removeFromHumanReview = useStore((state) => state.removeFromHumanReview)
   const getEffectiveStatus = useStore((state) => state.getEffectiveStatus)
+  const recordStatusChange = useStore((state) => state.recordStatusChange)
   const chatThreads = useStore((state) => state.chatThreads)
   const { loadProjectData } = useProjectData()
   const { agents: bmadAgents } = useWorkflow()
@@ -211,6 +212,8 @@ export default function Board() {
       if (newStatus === 'human-review') {
         // Moving TO human-review: just add to app-level list
         addToHumanReview(story.id)
+        // Record the status change
+        recordStatusChange(story.id, story.title, currentEffectiveStatus, 'human-review', 'user')
         // Add to top of human-review column order
         const targetColumnStories = allStories
           .filter((s) => getEffectiveStatus(s) === 'human-review')
@@ -246,6 +249,10 @@ export default function Board() {
         setIsUserDragging(true)
         const result = await window.fileAPI.updateStoryStatus(story.filePath, newStatus)
         if (result.success) {
+          // Record the status change (use story.status as old, since we're moving from BMAD status)
+          // If was in human-review, the effective status was 'human-review', otherwise it's the story's actual status
+          const oldStatus = wasInHumanReview ? 'human-review' : story.status
+          recordStatusChange(story.id, story.title, oldStatus, newStatus, 'user')
           addToColumnOrder()
           setSnackbarMessage(`Moved "${story.title}" to ${newStatus}`)
           setSnackbarOpen(true)

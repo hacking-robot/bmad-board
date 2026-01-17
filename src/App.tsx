@@ -15,6 +15,7 @@ import KeyboardShortcuts from './components/KeyboardShortcuts'
 import HelpPanel from './components/HelpPanel'
 import StatusBar from './components/StatusBar'
 import { AgentChat } from './components/AgentChat'
+import StatusHistoryPanel from './components/StatusHistoryPanel/StatusHistoryPanel'
 
 const AGENT_PANEL_WIDTH = 500
 
@@ -29,9 +30,12 @@ export default function App() {
   const setHelpPanelOpen = useStore((state) => state.setHelpPanelOpen)
   const viewMode = useStore((state) => state.viewMode)
   const toggleViewMode = useStore((state) => state.toggleViewMode)
+  const aiTool = useStore((state) => state.aiTool)
 
-  const showAgentPanel = agentPanelOpen && enableAgents && viewMode === 'board'
-  const showChatView = viewMode === 'chat'
+  // Agent features only available with Claude Code
+  const isClaudeCode = aiTool === 'claude-code'
+  const showAgentPanel = agentPanelOpen && enableAgents && viewMode === 'board' && isClaudeCode
+  const showChatView = viewMode === 'chat' && isClaudeCode
 
   // Keyboard shortcut for view toggle (Cmd+Shift+A)
   useEffect(() => {
@@ -188,8 +192,8 @@ export default function App() {
                   )}
                 </Box>
 
-                {/* Toggle button when chat is closed */}
-                {!showChatView && (
+                {/* Toggle button when chat is closed - only for Claude Code */}
+                {!showChatView && isClaudeCode && (
                   <Tooltip title="Open teammates chat (⌘⇧A)" placement="right">
                     <IconButton
                       onClick={toggleViewMode}
@@ -215,8 +219,9 @@ export default function App() {
                 )}
               </Box>
             </Box>
-            {enableAgents && !showChatView && <AgentPanel />}
+            {enableAgents && !showChatView && isClaudeCode && <AgentPanel />}
             <StoryDialog />
+            <StatusHistoryPanel />
           </>
         )}
       </Box>
