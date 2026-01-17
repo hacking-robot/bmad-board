@@ -75,6 +75,11 @@ jobs:
       - name: Pull latest changes
         run: git pull origin master
 
+      - name: Setup Python (for node-gyp)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
 
