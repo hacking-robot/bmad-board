@@ -97,6 +97,8 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
   const streamBufferRef = useRef<string>('')
   const pendingMessageRef = useRef<{ content: string; assistantMsgId: string } | null>(null)
   const isLoadingAgentRef = useRef<boolean>(false)
+  const messageCompletedRef = useRef<boolean>(false) // Track if last message was completed (result received)
+  const toolUsedRef = useRef<boolean>(false) // Track if a tool_use block was seen (next text = new turn)
 
   // Get agents from workflow (based on current project type)
   const { agents } = useWorkflow()
@@ -109,11 +111,35 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
     }
   }, [agentId, thread])
 
+  // Helper to create a new assistant message for a new response turn
+  const createNewAssistantMessage = useCallback(() => {
+    const newMsgId = `msg-${Date.now()}`
+    addChatMessage(agentId, {
+      id: newMsgId,
+      role: 'assistant',
+      content: '',
+      timestamp: Date.now(),
+      status: 'streaming'
+    })
+    currentMessageIdRef.current = newMsgId
+    streamBufferRef.current = ''
+    messageCompletedRef.current = false
+    toolUsedRef.current = false
+    return newMsgId
+  }, [agentId, addChatMessage])
+
   // Subscribe to chat events
   useEffect(() => {
     // Handle chat output
     const unsubOutput = window.chatAPI.onChatOutput((event) => {
       if (event.agentId !== agentId) return
+
+      // Skip message creation during agent load - show as status instead
+      if (event.isAgentLoad) {
+        // Update activity to show agent is loading
+        setChatActivity(agentId, 'Loading agent...')
+        return
+      }
 
       // Parse stream-json output and extract text
       const chunk = event.chunk
@@ -126,6 +152,13 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
           // Handle content_block_delta - streaming text
           if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
             const newText = parsed.delta.text
+
+            // If previous message was completed, tool was used, or no current message, create a new one
+            if (!currentMessageIdRef.current || messageCompletedRef.current || toolUsedRef.current) {
+              createNewAssistantMessage()
+              toolUsedRef.current = false // Reset after creating new message
+            }
+
             streamBufferRef.current += newText
 
             // Update existing message
@@ -143,7 +176,11 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
 
           // Handle content_block_start for text blocks
           if (parsed.type === 'content_block_start' && parsed.content_block?.type === 'text') {
-            if (currentMessageIdRef.current) {
+            // If previous message was completed, tool was used, or no current message, create a new one
+            if (!currentMessageIdRef.current || messageCompletedRef.current || toolUsedRef.current) {
+              createNewAssistantMessage()
+              toolUsedRef.current = false // Reset after creating new message
+            } else if (currentMessageIdRef.current) {
               updateChatMessage(agentId, currentMessageIdRef.current, {
                 status: 'streaming'
               })
@@ -151,23 +188,46 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
           }
 
           // Handle assistant message (complete message format)
+          // Process text blocks FIRST, then tool_use blocks to avoid order-dependent issues
           if (parsed.type === 'assistant' && parsed.message?.content) {
+            // First pass: handle all text blocks
             for (const block of parsed.message.content) {
               if (block.type === 'text' && block.text) {
                 // Clear activity when we get text content
                 setChatActivity(agentId, undefined)
+
+                // If previous message was completed, tool was used, or no current message, create a new one
+                if (!currentMessageIdRef.current || messageCompletedRef.current || toolUsedRef.current) {
+                  createNewAssistantMessage()
+                  toolUsedRef.current = false // Reset after creating new message
+                }
+
                 if (currentMessageIdRef.current) {
+                  // Append to existing content instead of replacing
+                  const currentContent = useStore.getState().chatThreads[agentId]?.messages.find(
+                    m => m.id === currentMessageIdRef.current
+                  )?.content || ''
+                  const newContent = currentContent ? currentContent + block.text : block.text
+
                   updateChatMessage(agentId, currentMessageIdRef.current, {
-                    content: block.text,
+                    content: newContent,
                     status: 'streaming'
                   })
-                  streamBufferRef.current = block.text
+                  streamBufferRef.current = newContent
                 }
               }
-              // Handle tool_use - show what Claude is doing
+            }
+            // Second pass: handle tool_use blocks (after all text is processed)
+            for (const block of parsed.message.content) {
               if (block.type === 'tool_use' && block.name) {
                 const activity = getToolActivity(block.name, block.input as Record<string, unknown>)
                 setChatActivity(agentId, activity)
+                // Only mark message complete and set toolUsedRef if message has actual content
+                // This prevents empty placeholders from being "completed" when Claude starts with tools
+                if (currentMessageIdRef.current && streamBufferRef.current) {
+                  updateChatMessage(agentId, currentMessageIdRef.current, { status: 'complete' })
+                  toolUsedRef.current = true
+                }
               }
             }
           }
@@ -177,14 +237,15 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
             setChatActivity(agentId, undefined) // Clear activity indicator
             if (currentMessageIdRef.current) {
               updateChatMessage(agentId, currentMessageIdRef.current, { status: 'complete' })
-              setChatTyping(agentId, false)
               incrementUnread(agentId)
               // Show system notification if not viewing this chat and app not focused
               if (useStore.getState().selectedChatAgent !== agentId && agent) {
                 showChatNotification(agent, streamBufferRef.current)
               }
             }
-            currentMessageIdRef.current = null
+            // Mark message as completed so next content creates a new message
+            // Don't clear currentMessageIdRef yet - wait for next content or exit
+            messageCompletedRef.current = true
             streamBufferRef.current = ''
           }
         } catch {
@@ -199,6 +260,7 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
 
       console.log('[ChatThread] Agent loaded:', event)
       isLoadingAgentRef.current = false
+      setChatActivity(agentId, undefined) // Clear loading activity
 
       // Store session ID
       if (event.sessionId) {
@@ -213,6 +275,11 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
         // Set up for streaming response
         currentMessageIdRef.current = assistantMsgId
         streamBufferRef.current = ''
+        messageCompletedRef.current = false
+        toolUsedRef.current = false
+
+        // Wait a moment for session file to be fully written to disk
+        await new Promise(resolve => setTimeout(resolve, 150))
 
         // Send the actual user message with the session ID
         const result = await window.chatAPI.sendMessage({
@@ -239,6 +306,7 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
           status: 'error'
         })
         setChatTyping(agentId, false)
+        setChatActivity(agentId, undefined) // Clear activity on error
       }
     })
 
@@ -265,9 +333,12 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
         if (useStore.getState().selectedChatAgent !== agentId && agent) {
           showChatNotification(agent, finalContent)
         }
-        currentMessageIdRef.current = null
-        streamBufferRef.current = ''
       }
+      // Reset all refs on process exit
+      currentMessageIdRef.current = null
+      streamBufferRef.current = ''
+      messageCompletedRef.current = false
+      toolUsedRef.current = false
     })
 
     return () => {
@@ -275,7 +346,7 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
       unsubAgentLoaded()
       unsubExit()
     }
-  }, [agentId, projectPath, updateChatMessage, setChatTyping, setChatActivity, incrementUnread, setChatSessionId])
+  }, [agentId, projectPath, updateChatMessage, setChatTyping, setChatActivity, incrementUnread, setChatSessionId, createNewAssistantMessage])
 
   // Sync isTyping state with actual process status on mount/agent change
   // This detects crashed processes that didn't send proper exit events
@@ -311,6 +382,8 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
           streamBufferRef.current = ''
           pendingMessageRef.current = null
           isLoadingAgentRef.current = false
+          messageCompletedRef.current = false
+          toolUsedRef.current = false
         }
       }
     }
@@ -399,6 +472,8 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
       // Have session - send message directly with --resume
       currentMessageIdRef.current = assistantMsgId
       streamBufferRef.current = ''
+      messageCompletedRef.current = false
+      toolUsedRef.current = false
 
       try {
         const result = await window.chatAPI.sendMessage({
@@ -448,6 +523,8 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
         streamBufferRef.current = ''
         pendingMessageRef.current = null
         isLoadingAgentRef.current = false
+        messageCompletedRef.current = false
+        toolUsedRef.current = false
       }
     } catch (error) {
       console.error('[ChatThread] Failed to cancel:', error)
