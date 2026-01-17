@@ -13,6 +13,7 @@ import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline'
 import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import GroupsIcon from '@mui/icons-material/Groups'
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline'
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined'
 import { Story, EPIC_COLORS } from '../../types'
 import type { AgentDefinition } from '../../types/flow'
 import { useStore } from '../../store'
@@ -23,10 +24,11 @@ interface StoryCardProps {
   story: Story
   isDragging?: boolean
   disableDrag?: boolean
+  isLocked?: boolean
   workingTeammate?: AgentDefinition
 }
 
-export default function StoryCard({ story, isDragging = false, disableDrag = false, workingTeammate }: StoryCardProps) {
+export default function StoryCard({ story, isDragging = false, disableDrag = false, isLocked = false, workingTeammate }: StoryCardProps) {
   const setSelectedStory = useStore((state) => state.setSelectedStory)
   const projectPath = useStore((state) => state.projectPath)
   const agents = useStore((state) => state.agents)
@@ -287,14 +289,17 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
         elevation={0}
         sx={{
           border: 1,
-          borderColor: runningAgent ? 'success.main' : isDragging ? 'primary.main' : 'divider',
+          borderColor: isLocked
+            ? 'action.disabled'
+            : runningAgent ? 'success.main' : isDragging ? 'primary.main' : 'divider',
           position: 'relative',
-          cursor: isDragging ? 'grabbing' : 'grab',
+          cursor: isLocked ? 'default' : isDragging ? 'grabbing' : 'grab',
           userSelect: 'none', // Prevent text selection during drag
           // Hide the original card when being dragged (DragOverlay shows the copy)
-          opacity: isBeingDragged ? 0.3 : isDragging ? 0.9 : 1,
+          // Locked cards show reduced opacity
+          opacity: isLocked ? 0.5 : isBeingDragged ? 0.3 : isDragging ? 0.9 : 1,
           boxShadow: isDragging ? '0 8px 20px rgba(0,0,0,0.2)' : 'none',
-          '&:hover': {
+          '&:hover': isLocked ? {} : {
             borderColor: runningAgent ? 'success.main' : 'primary.main',
             transform: isDragging ? 'none' : 'translateY(-2px)',
             boxShadow: isDragging ? '0 8px 20px rgba(0,0,0,0.2)' : '0 4px 12px rgba(0,0,0,0.1)'
@@ -326,11 +331,14 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
                 }}
               />
             </Tooltip>
-            <Tooltip title={`Story ${story.epicId}.${story.storyNumber} - Click card for details`} arrow placement="top">
+            <Tooltip title={isLocked ? 'Switch to this story\'s branch to edit' : `Story ${story.epicId}.${story.storyNumber} - Click card for details`} arrow placement="top">
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flex: 1 }}>
+                {isLocked && (
+                  <LockOutlinedIcon sx={{ fontSize: 12, color: 'text.disabled' }} />
+                )}
                 <Typography
                   variant="caption"
-                  color="text.secondary"
+                  color={isLocked ? 'text.disabled' : 'text.secondary'}
                   sx={{ fontWeight: 500, cursor: 'help' }}
                 >
                   {story.epicId}.{story.storyNumber}

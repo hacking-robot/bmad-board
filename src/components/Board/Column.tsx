@@ -18,6 +18,7 @@ interface ColumnProps {
   isCollapsed?: boolean
   onToggleCollapse?: () => void
   disableDrag?: boolean
+  lockedStoryIds?: Set<string>
   workingTeammatesByBranch?: Record<string, AgentDefinition>
 }
 
@@ -29,6 +30,7 @@ function Column({
   isCollapsed = false,
   onToggleCollapse,
   disableDrag = false,
+  lockedStoryIds = new Set(),
   workingTeammatesByBranch = {}
 }: ColumnProps) {
   const [infoAnchor, setInfoAnchor] = useState<HTMLButtonElement | null>(null)
@@ -313,14 +315,18 @@ function Column({
                 </Typography>
               </Box>
             ) : (
-              stories.map((story) => (
-                <StoryCard
-                  key={story.id}
-                  story={story}
-                  disableDrag={disableDrag}
-                  workingTeammate={workingTeammatesByBranch[`${story.epicId}-${story.id}`]}
-                />
-              ))
+              stories.map((story) => {
+                const isLocked = lockedStoryIds.has(story.id)
+                return (
+                  <StoryCard
+                    key={story.id}
+                    story={story}
+                    disableDrag={disableDrag || isLocked}
+                    isLocked={isLocked}
+                    workingTeammate={workingTeammatesByBranch[`${story.epicId}-${story.id}`]}
+                  />
+                )
+              })
             )}
           </Box>
         </SortableContext>
