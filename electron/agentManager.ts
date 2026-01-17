@@ -44,7 +44,7 @@ class AgentManager extends EventEmitter {
     const agentId = `agent-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
 
     try {
-      const args: string[] = ['--output-format', 'stream-json', '--print', '--verbose']
+      const args: string[] = ['--output-format', 'stream-json', '--print', '--verbose', '--dangerously-skip-permissions']
 
       if (options.initialPrompt) {
         args.push('-p', options.initialPrompt)
@@ -252,7 +252,7 @@ class ChatAgentManager {
   ): { success: boolean; error?: string } {
     try {
       const prompt = `/bmad:${options.projectType}:agents:${options.agentId}`
-      const args: string[] = ['--output-format', 'stream-json', '--print', '--verbose', '-p', prompt]
+      const args: string[] = ['--output-format', 'stream-json', '--print', '--verbose', '--dangerously-skip-permissions', '-p', prompt]
 
       console.log('[ChatAgentManager] ================================')
       console.log('[ChatAgentManager] Loading agent:', options.agentId)
@@ -364,7 +364,7 @@ class ChatAgentManager {
       const prompt = options.message
 
       // Build args - use --resume if we have a session ID for conversation continuity
-      const args: string[] = ['--output-format', 'stream-json', '--print', '--verbose']
+      const args: string[] = ['--output-format', 'stream-json', '--print', '--verbose', '--dangerously-skip-permissions']
 
       if (options.sessionId) {
         args.push('--resume', options.sessionId)

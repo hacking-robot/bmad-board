@@ -7,7 +7,7 @@
 
 ---
 
-<img src="assets/screenshot.png" alt="BMad Board Screenshot" width="100%">
+<img src="assets/screenshot1.png" alt="BMad Board Screenshot" width="100%">
 
 ## Features
 
