@@ -153,6 +153,37 @@ export interface AgentThread {
   branchName?: string // The branch this thread is working on
 }
 
+// Story chat history types (persisted to project and user directories)
+export interface StoryChatSession {
+  sessionId: string          // UUID for this session
+  agentId: string            // e.g., "dev", "pm"
+  agentName: string          // Human-readable name
+  messages: ChatMessage[]    // Conversation messages
+  startTime: number
+  endTime?: number
+  branchName?: string
+}
+
+export interface StoryChatHistory {
+  storyId: string
+  storyTitle: string
+  sessions: StoryChatSession[]
+  lastUpdated: number
+}
+
+// Status change tracking types
+export type StatusChangeSource = 'user' | 'external'
+
+export interface StatusChangeEntry {
+  id: string                    // UUID
+  storyId: string               // e.g., "1-1-place-nand-gates"
+  storyTitle: string            // Human-readable title
+  oldStatus: StoryStatus
+  newStatus: StoryStatus
+  timestamp: number             // Unix timestamp
+  source: StatusChangeSource    // 'user' (drag-drop) or 'external' (file watcher)
+}
+
 // NOTE: BMAD agent definitions are now in src/data/flow-bmm.json and src/data/flow-bmgd.json
 // Use the useWorkflow hook to access agent data
 

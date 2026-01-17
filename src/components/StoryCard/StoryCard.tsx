@@ -653,7 +653,7 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
                 <Typography variant="body2" fontWeight={500}>
                   {step.label}
                 </Typography>
-                {step.command && (() => {
+                {step.command && aiTool === 'claude-code' && (() => {
                   const isAgentWorking = chatThreads[step.agentId]?.isTyping || false
                   const isDisabled = !isOnStoryBranch || isAgentWorking
                   const tooltipTitle = isAgentWorking

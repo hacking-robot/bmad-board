@@ -43,6 +43,20 @@ export interface StoryReviewState {
   lastUpdated: number
 }
 
+// Status change tracking types
+export type StoryStatus = 'backlog' | 'ready-for-dev' | 'in-progress' | 'review' | 'human-review' | 'done' | 'optional'
+export type StatusChangeSource = 'user' | 'external'
+
+export interface StatusChangeEntry {
+  id: string
+  storyId: string
+  storyTitle: string
+  oldStatus: StoryStatus
+  newStatus: StoryStatus
+  timestamp: number
+  source: StatusChangeSource
+}
+
 export interface AppSettings {
   themeMode: 'light' | 'dark'
   aiTool: AITool
@@ -62,6 +76,10 @@ export interface AppSettings {
   humanReviewStories: string[] // story IDs currently in human-review (app-level status override)
   // Chat settings
   maxThreadMessages: number // Max messages per chat thread (default 100)
+  // Status history
+  statusHistoryByStory: Record<string, StatusChangeEntry[]>
+  globalStatusHistory: StatusChangeEntry[]
+  lastViewedStatusHistoryAt: number
 }
 
 export interface FileAPI {
@@ -324,12 +342,34 @@ export interface ChatAgentLoadedEvent {
   timestamp: number
 }
 
+// Story chat history types (persisted to project and user directories)
+export interface StoryChatSession {
+  sessionId: string
+  agentId: string
+  agentName: string
+  messages: ChatMessage[]
+  startTime: number
+  endTime?: number
+  branchName?: string
+}
+
+export interface StoryChatHistory {
+  storyId: string
+  storyTitle: string
+  sessions: StoryChatSession[]
+  lastUpdated: number
+}
+
 export interface ChatAPI {
   // Thread persistence
   loadThread: (agentId: string) => Promise<AgentThread | null>
   saveThread: (agentId: string, thread: AgentThread) => Promise<boolean>
   clearThread: (agentId: string) => Promise<boolean>
   listThreads: () => Promise<string[]>
+  // Story chat history (persisted to project and user directories)
+  saveStoryChatHistory: (projectPath: string, storyId: string, history: StoryChatHistory) => Promise<boolean>
+  loadStoryChatHistory: (projectPath: string, storyId: string) => Promise<StoryChatHistory | null>
+  listStoryChatHistories: (projectPath: string) => Promise<string[]>
   // Agent loading - loads the BMAD agent, returns session ID via event
   loadAgent: (options: {
     agentId: string
@@ -358,6 +398,10 @@ const chatAPI: ChatAPI = {
   saveThread: (agentId, thread) => ipcRenderer.invoke('save-chat-thread', agentId, thread),
   clearThread: (agentId) => ipcRenderer.invoke('clear-chat-thread', agentId),
   listThreads: () => ipcRenderer.invoke('list-chat-threads'),
+  // Story chat history
+  saveStoryChatHistory: (projectPath, storyId, history) => ipcRenderer.invoke('save-story-chat-history', projectPath, storyId, history),
+  loadStoryChatHistory: (projectPath, storyId) => ipcRenderer.invoke('load-story-chat-history', projectPath, storyId),
+  listStoryChatHistories: (projectPath) => ipcRenderer.invoke('list-story-chat-histories', projectPath),
   // Agent loading
   loadAgent: (options) => ipcRenderer.invoke('chat-load-agent', options),
   // Message sending

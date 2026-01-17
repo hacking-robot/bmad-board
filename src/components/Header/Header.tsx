@@ -14,6 +14,7 @@ import RefreshIcon from '@mui/icons-material/Refresh'
 import TerminalIcon from '@mui/icons-material/Terminal'
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
 import SportsEsportsIcon from '@mui/icons-material/SportsEsports'
+import HistoryIcon from '@mui/icons-material/History'
 import SearchBar from '../SearchBar/SearchBar'
 import EpicFilter from '../EpicFilter/EpicFilter'
 import ThemeToggle from '../ThemeToggle/ThemeToggle'
@@ -29,6 +30,9 @@ export default function Header() {
   const enableAgents = useStore((state) => state.enableAgents)
   const toggleEnableAgents = useStore((state) => state.toggleEnableAgents)
   const setHelpPanelOpen = useStore((state) => state.setHelpPanelOpen)
+  const statusHistoryPanelOpen = useStore((state) => state.statusHistoryPanelOpen)
+  const setStatusHistoryPanelOpen = useStore((state) => state.setStatusHistoryPanelOpen)
+  const getUnreadStatusHistoryCount = useStore((state) => state.getUnreadStatusHistoryCount)
   const projectType = useStore((state) => state.projectType)
   const themeMode = useStore((state) => state.themeMode)
   const viewMode = useStore((state) => state.viewMode)
@@ -173,6 +177,22 @@ export default function Header() {
                 </IconButton>
               </Tooltip>
             )}
+            <Tooltip title="Status History">
+              <IconButton
+                onClick={() => setStatusHistoryPanelOpen(!statusHistoryPanelOpen)}
+                size="small"
+                sx={{ color: statusHistoryPanelOpen ? 'primary.main' : 'text.secondary' }}
+              >
+                <Badge
+                  badgeContent={getUnreadStatusHistoryCount()}
+                  color="primary"
+                  invisible={getUnreadStatusHistoryCount() === 0}
+                  max={99}
+                >
+                  <HistoryIcon />
+                </Badge>
+              </IconButton>
+            </Tooltip>
             <Tooltip title="BMAD Guide (F1)">
               <IconButton
                 onClick={() => setHelpPanelOpen(true)}
