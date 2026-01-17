@@ -302,6 +302,7 @@ export interface ChatOutputEvent {
   type: 'stdout' | 'stderr'
   chunk: string
   timestamp: number
+  isAgentLoad?: boolean
 }
 
 export interface ChatExitEvent {
