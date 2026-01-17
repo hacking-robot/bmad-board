@@ -21,11 +21,11 @@ interface BranchInfo {
   storyId?: string // Full story ID like "1-6-load-chips"
 }
 
-function parseBranchInfo(branchName: string | null): BranchInfo {
+function parseBranchInfo(branchName: string | null, principalBranch: string): BranchInfo {
   if (!branchName) return { type: 'main' }
 
-  // Main/master branches
-  if (branchName === 'main' || branchName === 'master') {
+  // Principal branch (configured in settings)
+  if (branchName === principalBranch) {
     return { type: 'main' }
   }
 
@@ -59,9 +59,10 @@ export default function Board() {
   const currentBranch = useStore((state) => state.currentBranch)
   const epicMergeStatusChecked = useStore((state) => state.epicMergeStatusChecked)
   const unmergedStoryBranches = useStore((state) => state.unmergedStoryBranches)
+  const principalBranch = useStore((state) => state.principalBranch)
 
   // Parse current branch to determine type and scope
-  const branchInfo = useMemo(() => parseBranchInfo(currentBranch), [currentBranch])
+  const branchInfo = useMemo(() => parseBranchInfo(currentBranch, principalBranch), [currentBranch, principalBranch])
 
   const isEpicBranch = branchInfo.type === 'epic'
   const isStoryBranch = branchInfo.type === 'story'
@@ -71,7 +72,7 @@ export default function Board() {
 
   // For story branches, board is editable but only for the matching story
   // For epic branches (when not epicReadOnly), only stories in that epic are editable
-  // For main/master, everything is editable
+  // For principal branch, everything is editable
   const readOnly = epicReadOnly
 
   // Configure sensors for drag detection - empty when read-only to disable dragging
@@ -110,7 +111,7 @@ export default function Board() {
 
     switch (branchInfo.type) {
       case 'main':
-        // On main/master, everything is editable
+        // On principal branch, everything is editable
         return true
       case 'epic':
         // On epic branch, only stories in this epic are editable

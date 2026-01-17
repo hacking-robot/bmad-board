@@ -82,6 +82,8 @@ interface AppSettings {
   recentProjects: RecentProject[]
   windowBounds?: WindowBounds
   storyOrder: Record<string, Record<string, string[]>> // { [epicId]: { [status]: [storyIds...] } }
+  // Git settings
+  principalBranch: 'main' | 'master' | 'develop'
   // Human Review feature
   enableHumanReviewColumn: boolean
   humanReviewChecklist: HumanReviewChecklistItem[]
@@ -105,6 +107,8 @@ const defaultSettings: AppSettings = {
   agentHistory: [],
   recentProjects: [],
   storyOrder: {},
+  // Git defaults
+  principalBranch: 'main',
   // Human Review defaults
   enableHumanReviewColumn: false,
   humanReviewChecklist: [

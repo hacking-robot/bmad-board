@@ -69,6 +69,8 @@ export interface AppSettings {
   windowBounds?: WindowBounds
   notificationsEnabled: boolean
   storyOrder: Record<string, Record<string, string[]>> // { [epicId]: { [status]: [storyIds...] } }
+  // Git settings
+  principalBranch: 'main' | 'master' | 'develop'
   // Human Review feature
   enableHumanReviewColumn: boolean
   humanReviewChecklist: HumanReviewChecklistItem[]

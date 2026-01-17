@@ -54,7 +54,7 @@ const electronStorage = {
       const parsed = JSON.parse(value)
       if (parsed.state) {
         // Only save the settings we care about
-        const { themeMode, aiTool, projectPath, projectType, selectedEpicId, collapsedColumnsByEpic, agentHistory, recentProjects, notificationsEnabled, storyOrder, enableHumanReviewColumn, humanReviewChecklist, humanReviewStates, humanReviewStories, maxThreadMessages, statusHistoryByStory, globalStatusHistory, lastViewedStatusHistoryAt } = parsed.state
+        const { themeMode, aiTool, projectPath, projectType, selectedEpicId, collapsedColumnsByEpic, agentHistory, recentProjects, notificationsEnabled, principalBranch, storyOrder, enableHumanReviewColumn, humanReviewChecklist, humanReviewStates, humanReviewStories, maxThreadMessages, statusHistoryByStory, globalStatusHistory, lastViewedStatusHistoryAt } = parsed.state
 
         // Don't persist full output - it can contain characters that break JSON
         // Just save metadata and a small summary
@@ -75,6 +75,7 @@ const electronStorage = {
           agentHistory: sanitizedHistory,
           recentProjects: recentProjects || [],
           notificationsEnabled: notificationsEnabled ?? false,
+          principalBranch: principalBranch || 'main',
           storyOrder: storyOrder || {},
           enableHumanReviewColumn: enableHumanReviewColumn ?? false,
           humanReviewChecklist: humanReviewChecklist || [],
@@ -101,6 +102,7 @@ const electronStorage = {
       agentHistory: [],
       recentProjects: [],
       notificationsEnabled: false,
+      principalBranch: 'main',
       storyOrder: {},
       enableHumanReviewColumn: false,
       humanReviewChecklist: [],
@@ -137,6 +139,10 @@ interface AppState {
   setNotificationsEnabled: (enabled: boolean) => void
   isUserDragging: boolean
   setIsUserDragging: (dragging: boolean) => void
+
+  // Git settings
+  principalBranch: 'main' | 'master' | 'develop'
+  setPrincipalBranch: (branch: 'main' | 'master' | 'develop') => void
 
   // Project
   projectPath: string | null
@@ -311,6 +317,10 @@ export const useStore = create<AppState>()(
       setNotificationsEnabled: (enabled) => set({ notificationsEnabled: enabled }),
       isUserDragging: false,
       setIsUserDragging: (dragging) => set({ isUserDragging: dragging }),
+
+      // Git settings
+      principalBranch: 'main',
+      setPrincipalBranch: (branch) => set({ principalBranch: branch }),
 
       // Project
       projectPath: null,
