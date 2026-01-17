@@ -23,18 +23,28 @@ npm run typecheck        # TypeScript type checking
 ```
 src/
 ├── components/
+│   ├── AgentChat/       # AI agent chat interface
+│   ├── AgentPanel/      # Agent sidebar panel
+│   ├── AgentsTab/       # Agents tab view
 │   ├── Board/           # Story board and columns
+│   ├── BranchSwitcher/  # Git branch switching
+│   ├── CommandPalette/  # Keyboard-driven command palette
+│   ├── common/          # Shared utility components
+│   ├── EpicFilter/      # Filter by epic
+│   ├── GitDiffDialog/   # View git diff for stories
+│   ├── Header/          # App header with controls
+│   ├── HelpPanel/       # Help documentation panel
+│   ├── KeyboardShortcuts/ # Keyboard shortcut handling
+│   ├── NewProjectDialog/ # New project guidance
+│   ├── ProjectSwitcher/ # Switch between projects
+│   ├── SearchBar/       # Story search
+│   ├── SettingsMenu/    # Application settings
+│   ├── StatusBar/       # Bottom status bar
 │   ├── StoryCard/       # Story card display
 │   ├── StoryDialog/     # Story detail modal
-│   ├── Header/          # App header with controls
-│   ├── SearchBar/       # Story search
-│   ├── EpicFilter/      # Filter by epic
 │   ├── ThemeToggle/     # Light/dark mode
-│   ├── CommandPalette/  # Keyboard-driven command palette
-│   ├── StatusBar/       # Bottom status bar
-│   ├── HelpPanel/       # Help documentation panel
-│   ├── WelcomeDialog/   # Project folder selection
-│   └── NewProjectDialog/ # New project guidance
+│   ├── UncommittedChanges/ # Show uncommitted git changes
+│   └── WelcomeDialog/   # Project folder selection
 ├── store.ts             # Zustand state management
 ├── theme.ts             # MUI theme configuration
 ├── types/               # TypeScript type definitions
