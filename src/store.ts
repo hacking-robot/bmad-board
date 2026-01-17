@@ -274,7 +274,7 @@ interface AppState {
   globalStatusHistory: StatusChangeEntry[]
   statusHistoryPanelOpen: boolean
   lastViewedStatusHistoryAt: number
-  recordStatusChange: (storyId: string, storyTitle: string, oldStatus: StoryStatus, newStatus: StoryStatus, source: StatusChangeSource) => void
+  recordStatusChange: (storyId: string, storyTitle: string, epicId: number, storyNumber: number, oldStatus: StoryStatus, newStatus: StoryStatus, source: StatusChangeSource) => void
   getStatusHistoryForStory: (storyId: string) => StatusChangeEntry[]
   setStatusHistoryPanelOpen: (open: boolean) => void
   markStatusHistoryViewed: () => void
@@ -772,7 +772,7 @@ export const useStore = create<AppState>()(
       statusHistoryByStory: {},
       globalStatusHistory: [],
       statusHistoryPanelOpen: false,
-      recordStatusChange: (storyId, storyTitle, oldStatus, newStatus, source) => set((state) => {
+      recordStatusChange: (storyId, storyTitle, epicId, storyNumber, oldStatus, newStatus, source) => set((state) => {
         // Skip if no actual change
         if (oldStatus === newStatus) return state
 
@@ -780,6 +780,8 @@ export const useStore = create<AppState>()(
           id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           storyId,
           storyTitle,
+          epicId,
+          storyNumber,
           oldStatus,
           newStatus,
           timestamp: Date.now(),
