@@ -15,6 +15,7 @@ import KeyboardShortcuts from './components/KeyboardShortcuts'
 import HelpPanel from './components/HelpPanel'
 import StatusBar from './components/StatusBar'
 import { AgentChat } from './components/AgentChat'
+import StatusHistoryPanel from './components/StatusHistoryPanel/StatusHistoryPanel'
 
 const AGENT_PANEL_WIDTH = 500
 
@@ -220,6 +221,7 @@ export default function App() {
             </Box>
             {enableAgents && !showChatView && isClaudeCode && <AgentPanel />}
             <StoryDialog />
+            <StatusHistoryPanel />
           </>
         )}
       </Box>

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import { Epic, Story, StoryContent, StoryStatus, Agent, ProjectType, AgentHistoryEntry, AITool, HumanReviewChecklistItem, StoryReviewState, ChatMessage, AgentThread } from './types'
+import { Epic, Story, StoryContent, StoryStatus, Agent, ProjectType, AgentHistoryEntry, AITool, HumanReviewChecklistItem, StoryReviewState, ChatMessage, AgentThread, StatusChangeEntry, StatusChangeSource } from './types'
 
 export type ViewMode = 'board' | 'chat'
 
@@ -12,6 +12,8 @@ export interface RecentProject {
 
 const MAX_HISTORY_ENTRIES = 50
 const MAX_RECENT_PROJECTS = 10
+const MAX_STATUS_HISTORY_PER_STORY = 50
+const MAX_GLOBAL_STATUS_HISTORY = 100
 
 // Debounce settings saves to prevent rapid writes that corrupt the file
 let saveTimeout: NodeJS.Timeout | null = null
@@ -52,7 +54,7 @@ const electronStorage = {
       const parsed = JSON.parse(value)
       if (parsed.state) {
         // Only save the settings we care about
-        const { themeMode, aiTool, projectPath, projectType, selectedEpicId, collapsedColumnsByEpic, agentHistory, recentProjects, notificationsEnabled, storyOrder, enableHumanReviewColumn, humanReviewChecklist, humanReviewStates, humanReviewStories, maxThreadMessages } = parsed.state
+        const { themeMode, aiTool, projectPath, projectType, selectedEpicId, collapsedColumnsByEpic, agentHistory, recentProjects, notificationsEnabled, storyOrder, enableHumanReviewColumn, humanReviewChecklist, humanReviewStates, humanReviewStories, maxThreadMessages, statusHistoryByStory, globalStatusHistory } = parsed.state
 
         // Don't persist full output - it can contain characters that break JSON
         // Just save metadata and a small summary
@@ -78,7 +80,9 @@ const electronStorage = {
           humanReviewChecklist: humanReviewChecklist || [],
           humanReviewStates: humanReviewStates || {},
           humanReviewStories: humanReviewStories || [],
-          maxThreadMessages: maxThreadMessages ?? 100
+          maxThreadMessages: maxThreadMessages ?? 100,
+          statusHistoryByStory: statusHistoryByStory || {},
+          globalStatusHistory: globalStatusHistory || []
         })
       }
     } catch (error) {
@@ -101,7 +105,9 @@ const electronStorage = {
       humanReviewChecklist: [],
       humanReviewStates: {},
       humanReviewStories: [],
-      maxThreadMessages: 100
+      maxThreadMessages: 100,
+      statusHistoryByStory: {},
+      globalStatusHistory: []
     })
   }
 }
@@ -260,6 +266,14 @@ interface AppState {
   setPendingChatMessage: (pending: { agentId: string; message: string; storyId?: string; branchName?: string } | null) => void
   clearPendingChatMessage: () => void
   setThreadContext: (agentId: string, storyId: string | undefined, branchName: string | undefined) => void
+
+  // Status History
+  statusHistoryByStory: Record<string, StatusChangeEntry[]>
+  globalStatusHistory: StatusChangeEntry[]
+  statusHistoryPanelOpen: boolean
+  recordStatusChange: (storyId: string, storyTitle: string, oldStatus: StoryStatus, newStatus: StoryStatus, source: StatusChangeSource) => void
+  getStatusHistoryForStory: (storyId: string) => StatusChangeEntry[]
+  setStatusHistoryPanelOpen: (open: boolean) => void
 
   // Computed - filtered stories
   getFilteredStories: () => Story[]
@@ -748,6 +762,45 @@ export const useStore = create<AppState>()(
           }
         }
       }),
+
+      // Status History
+      statusHistoryByStory: {},
+      globalStatusHistory: [],
+      statusHistoryPanelOpen: false,
+      recordStatusChange: (storyId, storyTitle, oldStatus, newStatus, source) => set((state) => {
+        // Skip if no actual change
+        if (oldStatus === newStatus) return state
+
+        const entry: StatusChangeEntry = {
+          id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          storyId,
+          storyTitle,
+          oldStatus,
+          newStatus,
+          timestamp: Date.now(),
+          source
+        }
+
+        // Update per-story history
+        const storyHistory = state.statusHistoryByStory[storyId] || []
+        const newStoryHistory = [entry, ...storyHistory].slice(0, MAX_STATUS_HISTORY_PER_STORY)
+
+        // Update global history
+        const newGlobalHistory = [entry, ...state.globalStatusHistory].slice(0, MAX_GLOBAL_STATUS_HISTORY)
+
+        return {
+          statusHistoryByStory: {
+            ...state.statusHistoryByStory,
+            [storyId]: newStoryHistory
+          },
+          globalStatusHistory: newGlobalHistory
+        }
+      }),
+      getStatusHistoryForStory: (storyId) => {
+        const { statusHistoryByStory } = get()
+        return statusHistoryByStory[storyId] || []
+      },
+      setStatusHistoryPanelOpen: (open) => set({ statusHistoryPanelOpen: open }),
 
       // Computed
       getFilteredStories: () => {

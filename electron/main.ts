@@ -57,6 +57,20 @@ interface StoryReviewState {
   lastUpdated: number
 }
 
+// Status change tracking types
+type StoryStatus = 'backlog' | 'ready-for-dev' | 'in-progress' | 'review' | 'human-review' | 'done' | 'optional'
+type StatusChangeSource = 'user' | 'external'
+
+interface StatusChangeEntry {
+  id: string
+  storyId: string
+  storyTitle: string
+  oldStatus: StoryStatus
+  newStatus: StoryStatus
+  timestamp: number
+  source: StatusChangeSource
+}
+
 interface AppSettings {
   themeMode: 'light' | 'dark'
   aiTool: AITool
@@ -75,6 +89,9 @@ interface AppSettings {
   humanReviewStories: string[] // story IDs in human-review (app-level override)
   // Chat settings
   maxThreadMessages: number
+  // Status history
+  statusHistoryByStory: Record<string, StatusChangeEntry[]>
+  globalStatusHistory: StatusChangeEntry[]
 }
 
 const defaultSettings: AppSettings = {
@@ -95,7 +112,10 @@ const defaultSettings: AppSettings = {
   humanReviewStates: {},
   humanReviewStories: [],
   // Chat defaults
-  maxThreadMessages: 100
+  maxThreadMessages: 100,
+  // Status history defaults
+  statusHistoryByStory: {},
+  globalStatusHistory: []
 }
 
 async function loadSettings(): Promise<AppSettings> {
