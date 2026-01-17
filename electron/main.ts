@@ -92,6 +92,7 @@ interface AppSettings {
   // Status history
   statusHistoryByStory: Record<string, StatusChangeEntry[]>
   globalStatusHistory: StatusChangeEntry[]
+  lastViewedStatusHistoryAt: number
 }
 
 const defaultSettings: AppSettings = {
@@ -115,7 +116,8 @@ const defaultSettings: AppSettings = {
   maxThreadMessages: 100,
   // Status history defaults
   statusHistoryByStory: {},
-  globalStatusHistory: []
+  globalStatusHistory: [],
+  lastViewedStatusHistoryAt: 0
 }
 
 async function loadSettings(): Promise<AppSettings> {

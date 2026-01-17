@@ -32,7 +32,7 @@ export default function Header() {
   const setHelpPanelOpen = useStore((state) => state.setHelpPanelOpen)
   const statusHistoryPanelOpen = useStore((state) => state.statusHistoryPanelOpen)
   const setStatusHistoryPanelOpen = useStore((state) => state.setStatusHistoryPanelOpen)
-  const globalStatusHistory = useStore((state) => state.globalStatusHistory)
+  const getUnreadStatusHistoryCount = useStore((state) => state.getUnreadStatusHistoryCount)
   const projectType = useStore((state) => state.projectType)
   const themeMode = useStore((state) => state.themeMode)
   const viewMode = useStore((state) => state.viewMode)
@@ -184,9 +184,9 @@ export default function Header() {
                 sx={{ color: statusHistoryPanelOpen ? 'primary.main' : 'text.secondary' }}
               >
                 <Badge
-                  badgeContent={globalStatusHistory.length}
+                  badgeContent={getUnreadStatusHistoryCount()}
                   color="primary"
-                  invisible={globalStatusHistory.length === 0}
+                  invisible={getUnreadStatusHistoryCount() === 0}
                   max={99}
                 >
                   <HistoryIcon />
