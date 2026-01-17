@@ -25,6 +25,7 @@ import NotificationsIcon from '@mui/icons-material/Notifications'
 import RateReviewIcon from '@mui/icons-material/RateReview'
 import ChatIcon from '@mui/icons-material/Chat'
 import GitIcon from '@mui/icons-material/AccountTree'
+import MergeIcon from '@mui/icons-material/Merge'
 import CloseIcon from '@mui/icons-material/Close'
 import { useStore } from '../../store'
 import { AI_TOOLS, AITool } from '../../types'
@@ -46,6 +47,8 @@ export default function SettingsMenu() {
   const setMaxThreadMessages = useStore((state) => state.setMaxThreadMessages)
   const principalBranch = useStore((state) => state.principalBranch)
   const setPrincipalBranch = useStore((state) => state.setPrincipalBranch)
+  const allowDirectEpicMerge = useStore((state) => state.allowDirectEpicMerge)
+  const setAllowDirectEpicMerge = useStore((state) => state.setAllowDirectEpicMerge)
 
   const selectedTool = AI_TOOLS.find((t) => t.id === aiTool) || AI_TOOLS[0]
 
@@ -171,6 +174,21 @@ export default function SettingsMenu() {
             primary="Principal Branch"
             secondary={principalBranch}
             secondaryTypographyProps={{ variant: 'caption' }}
+          />
+        </MenuItem>
+        <MenuItem onClick={() => setAllowDirectEpicMerge(!allowDirectEpicMerge)}>
+          <ListItemIcon>
+            <MergeIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText
+            primary="Direct Epic Merge"
+            secondary="Merge without PR"
+            secondaryTypographyProps={{ variant: 'caption' }}
+          />
+          <Switch
+            edge="end"
+            checked={allowDirectEpicMerge}
+            size="small"
           />
         </MenuItem>
         <MenuItem onClick={handleKeyboardShortcuts}>

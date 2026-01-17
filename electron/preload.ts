@@ -71,6 +71,7 @@ export interface AppSettings {
   storyOrder: Record<string, Record<string, string[]>> // { [epicId]: { [status]: [storyIds...] } }
   // Git settings
   principalBranch: 'main' | 'master' | 'develop'
+  allowDirectEpicMerge: boolean // Allow merging epic branches to principal without PR
   // Human Review feature
   enableHumanReviewColumn: boolean
   humanReviewChecklist: HumanReviewChecklistItem[]

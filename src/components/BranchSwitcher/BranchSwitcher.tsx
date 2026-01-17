@@ -30,6 +30,7 @@ export default function BranchSwitcher() {
   const [checkoutLoading, setCheckoutLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [mergeStatus, setMergeStatus] = useState<BranchMergeStatus>({})
+  const [epicMergeStatus, setEpicMergeStatus] = useState<BranchMergeStatus>({})
   const [mergingBranch, setMergingBranch] = useState<string | null>(null)
   const triggerRef = useRef<HTMLDivElement>(null)
 
@@ -40,7 +41,11 @@ export default function BranchSwitcher() {
   const epics = useStore((state) => state.epics)
   const stories = useStore((state) => state.stories)
   const principalBranch = useStore((state) => state.principalBranch)
+  const allowDirectEpicMerge = useStore((state) => state.allowDirectEpicMerge)
   const { loadProjectData } = useProjectData()
+
+  // Whether current branch is the principal branch
+  const isOnPrincipalBranch = currentBranch === principalBranch
 
   const open = Boolean(anchorEl)
 
@@ -126,6 +131,43 @@ export default function BranchSwitcher() {
     }
   }, [projectPath, currentBranch, setUnmergedStoryBranches, stories])
 
+  // Load merge status for epic branches when on principal branch
+  const loadEpicMergeStatus = useCallback(async (branchList: string[]) => {
+    if (!projectPath || !isOnPrincipalBranch) return
+
+    // Find epic branches from the list
+    const epicBranches = branchList.filter(branch => /^epic-\d+-/.test(branch))
+
+    if (epicBranches.length === 0) return
+
+    // Initialize loading state for all epic branches
+    setEpicMergeStatus(prev => {
+      const newStatus = { ...prev }
+      for (const branch of epicBranches) {
+        if (!newStatus[branch]) {
+          newStatus[branch] = { merged: false, loading: true }
+        }
+      }
+      return newStatus
+    })
+
+    // Check merge status for each epic branch against principal
+    for (const branch of epicBranches) {
+      try {
+        const result = await window.gitAPI.isBranchMerged(projectPath, branch, principalBranch)
+        setEpicMergeStatus(prev => ({
+          ...prev,
+          [branch]: { merged: result.merged, loading: false }
+        }))
+      } catch {
+        setEpicMergeStatus(prev => ({
+          ...prev,
+          [branch]: { merged: false, loading: false }
+        }))
+      }
+    }
+  }, [projectPath, isOnPrincipalBranch, principalBranch])
+
   // Load branches when dropdown opens
   useEffect(() => {
     if (open) {
@@ -139,6 +181,13 @@ export default function BranchSwitcher() {
       loadMergeStatus(branches, currentEpicId, false)
     }
   }, [open, branches, currentEpicId, loadMergeStatus])
+
+  // Load epic merge status when on principal branch (for dropdown display)
+  useEffect(() => {
+    if (open && branches.length > 0 && isOnPrincipalBranch) {
+      loadEpicMergeStatus(branches)
+    }
+  }, [open, branches, isOnPrincipalBranch, loadEpicMergeStatus])
 
   // Check merge status when switching to an epic branch (for read-only mode)
   useEffect(() => {
@@ -251,13 +300,15 @@ export default function BranchSwitcher() {
 
       // Add epic branch if it exists
       if (epicBranch) {
+        // Show merge status for epic branches when on principal branch
+        const showEpicMergeStatus = isOnPrincipalBranch
         result.push({
           id: epicBranch,
           label: epicBranch,
           isEpicBranch: true,
           isStoryBranch: false,
           epicId,
-          mergeStatus: null
+          mergeStatus: showEpicMergeStatus ? (epicMergeStatus[epicBranch] || { merged: false, loading: true }) : null
         })
       }
 
@@ -287,7 +338,7 @@ export default function BranchSwitcher() {
     }
 
     return result
-  }, [filteredBranches, currentEpicId, mergeStatus, principalBranch])
+  }, [filteredBranches, currentEpicId, mergeStatus, principalBranch, isOnPrincipalBranch, epicMergeStatus])
 
   const handleClick = () => {
     if (!projectPath || !currentBranch) return
@@ -341,6 +392,9 @@ export default function BranchSwitcher() {
     setMergingBranch(branchToMerge)
     setError(null)
 
+    // Determine if this is an epic branch merge
+    const isEpicMerge = /^epic-\d+-/.test(branchToMerge)
+
     try {
       const result = await window.gitAPI.mergeBranch(projectPath, branchToMerge)
       if (!result.success) {
@@ -348,15 +402,22 @@ export default function BranchSwitcher() {
         return
       }
 
-      // Update merge status to show as merged
-      setMergeStatus(prev => ({
-        ...prev,
-        [branchToMerge]: { merged: true, loading: false }
-      }))
+      // Update the appropriate merge status based on branch type
+      if (isEpicMerge) {
+        setEpicMergeStatus(prev => ({
+          ...prev,
+          [branchToMerge]: { merged: true, loading: false }
+        }))
+      } else {
+        setMergeStatus(prev => ({
+          ...prev,
+          [branchToMerge]: { merged: true, loading: false }
+        }))
 
-      // Update store to remove this branch from unmerged list
-      const currentUnmerged = useStore.getState().unmergedStoryBranches
-      setUnmergedStoryBranches(currentUnmerged.filter(b => b !== branchToMerge))
+        // Update store to remove this branch from unmerged list (only for story branches)
+        const currentUnmerged = useStore.getState().unmergedStoryBranches
+        setUnmergedStoryBranches(currentUnmerged.filter(b => b !== branchToMerge))
+      }
 
       // Refresh project data after merge
       loadProjectData()
@@ -374,7 +435,7 @@ export default function BranchSwitcher() {
 
   // Convert branches to dropdown items with custom rendering
   const branchItems: SearchableDropdownItem[] = groupedBranches.map((branch) => {
-    // Epic branch - show with tree icon
+    // Epic branch - show with tree icon and merge status when on principal branch
     if (branch.isEpicBranch) {
       return {
         id: branch.id,
@@ -394,6 +455,47 @@ export default function BranchSwitcher() {
             >
               {branch.label}
             </Typography>
+            {/* Show merge status when on principal branch */}
+            {branch.mergeStatus && (
+              branch.mergeStatus.loading ? (
+                <CircularProgress size={14} sx={{ color: 'text.disabled' }} />
+              ) : branch.mergeStatus.merged ? (
+                <Tooltip title="Merged into principal branch">
+                  <CheckCircleIcon sx={{ fontSize: 16, color: 'success.main' }} />
+                </Tooltip>
+              ) : allowDirectEpicMerge ? (
+                <Tooltip title="Merge into principal branch">
+                  <IconButton
+                    size="small"
+                    onClick={(e) => handleMergeBranch(branch.id, e)}
+                    disabled={mergingBranch !== null}
+                    sx={{
+                      p: 0.25,
+                      '&:hover': { bgcolor: 'action.hover' }
+                    }}
+                  >
+                    {mergingBranch === branch.id ? (
+                      <CircularProgress size={14} sx={{ color: 'primary.main' }} />
+                    ) : (
+                      <MergeIcon sx={{ fontSize: 16, color: 'primary.main' }} />
+                    )}
+                  </IconButton>
+                </Tooltip>
+              ) : (
+                <Tooltip title="Not merged (use PR to merge)">
+                  <Chip
+                    label="unmerged"
+                    size="small"
+                    sx={{
+                      height: 18,
+                      fontSize: '0.65rem',
+                      bgcolor: 'warning.main',
+                      color: 'warning.contrastText'
+                    }}
+                  />
+                </Tooltip>
+              )
+            )}
           </Box>
         )
       }
