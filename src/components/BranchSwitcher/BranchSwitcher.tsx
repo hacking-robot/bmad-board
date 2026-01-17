@@ -39,6 +39,7 @@ export default function BranchSwitcher() {
   const setUnmergedStoryBranches = useStore((state) => state.setUnmergedStoryBranches)
   const epics = useStore((state) => state.epics)
   const stories = useStore((state) => state.stories)
+  const principalBranch = useStore((state) => state.principalBranch)
   const { loadProjectData } = useProjectData()
 
   const open = Boolean(anchorEl)
@@ -162,15 +163,15 @@ export default function BranchSwitcher() {
     checkEpicMergeStatus()
   }, [projectPath, currentBranch, currentEpicId, loadMergeStatus, setUnmergedStoryBranches])
 
-  // Filter branches to only show relevant ones (epics, stories, main/master)
+  // Filter branches to only show relevant ones (epics, stories, principal branch)
   const filteredBranches = useMemo(() => {
     // Build set of valid branch prefixes
     const epicPrefixes = epics.map(e => `epic-${e.id}-`)
     const storyPrefixes = stories.map(s => `${s.epicId}-${s.id}`)
 
     return branches.filter(branch => {
-      // Always show main/master
-      if (branch === 'main' || branch === 'master') return true
+      // Always show principal branch
+      if (branch === principalBranch) return true
 
       // Show epic branches
       if (epicPrefixes.some(prefix => branch.startsWith(prefix))) return true
@@ -180,7 +181,7 @@ export default function BranchSwitcher() {
 
       return false
     })
-  }, [branches, epics, stories])
+  }, [branches, epics, stories, principalBranch])
 
   // Group branches into tree structure: main, then epics with their stories nested
   const groupedBranches = useMemo(() => {
@@ -200,7 +201,7 @@ export default function BranchSwitcher() {
     const epicBranchMap: Map<string, { epicBranch: string; storyBranches: string[] }> = new Map()
 
     for (const branch of filteredBranches) {
-      if (branch === 'main' || branch === 'master') {
+      if (branch === principalBranch) {
         mainBranches.push(branch)
         continue
       }
@@ -286,7 +287,7 @@ export default function BranchSwitcher() {
     }
 
     return result
-  }, [filteredBranches, currentEpicId, mergeStatus])
+  }, [filteredBranches, currentEpicId, mergeStatus, principalBranch])
 
   const handleClick = () => {
     if (!projectPath || !currentBranch) return
@@ -451,7 +452,7 @@ export default function BranchSwitcher() {
       }
     }
 
-    // Main/master or other branches - no custom render
+    // Principal branch or other branches - no custom render
     return {
       id: branch.id,
       label: branch.label
