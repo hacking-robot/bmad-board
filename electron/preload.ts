@@ -60,6 +60,8 @@ export interface AppSettings {
   humanReviewChecklist: HumanReviewChecklistItem[]
   humanReviewStates: Record<string, StoryReviewState> // keyed by storyId
   humanReviewStories: string[] // story IDs currently in human-review (app-level status override)
+  // Chat settings
+  maxThreadMessages: number // Max messages per chat thread (default 100)
 }
 
 export interface FileAPI {
@@ -249,6 +251,8 @@ export interface GitAPI {
   getCommitDiff: (projectPath: string, commitHash: string) => Promise<{ files: GitCommitFile[]; error?: string }>
   getFileAtParent: (projectPath: string, filePath: string, commitHash: string) => Promise<{ content: string }>
   getFileAtCommit: (projectPath: string, filePath: string, commitHash: string) => Promise<{ content: string }>
+  isBranchMerged: (projectPath: string, branchToCheck: string, targetBranch: string) => Promise<{ merged: boolean; error?: string }>
+  mergeBranch: (projectPath: string, branchToMerge: string) => Promise<{ success: boolean; error?: string; hasConflicts?: boolean }>
 }
 
 const gitAPI: GitAPI = {
@@ -267,15 +271,131 @@ const gitAPI: GitAPI = {
   getCommitHistory: (projectPath, baseBranch, featureBranch) => ipcRenderer.invoke('git-commit-history', projectPath, baseBranch, featureBranch),
   getCommitDiff: (projectPath, commitHash) => ipcRenderer.invoke('git-commit-diff', projectPath, commitHash),
   getFileAtParent: (projectPath, filePath, commitHash) => ipcRenderer.invoke('git-file-at-parent', projectPath, filePath, commitHash),
-  getFileAtCommit: (projectPath, filePath, commitHash) => ipcRenderer.invoke('git-file-at-commit', projectPath, filePath, commitHash)
+  getFileAtCommit: (projectPath, filePath, commitHash) => ipcRenderer.invoke('git-file-at-commit', projectPath, filePath, commitHash),
+  isBranchMerged: (projectPath, branchToCheck, targetBranch) => ipcRenderer.invoke('git-is-merged', projectPath, branchToCheck, targetBranch),
+  mergeBranch: (projectPath, branchToMerge) => ipcRenderer.invoke('git-merge-branch', projectPath, branchToMerge)
 }
 
 contextBridge.exposeInMainWorld('gitAPI', gitAPI)
+
+// Chat API types
+export interface ChatMessage {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  timestamp: number
+  status: 'pending' | 'streaming' | 'complete' | 'error'
+}
+
+export interface AgentThread {
+  agentId: string
+  messages: ChatMessage[]
+  lastActivity: number
+  unreadCount: number
+  isTyping: boolean
+  isInitialized: boolean
+  sessionId?: string // Claude conversation session ID for --resume
+}
+
+export interface ChatOutputEvent {
+  agentId: string
+  type: 'stdout' | 'stderr'
+  chunk: string
+  timestamp: number
+}
+
+export interface ChatExitEvent {
+  agentId: string
+  code: number | null
+  signal: string | null
+  error?: string
+  timestamp: number
+  sessionId?: string // Session ID captured from this conversation
+  cancelled?: boolean // True if the message was cancelled by user
+}
+
+export interface ChatAgentLoadedEvent {
+  agentId: string
+  code: number | null
+  signal: string | null
+  error?: string
+  sessionId?: string // Session ID for subsequent messages
+  timestamp: number
+}
+
+export interface ChatAPI {
+  // Thread persistence
+  loadThread: (agentId: string) => Promise<AgentThread | null>
+  saveThread: (agentId: string, thread: AgentThread) => Promise<boolean>
+  clearThread: (agentId: string) => Promise<boolean>
+  listThreads: () => Promise<string[]>
+  // Agent loading - loads the BMAD agent, returns session ID via event
+  loadAgent: (options: {
+    agentId: string
+    projectPath: string
+    projectType: 'bmm' | 'bmgd'
+  }) => Promise<{ success: boolean; error?: string }>
+  // Message sending - spawns new process per message, uses --resume for conversation continuity
+  sendMessage: (options: {
+    agentId: string
+    projectPath: string
+    message: string
+    sessionId?: string // Session ID from previous response for --resume
+  }) => Promise<{ success: boolean; error?: string }>
+  // Cancel an ongoing message/agent load
+  cancelMessage: (agentId: string) => Promise<boolean>
+  // Check if agent has a running process (for crash detection)
+  isAgentRunning: (agentId: string) => Promise<boolean>
+  // Event listeners
+  onChatOutput: (callback: (event: ChatOutputEvent) => void) => () => void
+  onChatExit: (callback: (event: ChatExitEvent) => void) => () => void
+  onAgentLoaded: (callback: (event: ChatAgentLoadedEvent) => void) => () => void
+}
+
+const chatAPI: ChatAPI = {
+  loadThread: (agentId) => ipcRenderer.invoke('load-chat-thread', agentId),
+  saveThread: (agentId, thread) => ipcRenderer.invoke('save-chat-thread', agentId, thread),
+  clearThread: (agentId) => ipcRenderer.invoke('clear-chat-thread', agentId),
+  listThreads: () => ipcRenderer.invoke('list-chat-threads'),
+  // Agent loading
+  loadAgent: (options) => ipcRenderer.invoke('chat-load-agent', options),
+  // Message sending
+  sendMessage: (options) => ipcRenderer.invoke('chat-send-message', options),
+  // Cancel message
+  cancelMessage: (agentId) => ipcRenderer.invoke('chat-cancel-message', agentId),
+  // Check if agent is running
+  isAgentRunning: (agentId) => ipcRenderer.invoke('chat-is-agent-running', agentId),
+  // Event listeners
+  onChatOutput: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: ChatOutputEvent) => {
+      callback(data)
+    }
+    ipcRenderer.on('chat:output', listener)
+    return () => ipcRenderer.removeListener('chat:output', listener)
+  },
+  onChatExit: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: ChatExitEvent) => {
+      callback(data)
+    }
+    ipcRenderer.on('chat:exit', listener)
+    return () => ipcRenderer.removeListener('chat:exit', listener)
+  },
+  onAgentLoaded: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: ChatAgentLoadedEvent) => {
+      callback(data)
+    }
+    ipcRenderer.on('chat:agent-loaded', listener)
+    return () => ipcRenderer.removeListener('chat:agent-loaded', listener)
+  }
+}
+
+contextBridge.exposeInMainWorld('chatAPI', chatAPI)
 
 declare global {
   interface Window {
     fileAPI: FileAPI
     agentAPI: AgentAPI
     gitAPI: GitAPI
+    chatAPI: ChatAPI
   }
 }

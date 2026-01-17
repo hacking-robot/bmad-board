@@ -73,6 +73,8 @@ interface AppSettings {
   humanReviewChecklist: HumanReviewChecklistItem[]
   humanReviewStates: Record<string, StoryReviewState>
   humanReviewStories: string[] // story IDs in human-review (app-level override)
+  // Chat settings
+  maxThreadMessages: number
 }
 
 const defaultSettings: AppSettings = {
@@ -91,7 +93,9 @@ const defaultSettings: AppSettings = {
     { id: 'approved', label: 'Approved', description: 'Story implementation has been reviewed and approved' }
   ],
   humanReviewStates: {},
-  humanReviewStories: []
+  humanReviewStories: [],
+  // Chat defaults
+  maxThreadMessages: 100
 }
 
 async function loadSettings(): Promise<AppSettings> {
@@ -1151,6 +1155,75 @@ ipcMain.handle('git-file-at-commit', async (_, projectPath: string, filePath: st
   return { content: result.stdout || '' }
 })
 
+// Check if a branch is merged into another branch
+ipcMain.handle('git-is-merged', async (_, projectPath: string, branchToCheck: string, targetBranch: string) => {
+  // Security: Validate branch names
+  if (!isValidGitRef(branchToCheck) || !isValidGitRef(targetBranch)) {
+    return { merged: false, error: 'Invalid branch name' }
+  }
+
+  // Use merge-base --is-ancestor to check if branchToCheck is merged into targetBranch
+  // Exit code 0 = merged (is ancestor), 1 = not merged
+  const result = spawnSync('git', ['merge-base', '--is-ancestor', branchToCheck, targetBranch], {
+    cwd: projectPath,
+    encoding: 'utf-8',
+    stdio: ['pipe', 'pipe', 'pipe']
+  })
+
+  if (result.error) {
+    return { merged: false, error: result.error.message }
+  }
+
+  // Exit code 0 means branchToCheck is an ancestor of targetBranch (i.e., merged)
+  return { merged: result.status === 0 }
+})
+
+// Merge a branch into the current branch
+ipcMain.handle('git-merge-branch', async (_, projectPath: string, branchToMerge: string) => {
+  // Security: Validate branch name
+  if (!isValidGitRef(branchToMerge)) {
+    return { success: false, error: 'Invalid branch name' }
+  }
+
+  // Check for uncommitted changes first
+  const changesResult = runGitCommand(['status', '--porcelain'], projectPath)
+  if (changesResult.error) {
+    return { success: false, error: 'Failed to check for changes' }
+  }
+  if (changesResult.stdout.trim().length > 0) {
+    return { success: false, error: 'You have uncommitted changes. Commit or stash them before merging.' }
+  }
+
+  // Perform the merge with --no-edit (use default merge message) and --no-ff (always create merge commit)
+  const mergeResult = spawnSync('git', ['merge', branchToMerge, '--no-edit', '--no-ff'], {
+    cwd: projectPath,
+    encoding: 'utf-8',
+    stdio: ['pipe', 'pipe', 'pipe']
+  })
+
+  if (mergeResult.error) {
+    return { success: false, error: mergeResult.error.message }
+  }
+
+  // Check for merge conflicts (exit code 1 with conflict markers)
+  if (mergeResult.status !== 0) {
+    // Check if it's a conflict
+    const statusAfter = runGitCommand(['status', '--porcelain'], projectPath)
+    const hasConflicts = statusAfter.stdout.includes('UU') || statusAfter.stdout.includes('AA') || statusAfter.stdout.includes('DD')
+
+    if (hasConflicts) {
+      // Abort the merge
+      runGitCommand(['merge', '--abort'], projectPath)
+      return { success: false, error: 'Merge has conflicts - resolve in terminal', hasConflicts: true }
+    }
+
+    // Some other error
+    return { success: false, error: mergeResult.stderr || 'Merge failed' }
+  }
+
+  return { success: true }
+})
+
 // Update story status in sprint-status.yaml
 ipcMain.handle('update-story-status', async (_, filePath: string, newStatus: string) => {
   try {
@@ -1196,4 +1269,124 @@ ipcMain.handle('show-notification', async (_, title: string, body: string) => {
   if (Notification.isSupported()) {
     new Notification({ title, body }).show()
   }
+})
+
+// Chat thread storage
+const getChatThreadsDir = () => join(app.getPath('userData'), 'chat-threads')
+const getChatThreadPath = (agentId: string) => join(getChatThreadsDir(), `${agentId}.json`)
+
+// Ensure chat threads directory exists
+async function ensureChatThreadsDir() {
+  const dir = getChatThreadsDir()
+  if (!existsSync(dir)) {
+    await mkdir(dir, { recursive: true })
+  }
+}
+
+// Chat thread IPC handlers
+ipcMain.handle('load-chat-thread', async (_, agentId: string) => {
+  try {
+    const filePath = getChatThreadPath(agentId)
+    if (!existsSync(filePath)) {
+      return null
+    }
+    const content = await readFile(filePath, 'utf-8')
+    return JSON.parse(content)
+  } catch (error) {
+    console.error('Failed to load chat thread:', error)
+    return null
+  }
+})
+
+ipcMain.handle('save-chat-thread', async (_, agentId: string, thread: unknown) => {
+  try {
+    await ensureChatThreadsDir()
+    const filePath = getChatThreadPath(agentId)
+    await writeFile(filePath, JSON.stringify(thread, null, 2))
+    return true
+  } catch (error) {
+    console.error('Failed to save chat thread:', error)
+    return false
+  }
+})
+
+ipcMain.handle('clear-chat-thread', async (_, agentId: string) => {
+  try {
+    const filePath = getChatThreadPath(agentId)
+    if (existsSync(filePath)) {
+      const { unlink } = await import('fs/promises')
+      await unlink(filePath)
+    }
+    return true
+  } catch (error) {
+    console.error('Failed to clear chat thread:', error)
+    return false
+  }
+})
+
+ipcMain.handle('list-chat-threads', async () => {
+  try {
+    const dir = getChatThreadsDir()
+    if (!existsSync(dir)) {
+      return []
+    }
+    const files = await readdir(dir)
+    return files
+      .filter(f => f.endsWith('.json'))
+      .map(f => f.replace('.json', ''))
+  } catch (error) {
+    console.error('Failed to list chat threads:', error)
+    return []
+  }
+})
+
+// Chat agent - simple spawn per message
+import { chatAgentManager } from './agentManager'
+
+// Set mainWindow for chatAgentManager when app is ready
+app.whenReady().then(() => {
+  chatAgentManager.setMainWindow(mainWindow)
+})
+
+ipcMain.handle('chat-load-agent', async (_, options: {
+  agentId: string
+  projectPath: string
+  projectType: 'bmm' | 'bmgd'
+}) => {
+  chatAgentManager.setMainWindow(mainWindow)
+  return chatAgentManager.loadAgent(options)
+})
+
+ipcMain.handle('chat-send-message', async (_, options: {
+  agentId: string
+  projectPath: string
+  message: string
+  sessionId?: string
+}) => {
+  chatAgentManager.setMainWindow(mainWindow)
+  return chatAgentManager.sendMessage(options)
+})
+
+ipcMain.handle('chat-cancel-message', async (_, agentId: string) => {
+  return chatAgentManager.cancelMessage(agentId)
+})
+
+ipcMain.handle('chat-is-agent-running', async (_, agentId: string) => {
+  return chatAgentManager.isRunning(agentId)
+})
+
+ipcMain.handle('chat-has-session', async () => {
+  return chatAgentManager.hasSession()
+})
+
+ipcMain.handle('chat-is-session-ready', async () => {
+  return chatAgentManager.isSessionReady()
+})
+
+ipcMain.handle('chat-kill-session', async () => {
+  return chatAgentManager.killSession()
+})
+
+ipcMain.handle('chat-get-active-sessions', async () => {
+  return []
 })

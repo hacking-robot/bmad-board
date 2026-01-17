@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import { Epic, Story, StoryContent, StoryStatus, Agent, ProjectType, AgentHistoryEntry, AITool, HumanReviewChecklistItem, StoryReviewState } from './types'
+import { Epic, Story, StoryContent, StoryStatus, Agent, ProjectType, AgentHistoryEntry, AITool, HumanReviewChecklistItem, StoryReviewState, ChatMessage, AgentThread } from './types'
+
+export type ViewMode = 'board' | 'chat'
 
 export interface RecentProject {
   path: string
@@ -50,7 +52,7 @@ const electronStorage = {
       const parsed = JSON.parse(value)
       if (parsed.state) {
         // Only save the settings we care about
-        const { themeMode, aiTool, projectPath, projectType, selectedEpicId, collapsedColumnsByEpic, agentHistory, recentProjects, notificationsEnabled, storyOrder, enableHumanReviewColumn, humanReviewChecklist, humanReviewStates, humanReviewStories } = parsed.state
+        const { themeMode, aiTool, projectPath, projectType, selectedEpicId, collapsedColumnsByEpic, agentHistory, recentProjects, notificationsEnabled, storyOrder, enableHumanReviewColumn, humanReviewChecklist, humanReviewStates, humanReviewStories, maxThreadMessages } = parsed.state
 
         // Don't persist full output - it can contain characters that break JSON
         // Just save metadata and a small summary
@@ -75,7 +77,8 @@ const electronStorage = {
           enableHumanReviewColumn: enableHumanReviewColumn ?? false,
           humanReviewChecklist: humanReviewChecklist || [],
           humanReviewStates: humanReviewStates || {},
-          humanReviewStories: humanReviewStories || []
+          humanReviewStories: humanReviewStories || [],
+          maxThreadMessages: maxThreadMessages ?? 100
         })
       }
     } catch (error) {
@@ -97,7 +100,8 @@ const electronStorage = {
       enableHumanReviewColumn: false,
       humanReviewChecklist: [],
       humanReviewStates: {},
-      humanReviewStories: []
+      humanReviewStories: [],
+      maxThreadMessages: 100
     })
   }
 }
@@ -140,8 +144,12 @@ interface AppState {
   // Git state (reactive across components)
   currentBranch: string | null
   hasUncommittedChanges: boolean
+  unmergedStoryBranches: string[]
+  epicMergeStatusChecked: boolean // true once we've checked merge status for current epic
   setCurrentBranch: (branch: string | null) => void
   setHasUncommittedChanges: (hasChanges: boolean) => void
+  setUnmergedStoryBranches: (branches: string[]) => void
+  setEpicMergeStatusChecked: (checked: boolean) => void
 
   // Data
   epics: Epic[]
@@ -182,8 +190,10 @@ interface AppState {
   // Help Panel
   helpPanelOpen: boolean
   helpPanelTab: number
-  setHelpPanelOpen: (open: boolean, tab?: number) => void
+  helpPanelScrollToAgent: string | null
+  setHelpPanelOpen: (open: boolean, tab?: number, scrollToAgent?: string) => void
   toggleHelpPanel: () => void
+  clearHelpPanelScrollToAgent: () => void
 
   // New Project Dialog
   newProjectDialogOpen: boolean
@@ -224,6 +234,32 @@ interface AppState {
   removeFromHumanReview: (storyId: string) => void
   isInHumanReview: (storyId: string) => boolean
   getEffectiveStatus: (story: Story) => StoryStatus
+
+  // View Mode (board or chat)
+  viewMode: ViewMode
+  setViewMode: (mode: ViewMode) => void
+  toggleViewMode: () => void
+
+  // Chat Interface
+  chatThreads: Record<string, AgentThread>
+  selectedChatAgent: string | null
+  maxThreadMessages: number
+  setSelectedChatAgent: (agentId: string | null) => void
+  setMaxThreadMessages: (max: number) => void
+  addChatMessage: (agentId: string, message: ChatMessage) => void
+  updateChatMessage: (agentId: string, messageId: string, updates: Partial<ChatMessage>) => void
+  setChatTyping: (agentId: string, isTyping: boolean) => void
+  setChatActivity: (agentId: string, activity: string | undefined) => void
+  markChatRead: (agentId: string) => void
+  incrementUnread: (agentId: string) => void
+  clearChatThread: (agentId: string) => void
+  setAgentInitialized: (agentId: string, initialized: boolean) => void
+  setChatSessionId: (agentId: string, sessionId: string) => void
+  // Pending message to send when switching to chat
+  pendingChatMessage: { agentId: string; message: string; storyId?: string; branchName?: string } | null
+  setPendingChatMessage: (pending: { agentId: string; message: string; storyId?: string; branchName?: string } | null) => void
+  clearPendingChatMessage: () => void
+  setThreadContext: (agentId: string, storyId: string | undefined, branchName: string | undefined) => void
 
   // Computed - filtered stories
   getFilteredStories: () => Story[]
@@ -279,8 +315,23 @@ export const useStore = create<AppState>()(
       // Git state (reactive across components)
       currentBranch: null,
       hasUncommittedChanges: false,
-      setCurrentBranch: (branch) => set({ currentBranch: branch }),
+      unmergedStoryBranches: [],
+      epicMergeStatusChecked: false,
+      setCurrentBranch: (branch) => {
+        const current = get().currentBranch
+        // Skip if branch hasn't changed - prevents resetting merge status check
+        if (branch === current) return
+        set({
+          currentBranch: branch,
+          unmergedStoryBranches: [],
+          epicMergeStatusChecked: false // Reset - need to re-check merge status
+        })
+      },
       setHasUncommittedChanges: (hasChanges) => set({ hasUncommittedChanges: hasChanges }),
+      setUnmergedStoryBranches: (branches) => {
+        set({ unmergedStoryBranches: branches, epicMergeStatusChecked: true })
+      },
+      setEpicMergeStatusChecked: (checked) => set({ epicMergeStatusChecked: checked }),
 
       // Data
       epics: [],
@@ -348,8 +399,14 @@ export const useStore = create<AppState>()(
       // Help Panel
       helpPanelOpen: false,
       helpPanelTab: 0,
-      setHelpPanelOpen: (open, tab = 0) => set({ helpPanelOpen: open, helpPanelTab: tab }),
+      helpPanelScrollToAgent: null,
+      setHelpPanelOpen: (open, tab = 0, scrollToAgent) => set({
+        helpPanelOpen: open,
+        helpPanelTab: tab,
+        helpPanelScrollToAgent: scrollToAgent || null
+      }),
       toggleHelpPanel: () => set((state) => ({ helpPanelOpen: !state.helpPanelOpen })),
+      clearHelpPanelScrollToAgent: () => set({ helpPanelScrollToAgent: null }),
 
       // New Project Dialog
       newProjectDialogOpen: false,
@@ -483,6 +540,214 @@ export const useStore = create<AppState>()(
         }
         return story.status
       },
+
+      // View Mode
+      viewMode: 'board',
+      setViewMode: (mode) => set({ viewMode: mode }),
+      toggleViewMode: () => set((state) => ({
+        viewMode: state.viewMode === 'board' ? 'chat' : 'board'
+      })),
+
+      // Chat Interface
+      chatThreads: {},
+      selectedChatAgent: null,
+      maxThreadMessages: 100,
+      pendingChatMessage: null,
+      setSelectedChatAgent: (agentId) => set({ selectedChatAgent: agentId }),
+      setPendingChatMessage: (pending) => set({ pendingChatMessage: pending }),
+      clearPendingChatMessage: () => set({ pendingChatMessage: null }),
+      setMaxThreadMessages: (max) => set({ maxThreadMessages: max }),
+      addChatMessage: (agentId, message) => set((state) => {
+        const thread = state.chatThreads[agentId] || {
+          agentId,
+          messages: [],
+          lastActivity: Date.now(),
+          unreadCount: 0,
+          isTyping: false,
+          isInitialized: false
+        }
+
+        // Add message and trim to max
+        const messages = [...thread.messages, message]
+        const trimmedMessages = messages.slice(-state.maxThreadMessages)
+
+        return {
+          chatThreads: {
+            ...state.chatThreads,
+            [agentId]: {
+              ...thread,
+              messages: trimmedMessages,
+              lastActivity: Date.now()
+            }
+          }
+        }
+      }),
+      updateChatMessage: (agentId, messageId, updates) => set((state) => {
+        const thread = state.chatThreads[agentId]
+        if (!thread) return state
+
+        const messages = thread.messages.map((msg) =>
+          msg.id === messageId ? { ...msg, ...updates } : msg
+        )
+
+        return {
+          chatThreads: {
+            ...state.chatThreads,
+            [agentId]: {
+              ...thread,
+              messages
+            }
+          }
+        }
+      }),
+      setChatTyping: (agentId, isTyping) => set((state) => {
+        const thread = state.chatThreads[agentId] || {
+          agentId,
+          messages: [],
+          lastActivity: Date.now(),
+          unreadCount: 0,
+          isTyping: false,
+          isInitialized: false
+        }
+
+        return {
+          chatThreads: {
+            ...state.chatThreads,
+            [agentId]: {
+              ...thread,
+              isTyping,
+              // Clear activity when typing stops
+              thinkingActivity: isTyping ? thread.thinkingActivity : undefined
+            }
+          }
+        }
+      }),
+      setChatActivity: (agentId, activity) => set((state) => {
+        const thread = state.chatThreads[agentId] || {
+          agentId,
+          messages: [],
+          lastActivity: Date.now(),
+          unreadCount: 0,
+          isTyping: false,
+          isInitialized: false
+        }
+
+        return {
+          chatThreads: {
+            ...state.chatThreads,
+            [agentId]: {
+              ...thread,
+              thinkingActivity: activity
+            }
+          }
+        }
+      }),
+      markChatRead: (agentId) => set((state) => {
+        const thread = state.chatThreads[agentId]
+        if (!thread) return state
+
+        return {
+          chatThreads: {
+            ...state.chatThreads,
+            [agentId]: {
+              ...thread,
+              unreadCount: 0
+            }
+          }
+        }
+      }),
+      incrementUnread: (agentId) => set((state) => {
+        const thread = state.chatThreads[agentId]
+        if (!thread) return state
+
+        // Don't increment if this agent is selected
+        if (state.selectedChatAgent === agentId) return state
+
+        return {
+          chatThreads: {
+            ...state.chatThreads,
+            [agentId]: {
+              ...thread,
+              unreadCount: thread.unreadCount + 1
+            }
+          }
+        }
+      }),
+      clearChatThread: (agentId) => set((state) => ({
+        chatThreads: {
+          ...state.chatThreads,
+          [agentId]: {
+            agentId,
+            messages: [],
+            lastActivity: Date.now(),
+            unreadCount: 0,
+            isTyping: false,
+            isInitialized: false,
+            sessionId: undefined // Clear session so agent reloads on next message
+          }
+        }
+      })),
+      setAgentInitialized: (agentId, initialized) => set((state) => {
+        const thread = state.chatThreads[agentId] || {
+          agentId,
+          messages: [],
+          lastActivity: Date.now(),
+          unreadCount: 0,
+          isTyping: false,
+          isInitialized: false
+        }
+
+        return {
+          chatThreads: {
+            ...state.chatThreads,
+            [agentId]: {
+              ...thread,
+              isInitialized: initialized
+            }
+          }
+        }
+      }),
+      setChatSessionId: (agentId, sessionId) => set((state) => {
+        const thread = state.chatThreads[agentId] || {
+          agentId,
+          messages: [],
+          lastActivity: Date.now(),
+          unreadCount: 0,
+          isTyping: false,
+          isInitialized: false
+        }
+
+        return {
+          chatThreads: {
+            ...state.chatThreads,
+            [agentId]: {
+              ...thread,
+              sessionId
+            }
+          }
+        }
+      }),
+      setThreadContext: (agentId, storyId, branchName) => set((state) => {
+        const thread = state.chatThreads[agentId] || {
+          agentId,
+          messages: [],
+          lastActivity: Date.now(),
+          unreadCount: 0,
+          isTyping: false,
+          isInitialized: false
+        }
+
+        return {
+          chatThreads: {
+            ...state.chatThreads,
+            [agentId]: {
+              ...thread,
+              storyId,
+              branchName
+            }
+          }
+        }
+      }),
 
       // Computed
       getFilteredStories: () => {

@@ -1,0 +1,359 @@
+import { Box, Typography, Paper, IconButton, Tooltip, Link } from '@mui/material'
+import ContentCopyIcon from '@mui/icons-material/ContentCopy'
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline'
+import { ChatMessage as ChatMessageType } from '../../types'
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { vscDarkPlus, vs } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import { useStore } from '../../store'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import type { Components } from 'react-markdown'
+
+interface ChatMessageProps {
+  message: ChatMessageType
+  agentName: string
+  agentAvatar: string
+}
+
+// Map file extensions to language names
+function getLanguageFromExtension(lang: string): string {
+  const langMap: Record<string, string> = {
+    js: 'javascript',
+    jsx: 'jsx',
+    ts: 'typescript',
+    tsx: 'tsx',
+    py: 'python',
+    rb: 'ruby',
+    rs: 'rust',
+    go: 'go',
+    java: 'java',
+    cpp: 'cpp',
+    c: 'c',
+    cs: 'csharp',
+    php: 'php',
+    swift: 'swift',
+    kt: 'kotlin',
+    sh: 'bash',
+    bash: 'bash',
+    json: 'json',
+    yaml: 'yaml',
+    yml: 'yaml',
+    xml: 'xml',
+    html: 'html',
+    css: 'css',
+    scss: 'scss',
+    sql: 'sql',
+    md: 'markdown'
+  }
+  return langMap[lang.toLowerCase()] || lang.toLowerCase() || 'text'
+}
+
+// Create markdown components with proper styling
+function createMarkdownComponents(isDark: boolean): Components {
+  return {
+    // Code blocks and inline code
+    code({ className, children }) {
+      const match = /language-(\w+)/.exec(className || '')
+      const language = match ? match[1] : ''
+      const codeString = String(children).replace(/\n$/, '')
+
+      // Check if it's a code block (has language) or inline code
+      const isBlock = match || codeString.includes('\n')
+
+      if (isBlock) {
+        const handleCopy = () => {
+          navigator.clipboard.writeText(codeString)
+        }
+
+        return (
+          <Box sx={{ position: 'relative', my: 1, borderRadius: 1, overflow: 'hidden' }}>
+            <Box
+              sx={{
+                position: 'absolute',
+                top: 4,
+                right: 4,
+                zIndex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1
+              }}
+            >
+              {language && (
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: isDark ? '#888' : '#666',
+                    fontSize: '0.65rem',
+                    textTransform: 'uppercase'
+                  }}
+                >
+                  {language}
+                </Typography>
+              )}
+              <Tooltip title="Copy code">
+                <IconButton
+                  size="small"
+                  onClick={handleCopy}
+                  sx={{
+                    p: 0.5,
+                    bgcolor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+                    '&:hover': {
+                      bgcolor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'
+                    }
+                  }}
+                >
+                  <ContentCopyIcon sx={{ fontSize: 14 }} />
+                </IconButton>
+              </Tooltip>
+            </Box>
+            <SyntaxHighlighter
+              language={getLanguageFromExtension(language)}
+              style={isDark ? vscDarkPlus : vs}
+              customStyle={{
+                margin: 0,
+                borderRadius: 4,
+                fontSize: '0.8rem',
+                padding: '12px',
+                paddingTop: language ? '28px' : '12px'
+              }}
+              wrapLongLines
+            >
+              {codeString}
+            </SyntaxHighlighter>
+          </Box>
+        )
+      }
+
+      // Inline code
+      return (
+        <Box
+          component="code"
+          sx={{
+            bgcolor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)',
+            px: 0.5,
+            py: 0.25,
+            borderRadius: 0.5,
+            fontSize: '0.85em',
+            fontFamily: 'monospace'
+          }}
+        >
+          {children}
+        </Box>
+      )
+    },
+
+    // Paragraphs
+    p({ children }) {
+      return (
+        <Typography variant="body2" sx={{ mb: 1, '&:last-child': { mb: 0 } }}>
+          {children}
+        </Typography>
+      )
+    },
+
+    // Headers
+    h1({ children }) {
+      return (
+        <Typography variant="h6" sx={{ mt: 2, mb: 1, fontWeight: 600 }}>
+          {children}
+        </Typography>
+      )
+    },
+    h2({ children }) {
+      return (
+        <Typography variant="subtitle1" sx={{ mt: 1.5, mb: 0.5, fontWeight: 600 }}>
+          {children}
+        </Typography>
+      )
+    },
+    h3({ children }) {
+      return (
+        <Typography variant="subtitle2" sx={{ mt: 1, mb: 0.5, fontWeight: 600 }}>
+          {children}
+        </Typography>
+      )
+    },
+
+    // Lists
+    ul({ children }) {
+      return (
+        <Box component="ul" sx={{ pl: 2, my: 0.5, '& li': { mb: 0.25 } }}>
+          {children}
+        </Box>
+      )
+    },
+    ol({ children }) {
+      return (
+        <Box component="ol" sx={{ pl: 2, my: 0.5, '& li': { mb: 0.25 } }}>
+          {children}
+        </Box>
+      )
+    },
+    li({ children }) {
+      return (
+        <Typography component="li" variant="body2">
+          {children}
+        </Typography>
+      )
+    },
+
+    // Links
+    a({ href, children }) {
+      return (
+        <Link
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          sx={{ color: 'primary.main' }}
+        >
+          {children}
+        </Link>
+      )
+    },
+
+    // Bold and italic
+    strong({ children }) {
+      return <strong>{children}</strong>
+    },
+    em({ children }) {
+      return <em>{children}</em>
+    },
+
+    // Blockquotes
+    blockquote({ children }) {
+      return (
+        <Box
+          sx={{
+            borderLeft: 3,
+            borderColor: 'primary.main',
+            pl: 1.5,
+            my: 1,
+            color: 'text.secondary',
+            fontStyle: 'italic'
+          }}
+        >
+          {children}
+        </Box>
+      )
+    },
+
+    // Horizontal rule
+    hr() {
+      return <Box sx={{ borderTop: 1, borderColor: 'divider', my: 1.5 }} />
+    }
+  }
+}
+
+export default function ChatMessage({ message, agentName, agentAvatar }: ChatMessageProps) {
+  const themeMode = useStore((state) => state.themeMode)
+  const isDark = themeMode === 'dark'
+  const isUser = message.role === 'user'
+  const isError = message.status === 'error'
+  const isPending = message.status === 'pending'
+  const isStreaming = message.status === 'streaming'
+
+  const formattedTime = new Date(message.timestamp).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+
+  // Use dark mode styling for agent messages in dark theme
+  const contentIsDark = isDark && !isUser
+
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: isUser ? 'row-reverse' : 'row',
+        gap: 1.5,
+        px: 2,
+        py: 1,
+        alignItems: 'flex-start'
+      }}
+    >
+      {/* Avatar */}
+      <Box
+        sx={{
+          width: 32,
+          height: 32,
+          borderRadius: '50%',
+          bgcolor: isUser ? 'grey.600' : 'primary.main',
+          color: 'white',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontWeight: 600,
+          fontSize: '0.75rem',
+          flexShrink: 0
+        }}
+      >
+        {isUser ? 'You' : agentAvatar}
+      </Box>
+
+      {/* Message Content */}
+      <Box sx={{ flex: 1, maxWidth: '75%' }}>
+        {/* Header */}
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+            mb: 0.5,
+            justifyContent: isUser ? 'flex-end' : 'flex-start'
+          }}
+        >
+          <Typography variant="caption" fontWeight={600}>
+            {isUser ? 'You' : agentName}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {formattedTime}
+          </Typography>
+          {isError && (
+            <ErrorOutlineIcon sx={{ fontSize: 14, color: 'error.main' }} />
+          )}
+        </Box>
+
+        {/* Message Bubble */}
+        <Paper
+          elevation={0}
+          sx={{
+            p: 1.5,
+            bgcolor: isUser
+              ? 'primary.main'
+              : isError
+                ? 'error.light'
+                : isDark
+                  ? 'grey.800'
+                  : 'grey.100',
+            color: isUser
+              ? 'primary.contrastText'
+              : isError
+                ? 'error.contrastText'
+                : 'text.primary',
+            borderRadius: 2,
+            borderTopLeftRadius: isUser ? 2 : 0,
+            borderTopRightRadius: isUser ? 0 : 2,
+            opacity: isPending ? 0.6 : 1
+          }}
+        >
+          {isPending ? (
+            <Typography variant="body2" color="text.secondary">
+              Waiting for response...
+            </Typography>
+          ) : isStreaming && !message.content ? (
+            <Typography variant="body2" color="text.secondary">
+              Thinking...
+            </Typography>
+          ) : (
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={createMarkdownComponents(contentIsDark)}
+            >
+              {message.content}
+            </ReactMarkdown>
+          )}
+        </Paper>
+      </Box>
+    </Box>
+  )
+}

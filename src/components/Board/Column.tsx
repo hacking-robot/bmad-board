@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, memo } from 'react'
 import { Box, Typography, Paper, Chip, IconButton, Tooltip, Popover } from '@mui/material'
 import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
@@ -6,6 +6,7 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import { Story, StoryStatus } from '../../types'
+import type { AgentDefinition } from '../../types/flow'
 import StoryCard from '../StoryCard/StoryCard'
 import { useWorkflow } from '../../hooks/useWorkflow'
 
@@ -16,15 +17,19 @@ interface ColumnProps {
   stories: Story[]
   isCollapsed?: boolean
   onToggleCollapse?: () => void
+  disableDrag?: boolean
+  workingTeammatesByBranch?: Record<string, AgentDefinition>
 }
 
-export default function Column({
+function Column({
   status,
   label,
   color,
   stories,
   isCollapsed = false,
-  onToggleCollapse
+  onToggleCollapse,
+  disableDrag = false,
+  workingTeammatesByBranch = {}
 }: ColumnProps) {
   const [infoAnchor, setInfoAnchor] = useState<HTMLButtonElement | null>(null)
   const { getStatus, getPrimaryNextStep, getAgentName } = useWorkflow()
@@ -236,7 +241,7 @@ export default function Column({
         </Typography>
         {info.agent !== '-' && (
           <Typography variant="caption" color="primary.main" sx={{ display: 'block', mb: 1 }}>
-            Agent: {info.agent}
+            Teammate: {info.agent}
           </Typography>
         )}
         <Box
@@ -309,7 +314,12 @@ export default function Column({
               </Box>
             ) : (
               stories.map((story) => (
-                <StoryCard key={story.id} story={story} />
+                <StoryCard
+                  key={story.id}
+                  story={story}
+                  disableDrag={disableDrag}
+                  workingTeammate={workingTeammatesByBranch[`${story.epicId}-${story.id}`]}
+                />
               ))
             )}
           </Box>
@@ -318,3 +328,5 @@ export default function Column({
     </Paper>
   )
 }
+
+export default memo(Column)

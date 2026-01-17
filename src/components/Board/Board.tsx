@@ -2,18 +2,29 @@ import { useMemo, useState, useRef } from 'react'
 import { Box, CircularProgress, Typography, Alert, Snackbar } from '@mui/material'
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, rectIntersection, closestCorners, CollisionDetection, PointerSensor, useSensor, useSensors, UniqueIdentifier } from '@dnd-kit/core'
 import { arrayMove } from '@dnd-kit/sortable'
+import MergeIcon from '@mui/icons-material/Merge'
 import { useStore } from '../../store'
 import { useProjectData } from '../../hooks/useProjectData'
+import { useWorkflow } from '../../hooks/useWorkflow'
 import { STATUS_COLUMNS, Story, StoryStatus } from '../../types'
+import type { AgentDefinition } from '../../types/flow'
 import Column from './Column'
 import StoryCard from '../StoryCard/StoryCard'
 
 export default function Board() {
-  // Configure sensors for drag detection
+  // Compute read-only state from store values (reactive)
+  const currentBranch = useStore((state) => state.currentBranch)
+  const epicMergeStatusChecked = useStore((state) => state.epicMergeStatusChecked)
+  const unmergedStoryBranches = useStore((state) => state.unmergedStoryBranches)
+
+  const isEpicBranch = currentBranch?.match(/^epic-\d+-/)
+  const readOnly = Boolean(isEpicBranch && (!epicMergeStatusChecked || unmergedStoryBranches.length > 0))
+
+  // Configure sensors for drag detection - empty when read-only to disable dragging
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 5 // 5px movement before drag starts - allows clicks to work
+        distance: readOnly ? Infinity : 5 // Infinity effectively disables drag; 5px allows clicks
       }
     })
   )
@@ -33,7 +44,23 @@ export default function Board() {
   const addToHumanReview = useStore((state) => state.addToHumanReview)
   const removeFromHumanReview = useStore((state) => state.removeFromHumanReview)
   const getEffectiveStatus = useStore((state) => state.getEffectiveStatus)
+  const chatThreads = useStore((state) => state.chatThreads)
   const { loadProjectData } = useProjectData()
+  const { agents: bmadAgents } = useWorkflow()
+
+  // Compute working teammates map at Board level to avoid per-card subscriptions
+  const workingTeammatesByBranch = useMemo(() => {
+    const map: Record<string, AgentDefinition> = {}
+    for (const thread of Object.values(chatThreads)) {
+      if (thread.isTyping && thread.branchName) {
+        const agentInfo = bmadAgents.find((a) => a.id === thread.agentId)
+        if (agentInfo) {
+          map[thread.branchName] = agentInfo
+        }
+      }
+    }
+    return map
+  }, [chatThreads, bmadAgents])
 
   // Drag and drop state
   const [activeStory, setActiveStory] = useState<Story | null>(null)
@@ -121,6 +148,13 @@ export default function Board() {
     // Restore scroll position immediately after clearing drag state
     if (scrollContainerRef.current) {
       scrollContainerRef.current.scrollLeft = savedScrollLeft
+    }
+
+    // Block drag operations in read-only mode
+    if (readOnly) {
+      setSnackbarMessage('Board is read-only. Merge story branches first.')
+      setSnackbarOpen(true)
+      return
     }
 
     if (!over) return
@@ -341,17 +375,37 @@ export default function Board() {
         sx={{
           flex: 1,
           overflow: 'hidden',
-          position: 'relative'
+          position: 'relative',
+          display: 'flex',
+          flexDirection: 'column'
         }}
       >
+        {/* Read-only banner when on epic with unmerged story branches */}
+        {readOnly && (
+          <Alert
+            severity="warning"
+            icon={!epicMergeStatusChecked ? <CircularProgress size={16} /> : <MergeIcon />}
+            sx={{
+              mx: 2,
+              mt: 2,
+              mb: 0,
+              py: 0.5,
+              '& .MuiAlert-message': { py: 0.5 }
+            }}
+          >
+            <Typography variant="body2">
+              {!epicMergeStatusChecked ? (
+                <><strong>Checking merge status...</strong></>
+              ) : (
+                <><strong>Read-only mode:</strong> Merge {unmergedStoryBranches.length} story branch{unmergedStoryBranches.length !== 1 ? 'es' : ''} before editing. Click the branch switcher to merge.</>
+              )}
+            </Typography>
+          </Alert>
+        )}
         <Box
           ref={scrollContainerRef}
           sx={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
+            flex: 1,
             display: 'flex',
             gap: 2,
             p: 2,
@@ -387,6 +441,8 @@ export default function Board() {
                 stories={sortedStories}
                 isCollapsed={collapsedColumns.includes(column.status)}
                 onToggleCollapse={() => toggleColumnCollapse(column.status)}
+                disableDrag={readOnly}
+                workingTeammatesByBranch={workingTeammatesByBranch}
               />
             )
           })}

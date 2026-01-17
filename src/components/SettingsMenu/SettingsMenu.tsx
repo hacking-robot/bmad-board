@@ -15,13 +15,15 @@ import {
   RadioGroup,
   FormControlLabel,
   Chip,
-  Switch
+  Switch,
+  Slider
 } from '@mui/material'
 import SettingsIcon from '@mui/icons-material/Settings'
 import KeyboardIcon from '@mui/icons-material/Keyboard'
 import SmartToyIcon from '@mui/icons-material/SmartToy'
 import NotificationsIcon from '@mui/icons-material/Notifications'
 import RateReviewIcon from '@mui/icons-material/RateReview'
+import ChatIcon from '@mui/icons-material/Chat'
 import CloseIcon from '@mui/icons-material/Close'
 import { useStore } from '../../store'
 import { AI_TOOLS, AITool } from '../../types'
@@ -29,6 +31,7 @@ import { AI_TOOLS, AITool } from '../../types'
 export default function SettingsMenu() {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
   const [toolDialogOpen, setToolDialogOpen] = useState(false)
+  const [chatSettingsDialogOpen, setChatSettingsDialogOpen] = useState(false)
   const open = Boolean(anchorEl)
 
   const aiTool = useStore((state) => state.aiTool)
@@ -37,8 +40,15 @@ export default function SettingsMenu() {
   const setNotificationsEnabled = useStore((state) => state.setNotificationsEnabled)
   const enableHumanReviewColumn = useStore((state) => state.enableHumanReviewColumn)
   const setEnableHumanReviewColumn = useStore((state) => state.setEnableHumanReviewColumn)
+  const maxThreadMessages = useStore((state) => state.maxThreadMessages)
+  const setMaxThreadMessages = useStore((state) => state.setMaxThreadMessages)
 
   const selectedTool = AI_TOOLS.find((t) => t.id === aiTool) || AI_TOOLS[0]
+
+  const handleChatSettingsClick = () => {
+    handleClose()
+    setChatSettingsDialogOpen(true)
+  }
 
   const handleClick = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget)
@@ -134,6 +144,16 @@ export default function SettingsMenu() {
             size="small"
           />
         </MenuItem>
+        <MenuItem onClick={handleChatSettingsClick}>
+          <ListItemIcon>
+            <ChatIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText
+            primary="Chat Settings"
+            secondary={`Max ${maxThreadMessages} messages`}
+            secondaryTypographyProps={{ variant: 'caption' }}
+          />
+        </MenuItem>
         <MenuItem onClick={handleKeyboardShortcuts}>
           <ListItemIcon>
             <KeyboardIcon fontSize="small" />
@@ -204,6 +224,54 @@ export default function SettingsMenu() {
               </Box>
             ))}
           </RadioGroup>
+        </DialogContent>
+      </Dialog>
+
+      {/* Chat Settings Dialog */}
+      <Dialog
+        open={chatSettingsDialogOpen}
+        onClose={() => setChatSettingsDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          Chat Settings
+          <IconButton size="small" onClick={() => setChatSettingsDialogOpen(false)}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            Configure the teammate chat interface settings.
+          </Typography>
+
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="subtitle2" gutterBottom>
+              Max Messages Per Thread
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+              Older messages will be removed when this limit is reached. Range: 50-500
+            </Typography>
+            <Box sx={{ px: 1 }}>
+              <Slider
+                value={maxThreadMessages}
+                onChange={(_, value) => setMaxThreadMessages(value as number)}
+                min={50}
+                max={500}
+                step={10}
+                marks={[
+                  { value: 50, label: '50' },
+                  { value: 100, label: '100' },
+                  { value: 250, label: '250' },
+                  { value: 500, label: '500' }
+                ]}
+                valueLabelDisplay="auto"
+              />
+            </Box>
+            <Typography variant="body2" sx={{ mt: 1, textAlign: 'center' }}>
+              Current: <strong>{maxThreadMessages}</strong> messages
+            </Typography>
+          </Box>
         </DialogContent>
       </Dialog>
     </>

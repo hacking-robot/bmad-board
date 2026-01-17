@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Box, Typography, Paper, Stack, Chip, Divider, Alert, IconButton, Tooltip, Snackbar } from '@mui/material'
+import { useState, useEffect, useRef } from 'react'
+import { Box, Typography, Paper, Stack, Chip, Divider, Alert, IconButton, Tooltip, Snackbar, Badge } from '@mui/material'
 import PersonIcon from '@mui/icons-material/Person'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import { useStore } from '../../store'
@@ -22,9 +22,27 @@ function formatAgentInvocation(agentId: string, aiTool: AITool, projectType: Pro
 export default function AgentsTab() {
   const aiTool = useStore((state) => state.aiTool)
   const projectType = useStore((state) => state.projectType)
+  const scrollToAgent = useStore((state) => state.helpPanelScrollToAgent)
+  const clearHelpPanelScrollToAgent = useStore((state) => state.clearHelpPanelScrollToAgent)
+  const chatThreads = useStore((state) => state.chatThreads)
   const selectedTool = AI_TOOLS.find((t) => t.id === aiTool) || AI_TOOLS[0]
   const { agents } = useWorkflow()
   const [snackbarOpen, setSnackbarOpen] = useState(false)
+  const agentRefs = useRef<Record<string, HTMLDivElement | null>>({})
+
+  // Scroll to specific agent when requested
+  useEffect(() => {
+    if (scrollToAgent && agentRefs.current[scrollToAgent]) {
+      // Small delay to ensure DOM is ready
+      setTimeout(() => {
+        agentRefs.current[scrollToAgent]?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start'
+        })
+        clearHelpPanelScrollToAgent()
+      }, 100)
+    }
+  }, [scrollToAgent, clearHelpPanelScrollToAgent])
 
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text)
@@ -40,14 +58,15 @@ export default function AgentsTab() {
       </Alert>
 
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        BMAD uses specialized AI agents, each with a distinct role in the development process.
-        Work with these agents in your AI coding assistant to guide your project.
+        BMAD uses specialized teammates, each with a distinct role in the development process.
+        Work with these teammates in your AI coding assistant to guide your project.
       </Typography>
 
       <Stack spacing={2}>
         {agents.map((agent) => (
           <Paper
             key={agent.id}
+            ref={(el) => { agentRefs.current[agent.id] = el }}
             variant="outlined"
             sx={{
               p: 2,
@@ -60,16 +79,47 @@ export default function AgentsTab() {
               <Typography variant="subtitle1" fontWeight={600}>
                 {agent.role}
               </Typography>
-              <Chip
-                label={agent.name}
-                size="small"
+              <Badge
+                badgeContent={chatThreads[agent.id]?.unreadCount || 0}
+                color="error"
+                invisible={!chatThreads[agent.id]?.unreadCount}
                 sx={{
-                  bgcolor: agent.color,
-                  color: 'white',
-                  fontWeight: 500,
-                  height: 22
+                  '& .MuiBadge-badge': {
+                    fontSize: '0.65rem',
+                    height: 16,
+                    minWidth: 16
+                  }
                 }}
-              />
+              >
+                <Chip
+                  label={agent.name}
+                  size="small"
+                  sx={{
+                    bgcolor: agent.color,
+                    color: 'white',
+                    fontWeight: 500,
+                    height: 22
+                  }}
+                />
+              </Badge>
+              {chatThreads[agent.id]?.isTyping && (
+                <Chip
+                  label="Working..."
+                  size="small"
+                  sx={{
+                    bgcolor: 'success.main',
+                    color: 'white',
+                    fontWeight: 500,
+                    height: 20,
+                    fontSize: '0.7rem',
+                    animation: 'pulse 1.5s ease-in-out infinite',
+                    '@keyframes pulse': {
+                      '0%, 100%': { opacity: 1 },
+                      '50%': { opacity: 0.6 }
+                    }
+                  }}
+                />
+              )}
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
                 <Chip
                   label={formatAgentInvocation(agent.id, aiTool, projectType)}
