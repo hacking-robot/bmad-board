@@ -1340,6 +1340,119 @@ ipcMain.handle('list-chat-threads', async () => {
   }
 })
 
+// Story chat history storage (linked to stories, persisted in project and user data)
+import { homedir } from 'os'
+
+interface StoryChatHistory {
+  storyId: string
+  storyTitle: string
+  sessions: unknown[]
+  lastUpdated: number
+}
+
+const getProjectStoryChatDir = (projectPath: string) => join(projectPath, '_bmad-output', 'chat-history')
+const getProjectStoryChatPath = (projectPath: string, storyId: string) => join(getProjectStoryChatDir(projectPath), `${storyId}.json`)
+const getUserStoryChatDir = () => join(homedir(), '.config', 'bmadboard', 'story-chats')
+const getUserStoryChatPath = (storyId: string) => join(getUserStoryChatDir(), `${storyId}.json`)
+
+// Ensure story chat directories exist
+async function ensureStoryChatDirs(projectPath: string) {
+  const projectDir = getProjectStoryChatDir(projectPath)
+  const userDir = getUserStoryChatDir()
+  if (!existsSync(projectDir)) {
+    await mkdir(projectDir, { recursive: true })
+  }
+  if (!existsSync(userDir)) {
+    await mkdir(userDir, { recursive: true })
+  }
+}
+
+// Save story chat history to both project and user data locations
+ipcMain.handle('save-story-chat-history', async (_, projectPath: string, storyId: string, history: StoryChatHistory) => {
+  try {
+    await ensureStoryChatDirs(projectPath)
+    const projectFilePath = getProjectStoryChatPath(projectPath, storyId)
+    const userFilePath = getUserStoryChatPath(storyId)
+    const content = JSON.stringify(history, null, 2)
+
+    // Save to both locations
+    await Promise.all([
+      writeFile(projectFilePath, content),
+      writeFile(userFilePath, content)
+    ])
+    return true
+  } catch (error) {
+    console.error('Failed to save story chat history:', error)
+    return false
+  }
+})
+
+// Load story chat history - user dir first (primary), fallback to project dir (backup)
+// If found in project dir but not user dir, sync to user dir
+ipcMain.handle('load-story-chat-history', async (_, projectPath: string, storyId: string) => {
+  try {
+    const projectFilePath = getProjectStoryChatPath(projectPath, storyId)
+    const userFilePath = getUserStoryChatPath(storyId)
+
+    // Try user directory first (primary)
+    if (existsSync(userFilePath)) {
+      const content = await readFile(userFilePath, 'utf-8')
+      return JSON.parse(content) as StoryChatHistory
+    }
+
+    // Fallback to project directory (backup)
+    if (existsSync(projectFilePath)) {
+      const content = await readFile(projectFilePath, 'utf-8')
+      const history = JSON.parse(content) as StoryChatHistory
+
+      // Sync to user directory for future access
+      try {
+        const userDir = getUserStoryChatDir()
+        if (!existsSync(userDir)) {
+          await mkdir(userDir, { recursive: true })
+        }
+        await writeFile(userFilePath, content)
+        console.log('Synced story chat history from project to user data:', storyId)
+      } catch (syncError) {
+        console.error('Failed to sync story chat history to user data:', syncError)
+      }
+
+      return history
+    }
+
+    return null
+  } catch (error) {
+    console.error('Failed to load story chat history:', error)
+    return null
+  }
+})
+
+// List all story IDs that have chat history
+ipcMain.handle('list-story-chat-histories', async (_, projectPath: string) => {
+  try {
+    const storyIds = new Set<string>()
+
+    // Check project directory
+    const projectDir = getProjectStoryChatDir(projectPath)
+    if (existsSync(projectDir)) {
+      const files = await readdir(projectDir)
+      files.filter(f => f.endsWith('.json')).forEach(f => storyIds.add(f.replace('.json', '')))
+    }
+
+    // Check user directory
+    const userDir = getUserStoryChatDir()
+    if (existsSync(userDir)) {
+      const files = await readdir(userDir)
+      files.filter(f => f.endsWith('.json')).forEach(f => storyIds.add(f.replace('.json', '')))
+    }
+
+    return Array.from(storyIds)
+  } catch (error) {
+    console.error('Failed to list story chat histories:', error)
+    return []
+  }
+})
+
 // Chat agent - simple spawn per message
 import { chatAgentManager } from './agentManager'
 
