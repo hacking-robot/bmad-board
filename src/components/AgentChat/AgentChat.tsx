@@ -53,6 +53,7 @@ export default function AgentChat() {
           sessionId: uuidv4(),
           agentId: selectedChatAgent,
           agentName: agent.name,
+          agentRole: agent.role,
           messages: thread.messages,
           startTime: thread.messages[0].timestamp,
           endTime: now,

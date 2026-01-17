@@ -82,6 +82,9 @@ interface AppSettings {
   recentProjects: RecentProject[]
   windowBounds?: WindowBounds
   storyOrder: Record<string, Record<string, string[]>> // { [epicId]: { [status]: [storyIds...] } }
+  // Git settings
+  principalBranch: 'main' | 'master' | 'develop'
+  allowDirectEpicMerge: boolean // Allow merging epic branches to principal without PR
   // Human Review feature
   enableHumanReviewColumn: boolean
   humanReviewChecklist: HumanReviewChecklistItem[]
@@ -105,6 +108,9 @@ const defaultSettings: AppSettings = {
   agentHistory: [],
   recentProjects: [],
   storyOrder: {},
+  // Git defaults
+  principalBranch: 'main',
+  allowDirectEpicMerge: false,
   // Human Review defaults
   enableHumanReviewColumn: false,
   humanReviewChecklist: [
