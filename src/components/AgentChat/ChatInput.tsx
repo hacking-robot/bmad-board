@@ -1,8 +1,9 @@
 import { useState, useRef, useCallback, KeyboardEvent } from 'react'
-import { Box, TextField, IconButton, Tooltip, Typography, Menu, MenuItem, Chip } from '@mui/material'
+import { Box, TextField, IconButton, Tooltip, Typography, Menu, MenuItem, Chip, alpha } from '@mui/material'
 import SendIcon from '@mui/icons-material/Send'
 import StopIcon from '@mui/icons-material/Stop'
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import { useWorkflow } from '../../hooks/useWorkflow'
 
 interface ChatInputProps {
@@ -178,6 +179,22 @@ export default function ChatInput({ onSend, onCancel, disabled = false, agentId 
       >
         Enter to send · Shift+Enter for new line
       </Typography>
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 0.5,
+          mt: 1,
+          p: 0.75,
+          borderRadius: 1,
+          bgcolor: (theme) => alpha(theme.palette.info.main, 0.08),
+        }}
+      >
+        <InfoOutlinedIcon sx={{ fontSize: 14, color: 'info.main', opacity: 0.7 }} />
+        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+          Check the selected git branch before chatting — agents make changes to the current branch
+        </Typography>
+      </Box>
 
       {/* Command menu for overflow */}
       <Menu

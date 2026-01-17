@@ -159,7 +159,7 @@ export function useProjectData() {
                   addToHumanReview(story.id)
                 }
                 // Record the status change (from old status to human-review, since that's the effective status)
-                recordStatusChange(story.id, story.title, oldStatus, 'human-review', 'external')
+                recordStatusChange(story.id, story.title, story.epicId, story.storyNumber, oldStatus, 'human-review', 'external')
                 // Show notification about the interception
                 if (notificationsEnabled) {
                   window.fileAPI.showNotification(
@@ -172,7 +172,7 @@ export function useProjectData() {
             }
 
             // Record the external status change
-            recordStatusChange(story.id, story.title, oldStatus, story.status, 'external')
+            recordStatusChange(story.id, story.title, story.epicId, story.storyNumber, oldStatus, story.status, 'external')
             // Show normal status change notification
             if (notificationsEnabled) {
               window.fileAPI.showNotification(
