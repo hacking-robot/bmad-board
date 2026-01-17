@@ -54,7 +54,7 @@ const electronStorage = {
       const parsed = JSON.parse(value)
       if (parsed.state) {
         // Only save the settings we care about
-        const { themeMode, aiTool, projectPath, projectType, selectedEpicId, collapsedColumnsByEpic, agentHistory, recentProjects, notificationsEnabled, storyOrder, enableHumanReviewColumn, humanReviewChecklist, humanReviewStates, humanReviewStories, maxThreadMessages, statusHistoryByStory, globalStatusHistory } = parsed.state
+        const { themeMode, aiTool, projectPath, projectType, selectedEpicId, collapsedColumnsByEpic, agentHistory, recentProjects, notificationsEnabled, storyOrder, enableHumanReviewColumn, humanReviewChecklist, humanReviewStates, humanReviewStories, maxThreadMessages, statusHistoryByStory, globalStatusHistory, lastViewedStatusHistoryAt } = parsed.state
 
         // Don't persist full output - it can contain characters that break JSON
         // Just save metadata and a small summary
@@ -82,7 +82,8 @@ const electronStorage = {
           humanReviewStories: humanReviewStories || [],
           maxThreadMessages: maxThreadMessages ?? 100,
           statusHistoryByStory: statusHistoryByStory || {},
-          globalStatusHistory: globalStatusHistory || []
+          globalStatusHistory: globalStatusHistory || [],
+          lastViewedStatusHistoryAt: lastViewedStatusHistoryAt || 0
         })
       }
     } catch (error) {
@@ -107,7 +108,8 @@ const electronStorage = {
       humanReviewStories: [],
       maxThreadMessages: 100,
       statusHistoryByStory: {},
-      globalStatusHistory: []
+      globalStatusHistory: [],
+      lastViewedStatusHistoryAt: 0
     })
   }
 }
@@ -271,9 +273,12 @@ interface AppState {
   statusHistoryByStory: Record<string, StatusChangeEntry[]>
   globalStatusHistory: StatusChangeEntry[]
   statusHistoryPanelOpen: boolean
+  lastViewedStatusHistoryAt: number
   recordStatusChange: (storyId: string, storyTitle: string, oldStatus: StoryStatus, newStatus: StoryStatus, source: StatusChangeSource) => void
   getStatusHistoryForStory: (storyId: string) => StatusChangeEntry[]
   setStatusHistoryPanelOpen: (open: boolean) => void
+  markStatusHistoryViewed: () => void
+  getUnreadStatusHistoryCount: () => number
 
   // Computed - filtered stories
   getFilteredStories: () => Story[]
@@ -801,6 +806,12 @@ export const useStore = create<AppState>()(
         return statusHistoryByStory[storyId] || []
       },
       setStatusHistoryPanelOpen: (open) => set({ statusHistoryPanelOpen: open }),
+      lastViewedStatusHistoryAt: 0,
+      markStatusHistoryViewed: () => set({ lastViewedStatusHistoryAt: Date.now() }),
+      getUnreadStatusHistoryCount: () => {
+        const { globalStatusHistory, lastViewedStatusHistoryAt } = get()
+        return globalStatusHistory.filter(entry => entry.timestamp > lastViewedStatusHistoryAt).length
+      },
 
       // Computed
       getFilteredStories: () => {

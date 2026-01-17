@@ -79,6 +79,7 @@ export interface AppSettings {
   // Status history
   statusHistoryByStory: Record<string, StatusChangeEntry[]>
   globalStatusHistory: StatusChangeEntry[]
+  lastViewedStatusHistoryAt: number
 }
 
 export interface FileAPI {

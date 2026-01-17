@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Drawer,
   Box,
@@ -134,10 +134,18 @@ export default function StatusHistoryPanel() {
   const globalStatusHistory = useStore((state) => state.globalStatusHistory)
   const statusHistoryPanelOpen = useStore((state) => state.statusHistoryPanelOpen)
   const setStatusHistoryPanelOpen = useStore((state) => state.setStatusHistoryPanelOpen)
+  const markStatusHistoryViewed = useStore((state) => state.markStatusHistoryViewed)
   const setSelectedStory = useStore((state) => state.setSelectedStory)
   const stories = useStore((state) => state.stories)
 
   const [sourceFilter, setSourceFilter] = useState<StatusChangeSource | 'all'>('all')
+
+  // Mark all entries as viewed when panel opens
+  useEffect(() => {
+    if (statusHistoryPanelOpen) {
+      markStatusHistoryViewed()
+    }
+  }, [statusHistoryPanelOpen, markStatusHistoryViewed])
 
   const handleClose = () => {
     setStatusHistoryPanelOpen(false)
