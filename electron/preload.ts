@@ -347,6 +347,7 @@ export interface StoryChatSession {
   sessionId: string
   agentId: string
   agentName: string
+  agentRole?: string
   messages: ChatMessage[]
   startTime: number
   endTime?: number

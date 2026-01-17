@@ -52,6 +52,7 @@ async function debouncedSaveStoryChatHistory(
   storyTitle: string,
   agentId: string,
   agentName: string,
+  agentRole: string,
   messages: ChatMessageType[],
   branchName?: string
 ) {
@@ -101,6 +102,7 @@ async function debouncedSaveStoryChatHistory(
           sessionId: uuidv4(),
           agentId,
           agentName,
+          agentRole,
           messages,
           startTime: messages.length > 0 ? messages[0].timestamp : now,
           endTime: now,
@@ -201,6 +203,7 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
           storyTitle,
           agentId,
           agent.name,
+          agent.role,
           thread.messages,
           thread.branchName
         )
