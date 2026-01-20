@@ -156,6 +156,10 @@ export function getAugmentedPath(): string {
     return cachedAugmentedPath
   }
 
+  // Clear cache first to prevent infinite recursion if getNpmGlobalBin() calls us back
+  const hadCachedPath = cachedAugmentedPath !== null
+  cachedAugmentedPath = null
+
   const existingPath = process.env.PATH || ''
   const existingPaths = new Set(existingPath.split(':').filter(Boolean))
 
@@ -177,7 +181,8 @@ export function getAugmentedPath(): string {
   }
 
   // Try npm global (only on subsequent calls to avoid recursion)
-  if (cachedAugmentedPath !== null) {
+  // hadCachedPath means this isn't our very first call ever
+  if (hadCachedPath) {
     const npmBin = getNpmGlobalBin()
     if (npmBin && !existingPaths.has(npmBin)) {
       additionalPaths.push(npmBin)
