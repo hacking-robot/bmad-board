@@ -1,4 +1,15 @@
+// Canonical statuses used in the UI
 export type StoryStatus = 'backlog' | 'ready-for-dev' | 'in-progress' | 'review' | 'human-review' | 'done' | 'optional'
+
+// Extended type that includes legacy/alternate status values that may appear in sprint-status.yaml
+export type StoryStatusExtended = StoryStatus | 'ready-for-review'
+
+// Normalize extended statuses to canonical statuses (for display in columns)
+// 'ready-for-review' is treated as 'review'
+export function normalizeStatus(status: StoryStatusExtended): StoryStatus {
+  if (status === 'ready-for-review') return 'review'
+  return status
+}
 
 export interface Epic {
   id: number
