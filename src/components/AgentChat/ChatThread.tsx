@@ -382,11 +382,13 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
         await new Promise(resolve => setTimeout(resolve, 150))
 
         // Send the actual user message with the session ID
+        const currentAiTool = useStore.getState().aiTool
         const result = await window.chatAPI.sendMessage({
           agentId,
           projectPath: projectPath!,
           message: content,
-          sessionId: event.sessionId
+          sessionId: event.sessionId,
+          tool: currentAiTool
         })
 
         if (!result.success) {
@@ -416,22 +418,41 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
 
       setChatTyping(agentId, false)
 
-      // Store session ID for conversation continuity
-      if (event.sessionId) {
-        setChatSessionId(agentId, event.sessionId)
-      }
-
       // Finalize any pending message
       if (currentMessageIdRef.current) {
-        const finalContent = streamBufferRef.current || 'Response completed.'
-        updateChatMessage(agentId, currentMessageIdRef.current, {
-          content: finalContent,
+        // Get existing content from store - don't overwrite with 'Response completed.'
+        // if content already exists (result event already finalized the content)
+        const existingMessage = useStore.getState().chatThreads[agentId]?.messages.find(
+          m => m.id === currentMessageIdRef.current
+        )
+        const existingContent = existingMessage?.content || ''
+        const finalContent = streamBufferRef.current || existingContent || 'Response completed.'
+
+        // Only update content if we have new content to add
+        const updatePayload: { content?: string; status: 'complete' | 'error' } = {
           status: event.code === 0 ? 'complete' : 'error'
-        })
+        }
+        if (streamBufferRef.current || !existingContent) {
+          updatePayload.content = finalContent
+        }
+
+        updateChatMessage(agentId, currentMessageIdRef.current, updatePayload)
         incrementUnread(agentId)
         // Show system notification if not viewing this chat and app not focused
         if (useStore.getState().selectedChatAgent !== agentId && agent) {
           showChatNotification(agent, finalContent)
+        }
+
+        // Store session ID for conversation continuity, but NOT if the response was
+        // just "Response completed." (fallback when no actual content was received)
+        // This ensures the next message starts a fresh session instead of resuming
+        if (event.sessionId && finalContent !== 'Response completed.') {
+          setChatSessionId(agentId, event.sessionId)
+        }
+      } else {
+        // No pending message - still store session ID for future use
+        if (event.sessionId) {
+          setChatSessionId(agentId, event.sessionId)
         }
       }
       // Reset all refs on process exit
@@ -543,10 +564,12 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
 
       try {
         const currentProjectType = useStore.getState().projectType || 'bmm'
+        const currentAiTool = useStore.getState().aiTool
         const result = await window.chatAPI.loadAgent({
           agentId,
           projectPath,
-          projectType: currentProjectType
+          projectType: currentProjectType,
+          tool: currentAiTool
         })
 
         if (!result.success) {
@@ -576,11 +599,13 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
       toolUsedRef.current = false
 
       try {
+        const currentAiTool = useStore.getState().aiTool
         const result = await window.chatAPI.sendMessage({
           agentId,
           projectPath,
           message: content.trim(),
-          sessionId: currentSessionId
+          sessionId: currentSessionId,
+          tool: currentAiTool
         })
 
         if (!result.success) {

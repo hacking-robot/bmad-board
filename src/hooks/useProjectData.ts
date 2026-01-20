@@ -22,7 +22,8 @@ export function useProjectData() {
     setStoryContent,
     selectedStory,
     setNewProjectDialogOpen,
-    setPendingNewProject
+    setPendingNewProject,
+    setBmadInGitignore
   } = useStore()
 
   const selectProject = useCallback(async () => {
@@ -221,6 +222,17 @@ export function useProjectData() {
     if (_hasHydrated && projectPath && projectType) {
       loadProjectData()
 
+      // Check if bmad folders are in .gitignore (affects branch restrictions)
+      // Defer this check so it doesn't compete with initial project load
+      setTimeout(() => {
+        const { bmadInGitignoreUserSet } = useStore.getState()
+        if (!bmadInGitignoreUserSet) {
+          window.fileAPI.checkBmadInGitignore(projectPath).then((result) => {
+            setBmadInGitignore(result.inGitignore)
+          })
+        }
+      }, 100)
+
       // Start watching for file changes
       window.fileAPI.startWatching(projectPath, projectType)
       setIsWatching(true)
@@ -248,6 +260,8 @@ export function useProjectData() {
         setIsWatching(false)
       }
     }
+  // Note: setBmadInGitignore is stable (Zustand setter) and intentionally omitted from deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [_hasHydrated, projectPath, projectType, loadProjectData, loadStoryContent, setIsWatching])
 
   // Load story content when selected story changes
