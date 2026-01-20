@@ -54,7 +54,7 @@ const electronStorage = {
       const parsed = JSON.parse(value)
       if (parsed.state) {
         // Only save the settings we care about
-        const { themeMode, aiTool, projectPath, projectType, selectedEpicId, collapsedColumnsByEpic, agentHistory, recentProjects, notificationsEnabled, principalBranch, allowDirectEpicMerge, bmadInGitignore, bmadInGitignoreUserSet, storyOrder, enableHumanReviewColumn, humanReviewChecklist, humanReviewStates, humanReviewStories, maxThreadMessages, statusHistoryByStory, globalStatusHistory, lastViewedStatusHistoryAt } = parsed.state
+        const { themeMode, aiTool, projectPath, projectType, selectedEpicId, collapsedColumnsByEpic, agentHistory, recentProjects, notificationsEnabled, baseBranch, allowDirectEpicMerge, bmadInGitignore, bmadInGitignoreUserSet, storyOrder, enableHumanReviewColumn, humanReviewChecklist, humanReviewStates, humanReviewStories, maxThreadMessages, statusHistoryByStory, globalStatusHistory, lastViewedStatusHistoryAt } = parsed.state
 
         // Don't persist full output - it can contain characters that break JSON
         // Just save metadata and a small summary
@@ -75,7 +75,7 @@ const electronStorage = {
           agentHistory: sanitizedHistory,
           recentProjects: recentProjects || [],
           notificationsEnabled: notificationsEnabled ?? false,
-          principalBranch: principalBranch || 'main',
+          baseBranch: baseBranch || 'main',
           allowDirectEpicMerge: allowDirectEpicMerge ?? false,
           bmadInGitignore: bmadInGitignore ?? false,
           bmadInGitignoreUserSet: bmadInGitignoreUserSet ?? false,
@@ -105,7 +105,7 @@ const electronStorage = {
       agentHistory: [],
       recentProjects: [],
       notificationsEnabled: false,
-      principalBranch: 'main',
+      baseBranch: 'main',
       allowDirectEpicMerge: false,
       bmadInGitignore: false,
       bmadInGitignoreUserSet: false,
@@ -147,8 +147,8 @@ interface AppState {
   setIsUserDragging: (dragging: boolean) => void
 
   // Git settings
-  principalBranch: 'main' | 'master' | 'develop'
-  setPrincipalBranch: (branch: 'main' | 'master' | 'develop') => void
+  baseBranch: 'main' | 'master' | 'develop'
+  setBaseBranch: (branch: 'main' | 'master' | 'develop') => void
   allowDirectEpicMerge: boolean
   setAllowDirectEpicMerge: (allow: boolean) => void
   bmadInGitignore: boolean // When true, bmad folders are gitignored so branch restrictions are relaxed
@@ -330,8 +330,8 @@ export const useStore = create<AppState>()(
       setIsUserDragging: (dragging) => set({ isUserDragging: dragging }),
 
       // Git settings
-      principalBranch: 'main',
-      setPrincipalBranch: (branch) => set({ principalBranch: branch }),
+      baseBranch: 'main',
+      setBaseBranch: (branch) => set({ baseBranch: branch }),
       allowDirectEpicMerge: false,
       setAllowDirectEpicMerge: (allow) => set({ allowDirectEpicMerge: allow }),
       bmadInGitignore: false,

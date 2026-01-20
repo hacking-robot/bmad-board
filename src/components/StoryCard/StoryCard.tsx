@@ -675,9 +675,9 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
                 {step.command && toolSupportsHeadless && (() => {
                   const agentThread = chatThreads[step.agentId]
                   const isAgentWorking = agentThread?.isTyping || false
-                  // Backlog stories can be worked on from epic branch (no story branch exists yet)
+                  // Backlog/ready-for-dev stories can be worked on from epic branch (no story branch exists yet)
                   // When bmad is gitignored, allow from any branch
-                  const canExecuteFromEpicBranch = effectiveStatus === 'backlog' && isOnEpicBranch
+                  const canExecuteFromEpicBranch = (effectiveStatus === 'backlog' || effectiveStatus === 'ready-for-dev') && isOnEpicBranch
                   const canExecute = canExecuteStoryActions || canExecuteFromEpicBranch
                   const isDisabled = !canExecute || isAgentWorking
                   const tooltipTitle = isAgentWorking

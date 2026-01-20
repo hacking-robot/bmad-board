@@ -40,12 +40,12 @@ export default function BranchSwitcher() {
   const setUnmergedStoryBranches = useStore((state) => state.setUnmergedStoryBranches)
   const epics = useStore((state) => state.epics)
   const stories = useStore((state) => state.stories)
-  const principalBranch = useStore((state) => state.principalBranch)
+  const baseBranch = useStore((state) => state.baseBranch)
   const allowDirectEpicMerge = useStore((state) => state.allowDirectEpicMerge)
   const { loadProjectData } = useProjectData()
 
-  // Whether current branch is the principal branch
-  const isOnPrincipalBranch = currentBranch === principalBranch
+  // Whether current branch is the base branch
+  const isOnBaseBranch = currentBranch === baseBranch
 
   const open = Boolean(anchorEl)
 
@@ -131,9 +131,9 @@ export default function BranchSwitcher() {
     }
   }, [projectPath, currentBranch, setUnmergedStoryBranches, stories])
 
-  // Load merge status for epic branches when on principal branch
+  // Load merge status for epic branches when on base branch
   const loadEpicMergeStatus = useCallback(async (branchList: string[]) => {
-    if (!projectPath || !isOnPrincipalBranch) return
+    if (!projectPath || !isOnBaseBranch) return
 
     // Find epic branches from the list
     const epicBranches = branchList.filter(branch => /^epic-\d+-/.test(branch))
@@ -151,10 +151,10 @@ export default function BranchSwitcher() {
       return newStatus
     })
 
-    // Check merge status for each epic branch against principal
+    // Check merge status for each epic branch against base
     for (const branch of epicBranches) {
       try {
-        const result = await window.gitAPI.isBranchMerged(projectPath, branch, principalBranch)
+        const result = await window.gitAPI.isBranchMerged(projectPath, branch, baseBranch)
         setEpicMergeStatus(prev => ({
           ...prev,
           [branch]: { merged: result.merged, loading: false }
@@ -166,7 +166,7 @@ export default function BranchSwitcher() {
         }))
       }
     }
-  }, [projectPath, isOnPrincipalBranch, principalBranch])
+  }, [projectPath, isOnBaseBranch, baseBranch])
 
   // Load branches when dropdown opens
   useEffect(() => {
@@ -182,12 +182,12 @@ export default function BranchSwitcher() {
     }
   }, [open, branches, currentEpicId, loadMergeStatus])
 
-  // Load epic merge status when on principal branch (for dropdown display)
+  // Load epic merge status when on base branch (for dropdown display)
   useEffect(() => {
-    if (open && branches.length > 0 && isOnPrincipalBranch) {
+    if (open && branches.length > 0 && isOnBaseBranch) {
       loadEpicMergeStatus(branches)
     }
-  }, [open, branches, isOnPrincipalBranch, loadEpicMergeStatus])
+  }, [open, branches, isOnBaseBranch, loadEpicMergeStatus])
 
   // Check merge status when switching to an epic branch (for read-only mode)
   useEffect(() => {
@@ -212,15 +212,15 @@ export default function BranchSwitcher() {
     checkEpicMergeStatus()
   }, [projectPath, currentBranch, currentEpicId, loadMergeStatus, setUnmergedStoryBranches])
 
-  // Filter branches to only show relevant ones (epics, stories, principal branch)
+  // Filter branches to only show relevant ones (epics, stories, base branch)
   const filteredBranches = useMemo(() => {
     // Build set of valid branch prefixes
     const epicPrefixes = epics.map(e => `epic-${e.id}-`)
     const storyPrefixes = stories.map(s => `${s.epicId}-${s.id}`)
 
     return branches.filter(branch => {
-      // Always show principal branch
-      if (branch === principalBranch) return true
+      // Always show base branch
+      if (branch === baseBranch) return true
 
       // Show epic branches
       if (epicPrefixes.some(prefix => branch.startsWith(prefix))) return true
@@ -230,7 +230,7 @@ export default function BranchSwitcher() {
 
       return false
     })
-  }, [branches, epics, stories, principalBranch])
+  }, [branches, epics, stories, baseBranch])
 
   // Group branches into tree structure: main, then epics with their stories nested
   const groupedBranches = useMemo(() => {
@@ -250,7 +250,7 @@ export default function BranchSwitcher() {
     const epicBranchMap: Map<string, { epicBranch: string; storyBranches: string[] }> = new Map()
 
     for (const branch of filteredBranches) {
-      if (branch === principalBranch) {
+      if (branch === baseBranch) {
         mainBranches.push(branch)
         continue
       }
@@ -300,8 +300,8 @@ export default function BranchSwitcher() {
 
       // Add epic branch if it exists
       if (epicBranch) {
-        // Show merge status for epic branches when on principal branch
-        const showEpicMergeStatus = isOnPrincipalBranch
+        // Show merge status for epic branches when on base branch
+        const showEpicMergeStatus = isOnBaseBranch
         result.push({
           id: epicBranch,
           label: epicBranch,
@@ -338,7 +338,7 @@ export default function BranchSwitcher() {
     }
 
     return result
-  }, [filteredBranches, currentEpicId, mergeStatus, principalBranch, isOnPrincipalBranch, epicMergeStatus])
+  }, [filteredBranches, currentEpicId, mergeStatus, baseBranch, isOnBaseBranch, epicMergeStatus])
 
   const handleClick = () => {
     if (!projectPath || !currentBranch) return
@@ -435,7 +435,7 @@ export default function BranchSwitcher() {
 
   // Convert branches to dropdown items with custom rendering
   const branchItems: SearchableDropdownItem[] = groupedBranches.map((branch) => {
-    // Epic branch - show with tree icon and merge status when on principal branch
+    // Epic branch - show with tree icon and merge status when on base branch
     if (branch.isEpicBranch) {
       return {
         id: branch.id,
@@ -455,16 +455,16 @@ export default function BranchSwitcher() {
             >
               {branch.label}
             </Typography>
-            {/* Show merge status when on principal branch */}
+            {/* Show merge status when on base branch */}
             {branch.mergeStatus && (
               branch.mergeStatus.loading ? (
                 <CircularProgress size={14} sx={{ color: 'text.disabled' }} />
               ) : branch.mergeStatus.merged ? (
-                <Tooltip title="Merged into principal branch">
+                <Tooltip title="Merged into base branch">
                   <CheckCircleIcon sx={{ fontSize: 16, color: 'success.main' }} />
                 </Tooltip>
               ) : allowDirectEpicMerge ? (
-                <Tooltip title="Merge into principal branch">
+                <Tooltip title="Merge into base branch">
                   <IconButton
                     size="small"
                     onClick={(e) => handleMergeBranch(branch.id, e)}
@@ -554,7 +554,7 @@ export default function BranchSwitcher() {
       }
     }
 
-    // Principal branch or other branches - no custom render
+    // Base branch or other branches - no custom render
     return {
       id: branch.id,
       label: branch.label
