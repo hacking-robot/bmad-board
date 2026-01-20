@@ -1,6 +1,11 @@
 import { spawn, ChildProcess } from 'child_process'
 import { EventEmitter } from 'events'
 import { BrowserWindow } from 'electron'
+import { getAugmentedEnv, findBinary } from './envUtils'
+import { buildArgs, getToolConfig, supportsHeadless } from './cliToolManager'
+
+// Supported AI tools
+type AITool = 'claude-code' | 'cursor' | 'windsurf' | 'roo-code' | 'aider'
 
 export interface AgentInfo {
   id: string
@@ -52,13 +57,13 @@ class AgentManager extends EventEmitter {
 
       console.log('Spawning claude with args:', args, 'in:', options.projectPath)
 
-      const proc = spawn('claude', args, {
+      // Find the claude binary using augmented PATH
+      const claudePath = findBinary('claude') || 'claude'
+
+      const proc = spawn(claudePath, args, {
         cwd: options.projectPath,
         stdio: ['ignore', 'pipe', 'pipe'],
-        env: {
-          ...process.env,
-          PATH: `/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ''}`
-        }
+        env: getAugmentedEnv()
       })
 
       const managed: ManagedAgent = {
@@ -241,32 +246,69 @@ class ChatAgentManager {
     }
   }
 
-  // Load a BMAD agent - spawns Claude with just the agent command
-  // Returns session ID via chat:exit event for subsequent messages
+  // Load a BMAD agent - spawns the AI tool with just the agent command
+  // Returns session ID via chat:exit event for subsequent messages (Claude only)
   loadAgent(
     options: {
       agentId: string
       projectPath: string
       projectType: 'bmm' | 'bmgd'
+      tool?: AITool
     }
   ): { success: boolean; error?: string } {
+    const tool = options.tool || 'claude-code'
+    
+    // Check if tool supports headless operation
+    if (!supportsHeadless(tool)) {
+      return { 
+        success: false, 
+        error: `${tool} does not support headless CLI operation. Use the IDE directly.` 
+      }
+    }
+
+    const toolConfig = getToolConfig(tool)
+    if (!toolConfig || !toolConfig.cliCommand) {
+      return { success: false, error: `Unknown tool: ${tool}` }
+    }
+
     try {
-      const prompt = `/bmad:${options.projectType}:agents:${options.agentId}`
-      const args: string[] = ['--output-format', 'stream-json', '--print', '--verbose', '--dangerously-skip-permissions', '-p', prompt]
+      // Build the agent load prompt
+      const agentPrompt = `/bmad:${options.projectType}:agents:${options.agentId}`
+      
+      // Build tool-specific args
+      let args: string[]
+      let binaryName: string
+      
+      if (tool === 'claude-code') {
+        // Claude: use buildArgs for consistency
+        args = buildArgs('claude-code', { prompt: agentPrompt, verbose: true })
+        binaryName = 'claude'
+      } else if (tool === 'cursor') {
+        // Cursor: headless mode with message
+        args = ['--headless', '--message', agentPrompt]
+        binaryName = 'cursor'
+      } else if (tool === 'aider') {
+        // Aider: non-interactive mode with message
+        args = ['--no-auto-commits', '--yes', '--message', agentPrompt]
+        binaryName = 'aider'
+      } else {
+        return { success: false, error: `Unsupported tool for agent loading: ${tool}` }
+      }
 
       console.log('[ChatAgentManager] ================================')
       console.log('[ChatAgentManager] Loading agent:', options.agentId)
+      console.log('[ChatAgentManager] Tool:', tool)
       console.log('[ChatAgentManager] Project path (cwd):', options.projectPath)
-      console.log('[ChatAgentManager] Full command: claude', args.join(' '))
+      console.log(`[ChatAgentManager] Full command: ${binaryName}`, args.join(' '))
       console.log('[ChatAgentManager] ================================')
 
-      const proc = spawn('claude', args, {
+      // Find the binary using augmented PATH
+      const binaryPath = findBinary(binaryName) || binaryName
+
+      const proc = spawn(binaryPath, args, {
         cwd: options.projectPath,
         stdio: ['ignore', 'pipe', 'pipe'],
-        env: {
-          ...process.env,
-          PATH: `/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ''}`
-        }
+        env: getAugmentedEnv()
       })
 
       console.log('[ChatAgentManager] Agent load process spawned, PID:', proc.pid)
@@ -350,42 +392,74 @@ class ChatAgentManager {
     }
   }
 
-  // Send a message to an agent - spawns a new Claude process each time
-  // Uses --resume for conversation continuity when sessionId is provided
+  // Send a message to an agent - spawns a new process each time
+  // Uses --resume for conversation continuity when sessionId is provided (Claude only)
   sendMessage(
     options: {
       agentId: string
       projectPath: string
       message: string
-      sessionId?: string // Session ID from previous response for --resume
+      sessionId?: string // Session ID from previous response for --resume (Claude only)
+      tool?: AITool
     }
   ): { success: boolean; error?: string } {
+    const tool = options.tool || 'claude-code'
+    
+    // Check if tool supports headless operation
+    if (!supportsHeadless(tool)) {
+      return { 
+        success: false, 
+        error: `${tool} does not support headless CLI operation. Use the IDE directly.` 
+      }
+    }
+
+    const toolConfig = getToolConfig(tool)
+    if (!toolConfig || !toolConfig.cliCommand) {
+      return { success: false, error: `Unknown tool: ${tool}` }
+    }
+
     try {
       const prompt = options.message
-
-      // Build args - use --resume if we have a session ID for conversation continuity
-      const args: string[] = ['--output-format', 'stream-json', '--print', '--verbose', '--dangerously-skip-permissions']
-
-      if (options.sessionId) {
-        args.push('--resume', options.sessionId)
+      
+      // Build tool-specific args
+      let args: string[]
+      let binaryName: string
+      
+      if (tool === 'claude-code') {
+        // Claude: use buildArgs, supports --resume for session continuity
+        args = buildArgs('claude-code', { 
+          prompt, 
+          sessionId: options.sessionId,
+          verbose: true 
+        })
+        binaryName = 'claude'
+      } else if (tool === 'cursor') {
+        // Cursor: headless mode with message (no session support)
+        args = ['--headless', '--message', prompt]
+        binaryName = 'cursor'
+      } else if (tool === 'aider') {
+        // Aider: non-interactive mode with message (no session support)
+        args = ['--no-auto-commits', '--yes', '--message', prompt]
+        binaryName = 'aider'
+      } else {
+        return { success: false, error: `Unsupported tool for messaging: ${tool}` }
       }
-
-      args.push('-p', prompt)
 
       console.log('[ChatAgentManager] ================================')
       console.log('[ChatAgentManager] Sending message')
+      console.log('[ChatAgentManager] Tool:', tool)
       console.log('[ChatAgentManager] Project path (cwd):', options.projectPath)
-      console.log('[ChatAgentManager] Session ID:', options.sessionId || 'none')
-      console.log('[ChatAgentManager] Full command: claude', args.join(' '))
+      console.log('[ChatAgentManager] Session ID:', options.sessionId || 'none (or not supported)')
+      console.log(`[ChatAgentManager] Full command: ${binaryName}`, args.join(' '))
       console.log('[ChatAgentManager] ================================')
 
-      const proc = spawn('claude', args, {
+      // Find the binary using augmented PATH
+      const binaryPath = findBinary(binaryName) || binaryName
+
+      const proc = spawn(binaryPath, args, {
         cwd: options.projectPath,
         stdio: ['ignore', 'pipe', 'pipe'],
-        env: {
-          ...process.env,
-          PATH: `/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ''}`
-        }
+        env: getAugmentedEnv()
       })
 
       console.log('[ChatAgentManager] Process spawned, PID:', proc.pid)

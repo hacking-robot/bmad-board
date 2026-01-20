@@ -106,13 +106,60 @@ export type AgentStatus = 'running' | 'completed' | 'error' | 'interrupted'
 export type ProjectType = 'bmm' | 'bmgd'
 
 // AI Tool types - determines command syntax
-export type AITool = 'claude-code' | 'cursor' | 'windsurf' | 'roo-code'
+export type AITool = 'claude-code' | 'cursor' | 'windsurf' | 'roo-code' | 'aider'
 
-export const AI_TOOLS: { id: AITool; name: string; agentPrefix: string; description: string }[] = [
-  { id: 'claude-code', name: 'Claude Code', agentPrefix: '/', description: 'Anthropic CLI - uses /agent slash commands' },
-  { id: 'cursor', name: 'Cursor', agentPrefix: '@', description: 'Cursor IDE - uses @agent rules' },
-  { id: 'windsurf', name: 'Windsurf', agentPrefix: '@', description: 'Codeium IDE - uses @agent workflows' },
-  { id: 'roo-code', name: 'Roo Code', agentPrefix: '@', description: 'VS Code extension - uses @agent rules' }
+// CLI Tool capabilities
+export interface CLIToolInfo {
+  cliCommand: string | null  // null means IDE-only (no CLI support)
+  hasStreamJson: boolean     // Supports --output-format stream-json
+  hasResume: boolean         // Supports --resume <sessionId>
+  supportsHeadless: boolean  // Can run without UI/IDE
+}
+
+// CLI detection result from backend
+export interface CLIDetectionResult {
+  available: boolean
+  path: string | null
+  version: string | null
+  error: string | null
+}
+
+export const AI_TOOLS: { id: AITool; name: string; agentPrefix: string; description: string; cli: CLIToolInfo }[] = [
+  { 
+    id: 'claude-code', 
+    name: 'Claude Code', 
+    agentPrefix: '/', 
+    description: 'Anthropic CLI - uses /agent slash commands',
+    cli: { cliCommand: 'claude', hasStreamJson: true, hasResume: true, supportsHeadless: true }
+  },
+  { 
+    id: 'cursor', 
+    name: 'Cursor', 
+    agentPrefix: '@', 
+    description: 'Cursor IDE - uses @agent rules',
+    cli: { cliCommand: 'cursor', hasStreamJson: false, hasResume: false, supportsHeadless: true }
+  },
+  { 
+    id: 'aider', 
+    name: 'Aider', 
+    agentPrefix: '/', 
+    description: 'AI pair programming - git-aware coding assistant',
+    cli: { cliCommand: 'aider', hasStreamJson: false, hasResume: false, supportsHeadless: true }
+  },
+  { 
+    id: 'windsurf', 
+    name: 'Windsurf', 
+    agentPrefix: '@', 
+    description: 'Codeium IDE - uses @agent workflows',
+    cli: { cliCommand: null, hasStreamJson: false, hasResume: false, supportsHeadless: false }
+  },
+  { 
+    id: 'roo-code', 
+    name: 'Roo Code', 
+    agentPrefix: '@', 
+    description: 'VS Code extension - uses @agent rules',
+    cli: { cliCommand: null, hasStreamJson: false, hasResume: false, supportsHeadless: false }
+  }
 ]
 
 export interface Agent {

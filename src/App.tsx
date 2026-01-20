@@ -4,6 +4,7 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import { useStore } from './store'
 import { lightTheme, darkTheme } from './theme'
+import { AI_TOOLS } from './types'
 import Header from './components/Header/Header'
 import Board from './components/Board/Board'
 import StoryDialog from './components/StoryDialog/StoryDialog'
@@ -32,10 +33,11 @@ export default function App() {
   const toggleViewMode = useStore((state) => state.toggleViewMode)
   const aiTool = useStore((state) => state.aiTool)
 
-  // Agent features only available with Claude Code
-  const isClaudeCode = aiTool === 'claude-code'
-  const showAgentPanel = agentPanelOpen && enableAgents && viewMode === 'board' && isClaudeCode
-  const showChatView = viewMode === 'chat' && isClaudeCode
+  // Agent features available for tools with headless CLI support
+  const selectedToolInfo = AI_TOOLS.find(t => t.id === aiTool)
+  const toolSupportsHeadless = selectedToolInfo?.cli.supportsHeadless ?? false
+  const showAgentPanel = agentPanelOpen && enableAgents && viewMode === 'board' && toolSupportsHeadless
+  const showChatView = viewMode === 'chat' && toolSupportsHeadless
 
   // Keyboard shortcut for view toggle (Cmd+Shift+A)
   useEffect(() => {
@@ -193,7 +195,7 @@ export default function App() {
                 </Box>
 
                 {/* Toggle button when chat is closed - only for Claude Code */}
-                {!showChatView && isClaudeCode && (
+                {!showChatView && toolSupportsHeadless && (
                   <Tooltip title="Open teammates chat (⌘⇧A)" placement="right">
                     <IconButton
                       onClick={toggleViewMode}
@@ -219,7 +221,7 @@ export default function App() {
                 )}
               </Box>
             </Box>
-            {enableAgents && !showChatView && isClaudeCode && <AgentPanel />}
+            {enableAgents && !showChatView && toolSupportsHeadless && <AgentPanel />}
             <StoryDialog />
             <StatusHistoryPanel />
           </>

@@ -382,11 +382,13 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
         await new Promise(resolve => setTimeout(resolve, 150))
 
         // Send the actual user message with the session ID
+        const currentAiTool = useStore.getState().aiTool
         const result = await window.chatAPI.sendMessage({
           agentId,
           projectPath: projectPath!,
           message: content,
-          sessionId: event.sessionId
+          sessionId: event.sessionId,
+          tool: currentAiTool
         })
 
         if (!result.success) {
@@ -562,10 +564,12 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
 
       try {
         const currentProjectType = useStore.getState().projectType || 'bmm'
+        const currentAiTool = useStore.getState().aiTool
         const result = await window.chatAPI.loadAgent({
           agentId,
           projectPath,
-          projectType: currentProjectType
+          projectType: currentProjectType,
+          tool: currentAiTool
         })
 
         if (!result.success) {
@@ -595,11 +599,13 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
       toolUsedRef.current = false
 
       try {
+        const currentAiTool = useStore.getState().aiTool
         const result = await window.chatAPI.sendMessage({
           agentId,
           projectPath,
           message: content.trim(),
-          sessionId: currentSessionId
+          sessionId: currentSessionId,
+          tool: currentAiTool
         })
 
         if (!result.success) {

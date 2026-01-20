@@ -14,7 +14,7 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import GroupsIcon from '@mui/icons-material/Groups'
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline'
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined'
-import { Story, EPIC_COLORS } from '../../types'
+import { Story, EPIC_COLORS, AI_TOOLS } from '../../types'
 import type { AgentDefinition } from '../../types/flow'
 import { useStore } from '../../store'
 import { useWorkflow } from '../../hooks/useWorkflow'
@@ -42,6 +42,10 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
   const setPendingChatMessage = useStore((state) => state.setPendingChatMessage)
   const clearChatThread = useStore((state) => state.clearChatThread)
   const chatThreads = useStore((state) => state.chatThreads)
+
+  // Check if selected AI tool supports headless CLI operation
+  const selectedToolInfo = AI_TOOLS.find(t => t.id === aiTool)
+  const toolSupportsHeadless = selectedToolInfo?.cli.supportsHeadless ?? false
 
   const { getNextSteps, getAgent } = useWorkflow()
 
@@ -642,7 +646,7 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
               )}
               <GroupsIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
               <Typography variant="body2" fontWeight={500}>
-                Talk to Teammates ({aiTool === 'claude-code' ? 'Claude Code' : aiTool === 'cursor' ? 'Cursor' : aiTool === 'windsurf' ? 'Windsurf' : 'Other'})
+                Talk to Teammates ({selectedToolInfo?.name || aiTool})
               </Typography>
             </Box>
           </Box>
@@ -661,7 +665,7 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
                 <Typography variant="body2" fontWeight={500}>
                   {step.label}
                 </Typography>
-                {step.command && aiTool === 'claude-code' && (() => {
+                {step.command && toolSupportsHeadless && (() => {
                   const agentThread = chatThreads[step.agentId]
                   const isAgentWorking = agentThread?.isTyping || false
                   // Backlog stories can be worked on from epic branch (no story branch exists yet)
