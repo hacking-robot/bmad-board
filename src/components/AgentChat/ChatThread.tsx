@@ -416,11 +416,6 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
 
       setChatTyping(agentId, false)
 
-      // Store session ID for conversation continuity
-      if (event.sessionId) {
-        setChatSessionId(agentId, event.sessionId)
-      }
-
       // Finalize any pending message
       if (currentMessageIdRef.current) {
         // Get existing content from store - don't overwrite with 'Response completed.'
@@ -444,6 +439,18 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
         // Show system notification if not viewing this chat and app not focused
         if (useStore.getState().selectedChatAgent !== agentId && agent) {
           showChatNotification(agent, finalContent)
+        }
+
+        // Store session ID for conversation continuity, but NOT if the response was
+        // just "Response completed." (fallback when no actual content was received)
+        // This ensures the next message starts a fresh session instead of resuming
+        if (event.sessionId && finalContent !== 'Response completed.') {
+          setChatSessionId(agentId, event.sessionId)
+        }
+      } else {
+        // No pending message - still store session ID for future use
+        if (event.sessionId) {
+          setChatSessionId(agentId, event.sessionId)
         }
       }
       // Reset all refs on process exit
