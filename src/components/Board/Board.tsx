@@ -21,11 +21,11 @@ interface BranchInfo {
   storyId?: string // Full story ID like "1-6-load-chips"
 }
 
-function parseBranchInfo(branchName: string | null, principalBranch: string): BranchInfo {
+function parseBranchInfo(branchName: string | null, baseBranch: string): BranchInfo {
   if (!branchName) return { type: 'main' }
 
-  // Principal branch (configured in settings)
-  if (branchName === principalBranch) {
+  // Base branch (configured in settings)
+  if (branchName === baseBranch) {
     return { type: 'main' }
   }
 
@@ -59,10 +59,11 @@ export default function Board() {
   const currentBranch = useStore((state) => state.currentBranch)
   const epicMergeStatusChecked = useStore((state) => state.epicMergeStatusChecked)
   const unmergedStoryBranches = useStore((state) => state.unmergedStoryBranches)
-  const principalBranch = useStore((state) => state.principalBranch)
+  const baseBranch = useStore((state) => state.baseBranch)
+  const bmadInGitignore = useStore((state) => state.bmadInGitignore)
 
   // Parse current branch to determine type and scope
-  const branchInfo = useMemo(() => parseBranchInfo(currentBranch, principalBranch), [currentBranch, principalBranch])
+  const branchInfo = useMemo(() => parseBranchInfo(currentBranch, baseBranch), [currentBranch, baseBranch])
 
   const isEpicBranch = branchInfo.type === 'epic'
   const isStoryBranch = branchInfo.type === 'story'
@@ -72,7 +73,7 @@ export default function Board() {
 
   // For story branches, board is editable but only for the matching story
   // For epic branches (when not epicReadOnly), only stories in that epic are editable
-  // For principal branch, everything is editable
+  // For base branch, everything is editable
   const readOnly = epicReadOnly
 
   // Configure sensors for drag detection - empty when read-only to disable dragging
@@ -106,12 +107,15 @@ export default function Board() {
 
   // Determine if a story is editable based on current branch
   const isStoryEditable = useCallback((story: Story): boolean => {
+    // When bmad is in .gitignore, data persists across branches so no restrictions needed
+    if (bmadInGitignore) return true
+
     // If in epic read-only mode (unmerged branches), nothing is editable
     if (epicReadOnly) return false
 
     switch (branchInfo.type) {
       case 'main':
-        // On principal branch, everything is editable
+        // On base branch, everything is editable
         return true
       case 'epic':
         // On epic branch, only stories in this epic are editable
@@ -122,10 +126,12 @@ export default function Board() {
       default:
         return true
     }
-  }, [branchInfo, epicReadOnly])
+  }, [branchInfo, epicReadOnly, bmadInGitignore])
 
   // Get set of locked story IDs for efficient lookup
   const lockedStoryIds = useMemo(() => {
+    // When bmad is in .gitignore, no stories are locked
+    if (bmadInGitignore) return new Set<string>()
     if (branchInfo.type === 'main' && !epicReadOnly) return new Set<string>()
 
     const locked = new Set<string>()
@@ -135,7 +141,7 @@ export default function Board() {
       }
     }
     return locked
-  }, [allStories, branchInfo, epicReadOnly, isStoryEditable])
+  }, [allStories, branchInfo, epicReadOnly, isStoryEditable, bmadInGitignore])
 
   // Compute working teammates map at Board level to avoid per-card subscriptions
   const workingTeammatesByBranch = useMemo(() => {

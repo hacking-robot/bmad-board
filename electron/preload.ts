@@ -20,7 +20,7 @@ export interface RecentProject {
   name: string
 }
 
-export type AITool = 'claude-code' | 'cursor' | 'windsurf' | 'roo-code'
+export type AITool = 'claude-code' | 'cursor' | 'windsurf' | 'roo-code' | 'aider'
 
 export interface WindowBounds {
   x: number
@@ -70,8 +70,10 @@ export interface AppSettings {
   notificationsEnabled: boolean
   storyOrder: Record<string, Record<string, string[]>> // { [epicId]: { [status]: [storyIds...] } }
   // Git settings
-  principalBranch: 'main' | 'master' | 'develop'
-  allowDirectEpicMerge: boolean // Allow merging epic branches to principal without PR
+  baseBranch: 'main' | 'master' | 'develop'
+  allowDirectEpicMerge: boolean // Allow merging epic branches to base without PR
+  bmadInGitignore: boolean // When true, bmad folders are gitignored so branch restrictions are relaxed
+  bmadInGitignoreUserSet: boolean // When true, user has manually set bmadInGitignore (don't auto-detect)
   // Human Review feature
   enableHumanReviewColumn: boolean
   humanReviewChecklist: HumanReviewChecklistItem[]
@@ -95,6 +97,7 @@ export interface FileAPI {
   stopWatching: () => Promise<boolean>
   updateStoryStatus: (filePath: string, newStatus: string) => Promise<{ success: boolean; error?: string }>
   showNotification: (title: string, body: string) => Promise<void>
+  checkBmadInGitignore: (projectPath: string) => Promise<{ inGitignore: boolean; error?: string }>
   onFilesChanged: (callback: () => void) => () => void
   onShowKeyboardShortcuts: (callback: () => void) => () => void
 }
@@ -109,6 +112,7 @@ const fileAPI: FileAPI = {
   stopWatching: () => ipcRenderer.invoke('stop-watching'),
   updateStoryStatus: (filePath: string, newStatus: string) => ipcRenderer.invoke('update-story-status', filePath, newStatus),
   showNotification: (title: string, body: string) => ipcRenderer.invoke('show-notification', title, body),
+  checkBmadInGitignore: (projectPath: string) => ipcRenderer.invoke('check-bmad-in-gitignore', projectPath),
   onFilesChanged: (callback: () => void) => {
     const listener = () => callback()
     ipcRenderer.on('files-changed', listener)
@@ -379,6 +383,7 @@ export interface ChatAPI {
     agentId: string
     projectPath: string
     projectType: 'bmm' | 'bmgd'
+    tool?: AITool // AI tool to use (defaults to claude-code)
   }) => Promise<{ success: boolean; error?: string }>
   // Message sending - spawns new process per message, uses --resume for conversation continuity
   sendMessage: (options: {
@@ -386,6 +391,7 @@ export interface ChatAPI {
     projectPath: string
     message: string
     sessionId?: string // Session ID from previous response for --resume
+    tool?: AITool // AI tool to use (defaults to claude-code)
   }) => Promise<{ success: boolean; error?: string }>
   // Cancel an ongoing message/agent load
   cancelMessage: (agentId: string) => Promise<boolean>
@@ -440,11 +446,34 @@ const chatAPI: ChatAPI = {
 
 contextBridge.exposeInMainWorld('chatAPI', chatAPI)
 
+// CLI Tool API types
+export interface CLIDetectionResult {
+  available: boolean
+  path: string | null
+  version: string | null
+  error: string | null
+}
+
+export interface CLIAPI {
+  detectTool: (toolId: AITool) => Promise<CLIDetectionResult>
+  detectAllTools: () => Promise<Record<string, CLIDetectionResult>>
+  clearCache: () => Promise<void>
+}
+
+const cliAPI: CLIAPI = {
+  detectTool: (toolId) => ipcRenderer.invoke('cli-detect-tool', toolId),
+  detectAllTools: () => ipcRenderer.invoke('cli-detect-all-tools'),
+  clearCache: () => ipcRenderer.invoke('cli-clear-cache')
+}
+
+contextBridge.exposeInMainWorld('cliAPI', cliAPI)
+
 declare global {
   interface Window {
     fileAPI: FileAPI
     agentAPI: AgentAPI
     gitAPI: GitAPI
     chatAPI: ChatAPI
+    cliAPI: CLIAPI
   }
 }

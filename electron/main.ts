@@ -4,6 +4,7 @@ import { readFile, readdir, stat, writeFile, mkdir } from 'fs/promises'
 import { existsSync, watch, FSWatcher } from 'fs'
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 import { agentManager } from './agentManager'
+import { detectTool, detectAllTools, clearDetectionCache } from './cliToolManager'
 
 // Set app name (shows in menu bar on macOS)
 app.setName('BMad Board')
@@ -34,7 +35,7 @@ interface RecentProject {
   name: string
 }
 
-type AITool = 'claude-code' | 'cursor' | 'windsurf' | 'roo-code'
+type AITool = 'claude-code' | 'cursor' | 'windsurf' | 'roo-code' | 'aider'
 
 interface WindowBounds {
   x: number
@@ -83,8 +84,10 @@ interface AppSettings {
   windowBounds?: WindowBounds
   storyOrder: Record<string, Record<string, string[]>> // { [epicId]: { [status]: [storyIds...] } }
   // Git settings
-  principalBranch: 'main' | 'master' | 'develop'
-  allowDirectEpicMerge: boolean // Allow merging epic branches to principal without PR
+  baseBranch: 'main' | 'master' | 'develop'
+  allowDirectEpicMerge: boolean // Allow merging epic branches to base without PR
+  bmadInGitignore: boolean // When true, bmad folders are gitignored so branch restrictions are relaxed
+  bmadInGitignoreUserSet: boolean // When true, user has manually set bmadInGitignore (don't auto-detect)
   // Human Review feature
   enableHumanReviewColumn: boolean
   humanReviewChecklist: HumanReviewChecklistItem[]
@@ -109,8 +112,10 @@ const defaultSettings: AppSettings = {
   recentProjects: [],
   storyOrder: {},
   // Git defaults
-  principalBranch: 'main',
+  baseBranch: 'main',
   allowDirectEpicMerge: false,
+  bmadInGitignore: false,
+  bmadInGitignoreUserSet: false,
   // Human Review defaults
   enableHumanReviewColumn: false,
   humanReviewChecklist: [
@@ -643,6 +648,43 @@ ipcMain.handle('detect-project-type', async (_, projectPath: string) => {
   return 'bmm'
 })
 
+// Check if bmad folders are in .gitignore
+// When bmad is gitignored, the data persists across branch switches since it's not tracked
+ipcMain.handle('check-bmad-in-gitignore', async (_, projectPath: string) => {
+  try {
+    const gitignorePath = join(projectPath, '.gitignore')
+    if (!existsSync(gitignorePath)) {
+      return { inGitignore: false }
+    }
+
+    const content = await readFile(gitignorePath, 'utf-8')
+    const lines = content.split('\n').map(line => line.trim())
+
+    // Check for patterns that would ignore bmad folders
+    // Common patterns: bmad, _bmad-output, _bmad-output/, docs/planning-artifacts, etc.
+    const bmadPatterns = [
+      'bmad',
+      '_bmad-output',
+      '_bmad-output/',
+      '_bmad-output/*',
+      'docs/planning-artifacts',
+      'docs/implementation-artifacts'
+    ]
+
+    const inGitignore = lines.some(line => {
+      // Skip comments and empty lines
+      if (!line || line.startsWith('#')) return false
+      // Check if any bmad pattern matches
+      return bmadPatterns.some(pattern => line === pattern || line.startsWith(pattern))
+    })
+
+    return { inGitignore }
+  } catch (error) {
+    console.error('Failed to check .gitignore:', error)
+    return { inGitignore: false, error: error instanceof Error ? error.message : 'Unknown error' }
+  }
+})
+
 // Agent output file management
 const getAgentOutputDir = () => join(app.getPath('userData'), 'agent-outputs')
 const getAgentOutputPath = (agentId: string) => join(getAgentOutputDir(), `${agentId}.jsonl`)
@@ -760,11 +802,17 @@ function isPathWithinProject(projectPath: string, filePath: string): boolean {
 
 // Helper to run git commands safely using spawnSync with array arguments
 function runGitCommand(args: string[], cwd: string, maxBuffer?: number): { stdout: string; error?: string } {
+  // Remove GPG_TTY from environment so gpg-agent uses GUI pinentry instead of terminal
+  // This prevents blocking when running from Electron (no TTY available)
+  const env = { ...process.env }
+  delete env.GPG_TTY
+  
   const result = spawnSync('git', args, {
     cwd,
     encoding: 'utf-8',
     maxBuffer: maxBuffer || 10 * 1024 * 1024,
-    stdio: ['pipe', 'pipe', 'pipe']
+    stdio: ['pipe', 'pipe', 'pipe'],
+    env
   })
 
   if (result.error) {
@@ -872,6 +920,7 @@ ipcMain.handle('git-commit', async (_, projectPath: string, message: string) => 
 
   // Then commit
   const commitResult = runGitCommand(['commit', '-m', message], projectPath)
+
   if (commitResult.error) {
     // Check for common errors
     if (commitResult.error.includes('nothing to commit')) {
@@ -1493,6 +1542,7 @@ ipcMain.handle('chat-load-agent', async (_, options: {
   agentId: string
   projectPath: string
   projectType: 'bmm' | 'bmgd'
+  tool?: AITool
 }) => {
   chatAgentManager.setMainWindow(mainWindow)
   return chatAgentManager.loadAgent(options)
@@ -1503,6 +1553,7 @@ ipcMain.handle('chat-send-message', async (_, options: {
   projectPath: string
   message: string
   sessionId?: string
+  tool?: AITool
 }) => {
   chatAgentManager.setMainWindow(mainWindow)
   return chatAgentManager.sendMessage(options)
@@ -1530,4 +1581,17 @@ ipcMain.handle('chat-kill-session', async () => {
 
 ipcMain.handle('chat-get-active-sessions', async () => {
   return []
+})
+
+// CLI Tool detection IPC handlers
+ipcMain.handle('cli-detect-tool', async (_, toolId: string) => {
+  return detectTool(toolId)
+})
+
+ipcMain.handle('cli-detect-all-tools', async () => {
+  return detectAllTools()
+})
+
+ipcMain.handle('cli-clear-cache', async () => {
+  clearDetectionCache()
 })
