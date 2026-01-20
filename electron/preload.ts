@@ -70,8 +70,8 @@ export interface AppSettings {
   notificationsEnabled: boolean
   storyOrder: Record<string, Record<string, string[]>> // { [epicId]: { [status]: [storyIds...] } }
   // Git settings
-  principalBranch: 'main' | 'master' | 'develop'
-  allowDirectEpicMerge: boolean // Allow merging epic branches to principal without PR
+  baseBranch: 'main' | 'master' | 'develop'
+  allowDirectEpicMerge: boolean // Allow merging epic branches to base without PR
   bmadInGitignore: boolean // When true, bmad folders are gitignored so branch restrictions are relaxed
   bmadInGitignoreUserSet: boolean // When true, user has manually set bmadInGitignore (don't auto-detect)
   // Human Review feature

@@ -53,8 +53,8 @@ export default function SettingsMenu() {
   const setEnableHumanReviewColumn = useStore((state) => state.setEnableHumanReviewColumn)
   const maxThreadMessages = useStore((state) => state.maxThreadMessages)
   const setMaxThreadMessages = useStore((state) => state.setMaxThreadMessages)
-  const principalBranch = useStore((state) => state.principalBranch)
-  const setPrincipalBranch = useStore((state) => state.setPrincipalBranch)
+  const baseBranch = useStore((state) => state.baseBranch)
+  const setBaseBranch = useStore((state) => state.setBaseBranch)
   const allowDirectEpicMerge = useStore((state) => state.allowDirectEpicMerge)
   const setAllowDirectEpicMerge = useStore((state) => state.setAllowDirectEpicMerge)
   const bmadInGitignore = useStore((state) => state.bmadInGitignore)
@@ -213,8 +213,8 @@ export default function SettingsMenu() {
             <GitIcon fontSize="small" />
           </ListItemIcon>
           <ListItemText
-            primary="Principal Branch"
-            secondary={principalBranch}
+            primary="Base Branch"
+            secondary={baseBranch}
             secondaryTypographyProps={{ variant: 'caption' }}
           />
         </MenuItem>
@@ -429,7 +429,7 @@ export default function SettingsMenu() {
         </DialogContent>
       </Dialog>
 
-      {/* Principal Branch Selection Dialog */}
+      {/* Base Branch Selection Dialog */}
       <Dialog
         open={branchDialogOpen}
         onClose={() => setBranchDialogOpen(false)}
@@ -437,18 +437,18 @@ export default function SettingsMenu() {
         fullWidth
       >
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          Principal Branch
+          Base Branch
           <IconButton size="small" onClick={() => setBranchDialogOpen(false)}>
             <CloseIcon />
           </IconButton>
         </DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Select your repository's main/principal branch. This is used for branch comparisons and story editing restrictions.
+            Select your repository's main/base branch. This is used for branch comparisons and story editing restrictions.
           </Typography>
           <RadioGroup
-            value={principalBranch}
-            onChange={(e) => setPrincipalBranch(e.target.value as 'main' | 'master' | 'develop')}
+            value={baseBranch}
+            onChange={(e) => setBaseBranch(e.target.value as 'main' | 'master' | 'develop')}
           >
             {(['main', 'master', 'develop'] as const).map((branch) => (
               <Box
@@ -457,7 +457,7 @@ export default function SettingsMenu() {
                   p: 1.5,
                   mb: 1,
                   border: 1,
-                  borderColor: principalBranch === branch ? 'primary.main' : 'divider',
+                  borderColor: baseBranch === branch ? 'primary.main' : 'divider',
                   borderRadius: 1,
                   cursor: 'pointer',
                   '&:hover': {
@@ -465,7 +465,7 @@ export default function SettingsMenu() {
                     bgcolor: 'action.hover'
                   }
                 }}
-                onClick={() => setPrincipalBranch(branch)}
+                onClick={() => setBaseBranch(branch)}
               >
                 <FormControlLabel
                   value={branch}
