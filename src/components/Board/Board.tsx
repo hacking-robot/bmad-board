@@ -60,6 +60,7 @@ export default function Board() {
   const epicMergeStatusChecked = useStore((state) => state.epicMergeStatusChecked)
   const unmergedStoryBranches = useStore((state) => state.unmergedStoryBranches)
   const principalBranch = useStore((state) => state.principalBranch)
+  const bmadInGitignore = useStore((state) => state.bmadInGitignore)
 
   // Parse current branch to determine type and scope
   const branchInfo = useMemo(() => parseBranchInfo(currentBranch, principalBranch), [currentBranch, principalBranch])
@@ -106,6 +107,9 @@ export default function Board() {
 
   // Determine if a story is editable based on current branch
   const isStoryEditable = useCallback((story: Story): boolean => {
+    // When bmad is in .gitignore, data persists across branches so no restrictions needed
+    if (bmadInGitignore) return true
+
     // If in epic read-only mode (unmerged branches), nothing is editable
     if (epicReadOnly) return false
 
@@ -122,10 +126,12 @@ export default function Board() {
       default:
         return true
     }
-  }, [branchInfo, epicReadOnly])
+  }, [branchInfo, epicReadOnly, bmadInGitignore])
 
   // Get set of locked story IDs for efficient lookup
   const lockedStoryIds = useMemo(() => {
+    // When bmad is in .gitignore, no stories are locked
+    if (bmadInGitignore) return new Set<string>()
     if (branchInfo.type === 'main' && !epicReadOnly) return new Set<string>()
 
     const locked = new Set<string>()
@@ -135,7 +141,7 @@ export default function Board() {
       }
     }
     return locked
-  }, [allStories, branchInfo, epicReadOnly, isStoryEditable])
+  }, [allStories, branchInfo, epicReadOnly, isStoryEditable, bmadInGitignore])
 
   // Compute working teammates map at Board level to avoid per-card subscriptions
   const workingTeammatesByBranch = useMemo(() => {

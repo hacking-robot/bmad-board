@@ -32,6 +32,7 @@ import RefreshIcon from '@mui/icons-material/Refresh'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import ErrorIcon from '@mui/icons-material/Error'
 import DesktopWindowsIcon from '@mui/icons-material/DesktopWindows'
+import FolderOffIcon from '@mui/icons-material/FolderOff'
 import { useStore } from '../../store'
 import { AI_TOOLS, AITool, CLIDetectionResult } from '../../types'
 
@@ -56,6 +57,8 @@ export default function SettingsMenu() {
   const setPrincipalBranch = useStore((state) => state.setPrincipalBranch)
   const allowDirectEpicMerge = useStore((state) => state.allowDirectEpicMerge)
   const setAllowDirectEpicMerge = useStore((state) => state.setAllowDirectEpicMerge)
+  const bmadInGitignore = useStore((state) => state.bmadInGitignore)
+  const setBmadInGitignore = useStore((state) => state.setBmadInGitignore)
 
   const selectedTool = AI_TOOLS.find((t) => t.id === aiTool) || AI_TOOLS[0]
 
@@ -227,6 +230,21 @@ export default function SettingsMenu() {
           <Switch
             edge="end"
             checked={allowDirectEpicMerge}
+            size="small"
+          />
+        </MenuItem>
+        <MenuItem onClick={() => setBmadInGitignore(!bmadInGitignore, true)}>
+          <ListItemIcon>
+            <FolderOffIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText
+            primary="BMAD in .gitignore"
+            secondary="Skip branch restrictions"
+            secondaryTypographyProps={{ variant: 'caption' }}
+          />
+          <Switch
+            edge="end"
+            checked={bmadInGitignore}
             size="small"
           />
         </MenuItem>

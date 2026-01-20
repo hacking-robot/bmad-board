@@ -71,6 +71,7 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
   const hasUncommittedChanges = useStore((state) => state.hasUncommittedChanges)
   const setHasUncommittedChanges = useStore((state) => state.setHasUncommittedChanges)
   const setCurrentBranch = useStore((state) => state.setCurrentBranch)
+  const bmadInGitignore = useStore((state) => state.bmadInGitignore)
 
   // Compute if we're on this story's branch (derived from store state)
   const storyBranchName = `${story.epicId}-${story.id}`
@@ -79,6 +80,12 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
   // Check if we're on the epic branch (required for creating story branch)
   const epicBranchPrefix = `epic-${story.epicId}-`
   const isOnEpicBranch = currentBranch?.startsWith(epicBranchPrefix) || false
+
+  // When bmad is gitignored, branch restrictions are relaxed since data persists across branches
+  // These determine if actions are allowed (separate from actual branch state for UI)
+  const canExecuteOnAnyBranch = bmadInGitignore
+  const canExecuteStoryActions = isOnStoryBranch || canExecuteOnAnyBranch
+  const canCreateBranchFromHere = isOnEpicBranch || canExecuteOnAnyBranch
 
   // Make card sortable (draggable + reorderable)
   const { attributes, listeners, setNodeRef, transform, transition, isDragging: isBeingDragged } = useSortable({
@@ -529,13 +536,13 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
               <Typography variant="body2" fontWeight={500} sx={{ flex: 1 }}>
                 Create Branch
               </Typography>
-              <Tooltip title={!isOnEpicBranch ? `Switch to epic-${story.epicId} branch first` : ''}>
+              <Tooltip title={!canCreateBranchFromHere ? `Switch to epic-${story.epicId} branch first` : ''}>
                 <span>
                   <Button
                     size="small"
                     variant="contained"
                     onClick={handleCreateBranch}
-                    disabled={creatingBranch || !isOnEpicBranch}
+                    disabled={creatingBranch || !canCreateBranchFromHere}
                     startIcon={creatingBranch ? <CircularProgress size={12} color="inherit" /> : undefined}
                     sx={{ fontSize: '0.7rem', py: 0.25, px: 1, minWidth: 0 }}
                   >
@@ -573,7 +580,7 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
                 </IconButton>
               </Tooltip>
             </Box>
-            {!isOnEpicBranch && (
+            {!canCreateBranchFromHere && (
               <Typography variant="caption" color="warning.main" sx={{ mt: 0.5, display: 'block' }}>
                 Switch to epic-{story.epicId} branch first
               </Typography>
@@ -582,7 +589,7 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
         )}
 
         {/* Step 1: Git Commit Command - For review (commit implementation) and done (complete) - only when on story branch with uncommitted changes */}
-        {(effectiveStatus === 'review' || effectiveStatus === 'done') && isOnStoryBranch && hasUncommittedChanges && (
+        {(effectiveStatus === 'review' || effectiveStatus === 'done') && canExecuteStoryActions && hasUncommittedChanges && (
           <Box sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: 'divider', bgcolor: 'action.hover' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
               <Chip label="Step 1" size="small" sx={{ height: 18, fontSize: '0.65rem', fontWeight: 600, bgcolor: 'primary.main', color: 'white' }} />
@@ -637,7 +644,7 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
         {nextSteps.length > 0 && (
           <Box sx={{ px: 2, py: 1, borderBottom: 1, borderColor: 'divider', bgcolor: 'action.selected' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              {((effectiveStatus === 'ready-for-dev' && !branchExists && !isOnStoryBranch) || ((effectiveStatus === 'review' || effectiveStatus === 'done') && isOnStoryBranch && hasUncommittedChanges)) && (
+              {((effectiveStatus === 'ready-for-dev' && !branchExists && !isOnStoryBranch) || ((effectiveStatus === 'review' || effectiveStatus === 'done') && canExecuteStoryActions && hasUncommittedChanges)) && (
                 <Chip
                   label="Step 2"
                   size="small"
@@ -669,8 +676,9 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
                   const agentThread = chatThreads[step.agentId]
                   const isAgentWorking = agentThread?.isTyping || false
                   // Backlog stories can be worked on from epic branch (no story branch exists yet)
+                  // When bmad is gitignored, allow from any branch
                   const canExecuteFromEpicBranch = effectiveStatus === 'backlog' && isOnEpicBranch
-                  const canExecute = isOnStoryBranch || canExecuteFromEpicBranch
+                  const canExecute = canExecuteStoryActions || canExecuteFromEpicBranch
                   const isDisabled = !canExecute || isAgentWorking
                   const tooltipTitle = isAgentWorking
                     ? agentThread?.thinkingActivity || 'Working...'
@@ -696,7 +704,7 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
                 {step.primary && (
                   <Chip label="Primary" size="small" sx={{ height: 18, fontSize: '0.65rem' }} />
                 )}
-                {step.command && isOnStoryBranch && hasUncommittedChanges && (
+                {step.command && canExecuteStoryActions && hasUncommittedChanges && (
                   <Tooltip title={`Copy git commit for ${transformCommand(step.command, aiTool)}`}>
                     <IconButton
                       size="small"

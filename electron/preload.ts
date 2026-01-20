@@ -72,6 +72,8 @@ export interface AppSettings {
   // Git settings
   principalBranch: 'main' | 'master' | 'develop'
   allowDirectEpicMerge: boolean // Allow merging epic branches to principal without PR
+  bmadInGitignore: boolean // When true, bmad folders are gitignored so branch restrictions are relaxed
+  bmadInGitignoreUserSet: boolean // When true, user has manually set bmadInGitignore (don't auto-detect)
   // Human Review feature
   enableHumanReviewColumn: boolean
   humanReviewChecklist: HumanReviewChecklistItem[]
@@ -95,6 +97,7 @@ export interface FileAPI {
   stopWatching: () => Promise<boolean>
   updateStoryStatus: (filePath: string, newStatus: string) => Promise<{ success: boolean; error?: string }>
   showNotification: (title: string, body: string) => Promise<void>
+  checkBmadInGitignore: (projectPath: string) => Promise<{ inGitignore: boolean; error?: string }>
   onFilesChanged: (callback: () => void) => () => void
   onShowKeyboardShortcuts: (callback: () => void) => () => void
 }
@@ -109,6 +112,7 @@ const fileAPI: FileAPI = {
   stopWatching: () => ipcRenderer.invoke('stop-watching'),
   updateStoryStatus: (filePath: string, newStatus: string) => ipcRenderer.invoke('update-story-status', filePath, newStatus),
   showNotification: (title: string, body: string) => ipcRenderer.invoke('show-notification', title, body),
+  checkBmadInGitignore: (projectPath: string) => ipcRenderer.invoke('check-bmad-in-gitignore', projectPath),
   onFilesChanged: (callback: () => void) => {
     const listener = () => callback()
     ipcRenderer.on('files-changed', listener)
