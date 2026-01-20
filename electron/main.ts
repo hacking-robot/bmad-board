@@ -86,6 +86,8 @@ interface AppSettings {
   // Git settings
   principalBranch: 'main' | 'master' | 'develop'
   allowDirectEpicMerge: boolean // Allow merging epic branches to principal without PR
+  bmadInGitignore: boolean // When true, bmad folders are gitignored so branch restrictions are relaxed
+  bmadInGitignoreUserSet: boolean // When true, user has manually set bmadInGitignore (don't auto-detect)
   // Human Review feature
   enableHumanReviewColumn: boolean
   humanReviewChecklist: HumanReviewChecklistItem[]
@@ -112,6 +114,8 @@ const defaultSettings: AppSettings = {
   // Git defaults
   principalBranch: 'main',
   allowDirectEpicMerge: false,
+  bmadInGitignore: false,
+  bmadInGitignoreUserSet: false,
   // Human Review defaults
   enableHumanReviewColumn: false,
   humanReviewChecklist: [
@@ -642,6 +646,43 @@ ipcMain.handle('detect-project-type', async (_, projectPath: string) => {
 
   // Default to BMM (standard BMAD Method)
   return 'bmm'
+})
+
+// Check if bmad folders are in .gitignore
+// When bmad is gitignored, the data persists across branch switches since it's not tracked
+ipcMain.handle('check-bmad-in-gitignore', async (_, projectPath: string) => {
+  try {
+    const gitignorePath = join(projectPath, '.gitignore')
+    if (!existsSync(gitignorePath)) {
+      return { inGitignore: false }
+    }
+
+    const content = await readFile(gitignorePath, 'utf-8')
+    const lines = content.split('\n').map(line => line.trim())
+
+    // Check for patterns that would ignore bmad folders
+    // Common patterns: bmad, _bmad-output, _bmad-output/, docs/planning-artifacts, etc.
+    const bmadPatterns = [
+      'bmad',
+      '_bmad-output',
+      '_bmad-output/',
+      '_bmad-output/*',
+      'docs/planning-artifacts',
+      'docs/implementation-artifacts'
+    ]
+
+    const inGitignore = lines.some(line => {
+      // Skip comments and empty lines
+      if (!line || line.startsWith('#')) return false
+      // Check if any bmad pattern matches
+      return bmadPatterns.some(pattern => line === pattern || line.startsWith(pattern))
+    })
+
+    return { inGitignore }
+  } catch (error) {
+    console.error('Failed to check .gitignore:', error)
+    return { inGitignore: false, error: error instanceof Error ? error.message : 'Unknown error' }
+  }
 })
 
 // Agent output file management
