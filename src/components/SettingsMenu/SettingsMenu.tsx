@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   IconButton,
   Menu,
@@ -16,7 +16,8 @@ import {
   FormControlLabel,
   Chip,
   Switch,
-  Slider
+  Slider,
+  CircularProgress
 } from '@mui/material'
 import SettingsIcon from '@mui/icons-material/Settings'
 import KeyboardIcon from '@mui/icons-material/Keyboard'
@@ -27,14 +28,20 @@ import ChatIcon from '@mui/icons-material/Chat'
 import GitIcon from '@mui/icons-material/AccountTree'
 import MergeIcon from '@mui/icons-material/Merge'
 import CloseIcon from '@mui/icons-material/Close'
+import RefreshIcon from '@mui/icons-material/Refresh'
+import CheckCircleIcon from '@mui/icons-material/CheckCircle'
+import ErrorIcon from '@mui/icons-material/Error'
+import DesktopWindowsIcon from '@mui/icons-material/DesktopWindows'
 import { useStore } from '../../store'
-import { AI_TOOLS, AITool } from '../../types'
+import { AI_TOOLS, AITool, CLIDetectionResult } from '../../types'
 
 export default function SettingsMenu() {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
   const [toolDialogOpen, setToolDialogOpen] = useState(false)
   const [chatSettingsDialogOpen, setChatSettingsDialogOpen] = useState(false)
   const [branchDialogOpen, setBranchDialogOpen] = useState(false)
+  const [cliStatus, setCliStatus] = useState<Record<string, CLIDetectionResult>>({})
+  const [detectingCli, setDetectingCli] = useState(false)
   const open = Boolean(anchorEl)
 
   const aiTool = useStore((state) => state.aiTool)
@@ -51,6 +58,38 @@ export default function SettingsMenu() {
   const setAllowDirectEpicMerge = useStore((state) => state.setAllowDirectEpicMerge)
 
   const selectedTool = AI_TOOLS.find((t) => t.id === aiTool) || AI_TOOLS[0]
+
+  // Detect CLI tools when dialog opens
+  useEffect(() => {
+    if (toolDialogOpen && Object.keys(cliStatus).length === 0) {
+      detectCliTools()
+    }
+  }, [toolDialogOpen])
+
+  const detectCliTools = async () => {
+    setDetectingCli(true)
+    try {
+      const results = await window.cliAPI.detectAllTools()
+      setCliStatus(results)
+    } catch (error) {
+      console.error('Failed to detect CLI tools:', error)
+    } finally {
+      setDetectingCli(false)
+    }
+  }
+
+  const refreshCliDetection = async () => {
+    setDetectingCli(true)
+    try {
+      await window.cliAPI.clearCache()
+      const results = await window.cliAPI.detectAllTools()
+      setCliStatus(results)
+    } catch (error) {
+      console.error('Failed to refresh CLI detection:', error)
+    } finally {
+      setDetectingCli(false)
+    }
+  }
 
   const handleChatSettingsClick = () => {
     handleClose()
@@ -208,58 +247,118 @@ export default function SettingsMenu() {
       >
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           Select AI Tool
-          <IconButton size="small" onClick={() => setToolDialogOpen(false)}>
-            <CloseIcon />
-          </IconButton>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Tooltip title="Refresh CLI detection">
+              <IconButton 
+                size="small" 
+                onClick={refreshCliDetection}
+                disabled={detectingCli}
+              >
+                {detectingCli ? <CircularProgress size={20} /> : <RefreshIcon />}
+              </IconButton>
+            </Tooltip>
+            <IconButton size="small" onClick={() => setToolDialogOpen(false)}>
+              <CloseIcon />
+            </IconButton>
+          </Box>
         </DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             Select your AI coding assistant. This determines the command syntax shown in the BMAD Guide.
           </Typography>
           <RadioGroup value={aiTool} onChange={handleToolChange}>
-            {AI_TOOLS.map((tool) => (
-              <Box
-                key={tool.id}
-                sx={{
-                  p: 1.5,
-                  mb: 1,
-                  border: 1,
-                  borderColor: aiTool === tool.id ? 'primary.main' : 'divider',
-                  borderRadius: 1,
-                  cursor: 'pointer',
-                  '&:hover': {
-                    borderColor: 'primary.main',
-                    bgcolor: 'action.hover'
-                  }
-                }}
-                onClick={() => setAITool(tool.id)}
-              >
-                <FormControlLabel
-                  value={tool.id}
-                  control={<Radio size="small" />}
-                  label={
-                    <Box>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Typography fontWeight={500}>{tool.name}</Typography>
-                        <Chip
-                          label={`${tool.agentPrefix}agent`}
-                          size="small"
-                          sx={{
-                            fontFamily: 'monospace',
-                            height: 20,
-                            fontSize: '0.7rem'
-                          }}
-                        />
+            {AI_TOOLS.map((tool) => {
+              const status = cliStatus[tool.id]
+              const isIdeOnly = !tool.cli.supportsHeadless
+              const isAvailable = status?.available
+              const version = status?.version
+
+              return (
+                <Box
+                  key={tool.id}
+                  sx={{
+                    p: 1.5,
+                    mb: 1,
+                    border: 1,
+                    borderColor: aiTool === tool.id ? 'primary.main' : 'divider',
+                    borderRadius: 1,
+                    cursor: 'pointer',
+                    '&:hover': {
+                      borderColor: 'primary.main',
+                      bgcolor: 'action.hover'
+                    }
+                  }}
+                  onClick={() => setAITool(tool.id)}
+                >
+                  <FormControlLabel
+                    value={tool.id}
+                    control={<Radio size="small" />}
+                    label={
+                      <Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                          <Typography fontWeight={500}>{tool.name}</Typography>
+                          <Chip
+                            label={`${tool.agentPrefix}agent`}
+                            size="small"
+                            sx={{
+                              fontFamily: 'monospace',
+                              height: 20,
+                              fontSize: '0.7rem'
+                            }}
+                          />
+                          {isIdeOnly ? (
+                            <Chip
+                              icon={<DesktopWindowsIcon sx={{ fontSize: '0.9rem !important' }} />}
+                              label="IDE Only"
+                              size="small"
+                              color="warning"
+                              variant="outlined"
+                              sx={{ height: 20, fontSize: '0.65rem' }}
+                            />
+                          ) : status ? (
+                            isAvailable ? (
+                              <Chip
+                                icon={<CheckCircleIcon sx={{ fontSize: '0.9rem !important' }} />}
+                                label={version ? `v${version}` : 'Available'}
+                                size="small"
+                                color="success"
+                                variant="outlined"
+                                sx={{ height: 20, fontSize: '0.65rem' }}
+                              />
+                            ) : (
+                              <Chip
+                                icon={<ErrorIcon sx={{ fontSize: '0.9rem !important' }} />}
+                                label="Not Found"
+                                size="small"
+                                color="error"
+                                variant="outlined"
+                                sx={{ height: 20, fontSize: '0.65rem' }}
+                              />
+                            )
+                          ) : detectingCli ? (
+                            <CircularProgress size={14} />
+                          ) : null}
+                        </Box>
+                        <Typography variant="caption" color="text.secondary">
+                          {tool.description}
+                        </Typography>
+                        {!isIdeOnly && status && !isAvailable && (
+                          <Typography variant="caption" color="error.main" sx={{ display: 'block', mt: 0.5 }}>
+                            Install {tool.cli.cliCommand} CLI to enable agent chat
+                          </Typography>
+                        )}
+                        {isIdeOnly && (
+                          <Typography variant="caption" color="warning.main" sx={{ display: 'block', mt: 0.5 }}>
+                            Use copy-to-clipboard workflow for this IDE
+                          </Typography>
+                        )}
                       </Box>
-                      <Typography variant="caption" color="text.secondary">
-                        {tool.description}
-                      </Typography>
-                    </Box>
-                  }
-                  sx={{ m: 0, width: '100%' }}
-                />
-              </Box>
-            ))}
+                    }
+                    sx={{ m: 0, width: '100%' }}
+                  />
+                </Box>
+              )
+            })}
           </RadioGroup>
         </DialogContent>
       </Dialog>

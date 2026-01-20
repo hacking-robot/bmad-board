@@ -20,7 +20,7 @@ export interface RecentProject {
   name: string
 }
 
-export type AITool = 'claude-code' | 'cursor' | 'windsurf' | 'roo-code'
+export type AITool = 'claude-code' | 'cursor' | 'windsurf' | 'roo-code' | 'aider'
 
 export interface WindowBounds {
   x: number
@@ -379,6 +379,7 @@ export interface ChatAPI {
     agentId: string
     projectPath: string
     projectType: 'bmm' | 'bmgd'
+    tool?: AITool // AI tool to use (defaults to claude-code)
   }) => Promise<{ success: boolean; error?: string }>
   // Message sending - spawns new process per message, uses --resume for conversation continuity
   sendMessage: (options: {
@@ -386,6 +387,7 @@ export interface ChatAPI {
     projectPath: string
     message: string
     sessionId?: string // Session ID from previous response for --resume
+    tool?: AITool // AI tool to use (defaults to claude-code)
   }) => Promise<{ success: boolean; error?: string }>
   // Cancel an ongoing message/agent load
   cancelMessage: (agentId: string) => Promise<boolean>
@@ -440,11 +442,34 @@ const chatAPI: ChatAPI = {
 
 contextBridge.exposeInMainWorld('chatAPI', chatAPI)
 
+// CLI Tool API types
+export interface CLIDetectionResult {
+  available: boolean
+  path: string | null
+  version: string | null
+  error: string | null
+}
+
+export interface CLIAPI {
+  detectTool: (toolId: AITool) => Promise<CLIDetectionResult>
+  detectAllTools: () => Promise<Record<string, CLIDetectionResult>>
+  clearCache: () => Promise<void>
+}
+
+const cliAPI: CLIAPI = {
+  detectTool: (toolId) => ipcRenderer.invoke('cli-detect-tool', toolId),
+  detectAllTools: () => ipcRenderer.invoke('cli-detect-all-tools'),
+  clearCache: () => ipcRenderer.invoke('cli-clear-cache')
+}
+
+contextBridge.exposeInMainWorld('cliAPI', cliAPI)
+
 declare global {
   interface Window {
     fileAPI: FileAPI
     agentAPI: AgentAPI
     gitAPI: GitAPI
     chatAPI: ChatAPI
+    cliAPI: CLIAPI
   }
 }

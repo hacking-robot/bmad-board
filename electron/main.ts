@@ -4,6 +4,7 @@ import { readFile, readdir, stat, writeFile, mkdir } from 'fs/promises'
 import { existsSync, watch, FSWatcher } from 'fs'
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 import { agentManager } from './agentManager'
+import { detectTool, detectAllTools, clearDetectionCache } from './cliToolManager'
 
 // Set app name (shows in menu bar on macOS)
 app.setName('BMad Board')
@@ -34,7 +35,7 @@ interface RecentProject {
   name: string
 }
 
-type AITool = 'claude-code' | 'cursor' | 'windsurf' | 'roo-code'
+type AITool = 'claude-code' | 'cursor' | 'windsurf' | 'roo-code' | 'aider'
 
 interface WindowBounds {
   x: number
@@ -1500,6 +1501,7 @@ ipcMain.handle('chat-load-agent', async (_, options: {
   agentId: string
   projectPath: string
   projectType: 'bmm' | 'bmgd'
+  tool?: AITool
 }) => {
   chatAgentManager.setMainWindow(mainWindow)
   return chatAgentManager.loadAgent(options)
@@ -1510,6 +1512,7 @@ ipcMain.handle('chat-send-message', async (_, options: {
   projectPath: string
   message: string
   sessionId?: string
+  tool?: AITool
 }) => {
   chatAgentManager.setMainWindow(mainWindow)
   return chatAgentManager.sendMessage(options)
@@ -1537,4 +1540,17 @@ ipcMain.handle('chat-kill-session', async () => {
 
 ipcMain.handle('chat-get-active-sessions', async () => {
   return []
+})
+
+// CLI Tool detection IPC handlers
+ipcMain.handle('cli-detect-tool', async (_, toolId: string) => {
+  return detectTool(toolId)
+})
+
+ipcMain.handle('cli-detect-all-tools', async () => {
+  return detectAllTools()
+})
+
+ipcMain.handle('cli-clear-cache', async () => {
+  clearDetectionCache()
 })
