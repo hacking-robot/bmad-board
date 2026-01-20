@@ -662,13 +662,14 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
                   {step.label}
                 </Typography>
                 {step.command && aiTool === 'claude-code' && (() => {
-                  const isAgentWorking = chatThreads[step.agentId]?.isTyping || false
+                  const agentThread = chatThreads[step.agentId]
+                  const isAgentWorking = agentThread?.isTyping || false
                   // Backlog stories can be worked on from epic branch (no story branch exists yet)
                   const canExecuteFromEpicBranch = effectiveStatus === 'backlog' && isOnEpicBranch
                   const canExecute = isOnStoryBranch || canExecuteFromEpicBranch
                   const isDisabled = !canExecute || isAgentWorking
                   const tooltipTitle = isAgentWorking
-                    ? 'Teammate is currently working'
+                    ? agentThread?.thinkingActivity || 'Working...'
                     : canExecute
                       ? 'Send to chat'
                       : `Switch to branch ${storyBranchName} first`
