@@ -870,13 +870,19 @@ ipcMain.handle('git-checkout-branch', async (_, projectPath: string, branchName:
 })
 
 // Create and switch to a new branch
-ipcMain.handle('git-create-branch', async (_, projectPath: string, branchName: string) => {
+ipcMain.handle('git-create-branch', async (_, projectPath: string, branchName: string, fromBranch?: string) => {
   // Security: Validate branch name
   if (!isValidGitRef(branchName)) {
     return { success: false, error: 'Invalid branch name' }
   }
+  // Security: Validate fromBranch if provided
+  if (fromBranch && !isValidGitRef(fromBranch)) {
+    return { success: false, error: 'Invalid source branch name' }
+  }
 
-  const result = runGitCommand(['checkout', '-b', branchName], projectPath)
+  // If fromBranch is specified, create from that branch; otherwise create from current branch
+  const args = fromBranch ? ['checkout', '-b', branchName, fromBranch] : ['checkout', '-b', branchName]
+  const result = runGitCommand(args, projectPath)
   if (result.error) {
     // Parse common git checkout -b errors for better messages
     if (result.error.includes('already exists')) {
