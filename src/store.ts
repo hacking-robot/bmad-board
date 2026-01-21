@@ -155,8 +155,8 @@ interface AppState {
   setIsUserDragging: (dragging: boolean) => void
 
   // Git settings
-  baseBranch: 'main' | 'master' | 'develop'
-  setBaseBranch: (branch: 'main' | 'master' | 'develop') => void
+  baseBranch: string
+  setBaseBranch: (branch: string) => void
   allowDirectEpicMerge: boolean
   setAllowDirectEpicMerge: (allow: boolean) => void
   bmadInGitignore: boolean // When true, bmad folders are gitignored so branch restrictions are relaxed
