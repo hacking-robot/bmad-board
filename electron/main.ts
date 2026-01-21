@@ -36,6 +36,7 @@ interface RecentProject {
 }
 
 type AITool = 'claude-code' | 'cursor' | 'windsurf' | 'roo-code' | 'aider'
+type ClaudeModel = 'sonnet' | 'opus' | 'haiku'
 
 interface WindowBounds {
   x: number
@@ -75,6 +76,7 @@ interface StatusChangeEntry {
 interface AppSettings {
   themeMode: 'light' | 'dark'
   aiTool: AITool
+  claudeModel: ClaudeModel
   projectPath: string | null
   projectType: ProjectType | null
   selectedEpicId: number | null
@@ -88,6 +90,7 @@ interface AppSettings {
   allowDirectEpicMerge: boolean // Allow merging epic branches to base without PR
   bmadInGitignore: boolean // When true, bmad folders are gitignored so branch restrictions are relaxed
   bmadInGitignoreUserSet: boolean // When true, user has manually set bmadInGitignore (don't auto-detect)
+  enableEpicBranches: boolean // When true, show epic branch features
   // Human Review feature
   enableHumanReviewColumn: boolean
   humanReviewChecklist: HumanReviewChecklistItem[]
@@ -104,6 +107,7 @@ interface AppSettings {
 const defaultSettings: AppSettings = {
   themeMode: 'light',
   aiTool: 'claude-code',
+  claudeModel: 'sonnet',
   projectPath: null,
   projectType: null,
   selectedEpicId: null,
@@ -116,6 +120,7 @@ const defaultSettings: AppSettings = {
   allowDirectEpicMerge: false,
   bmadInGitignore: false,
   bmadInGitignoreUserSet: false,
+  enableEpicBranches: false,
   // Human Review defaults
   enableHumanReviewColumn: false,
   humanReviewChecklist: [

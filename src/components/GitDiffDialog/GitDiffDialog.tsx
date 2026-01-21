@@ -507,7 +507,7 @@ export default function GitDiffDialog({ open, onClose, branchName }: GitDiffDial
   // Find matching story for commit message
   const getStoryFromBranch = (branch: string) => {
     for (const story of stories) {
-      const storyBranchPrefix = `${story.epicId}-${story.id}`
+      const storyBranchPrefix = story.id
       if (branch === storyBranchPrefix || branch.startsWith(`${storyBranchPrefix}-`)) {
         return story
       }

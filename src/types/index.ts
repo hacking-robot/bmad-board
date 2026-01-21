@@ -2,12 +2,14 @@
 export type StoryStatus = 'backlog' | 'ready-for-dev' | 'in-progress' | 'review' | 'human-review' | 'done' | 'optional'
 
 // Extended type that includes legacy/alternate status values that may appear in sprint-status.yaml
-export type StoryStatusExtended = StoryStatus | 'ready-for-review'
+export type StoryStatusExtended = StoryStatus | 'ready-for-review' | 'complete'
 
 // Normalize extended statuses to canonical statuses (for display in columns)
 // 'ready-for-review' is treated as 'review'
+// 'complete' is treated as 'done'
 export function normalizeStatus(status: StoryStatusExtended): StoryStatus {
   if (status === 'ready-for-review') return 'review'
+  if (status === 'complete') return 'done'
   return status
 }
 
@@ -107,6 +109,15 @@ export type ProjectType = 'bmm' | 'bmgd'
 
 // AI Tool types - determines command syntax
 export type AITool = 'claude-code' | 'cursor' | 'windsurf' | 'roo-code' | 'aider'
+
+// Claude model aliases for --model flag
+export type ClaudeModel = 'sonnet' | 'opus' | 'haiku'
+
+export const CLAUDE_MODELS: { id: ClaudeModel; name: string; description: string }[] = [
+  { id: 'sonnet', name: 'Sonnet', description: 'Fast and capable (default)' },
+  { id: 'opus', name: 'Opus', description: 'Most intelligent, best for complex tasks' },
+  { id: 'haiku', name: 'Haiku', description: 'Fastest, best for simple tasks' }
+]
 
 // CLI Tool capabilities
 export interface CLIToolInfo {

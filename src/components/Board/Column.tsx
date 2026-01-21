@@ -323,7 +323,7 @@ function Column({
                     story={story}
                     disableDrag={disableDrag || isLocked}
                     isLocked={isLocked}
-                    workingTeammate={workingTeammatesByBranch[`${story.epicId}-${story.id}`]}
+                    workingTeammate={workingTeammatesByBranch[story.id]}
                   />
                 )
               })

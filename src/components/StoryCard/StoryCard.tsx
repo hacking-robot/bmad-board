@@ -74,7 +74,7 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
   const bmadInGitignore = useStore((state) => state.bmadInGitignore)
 
   // Compute if we're on this story's branch (derived from store state)
-  const storyBranchName = `${story.epicId}-${story.id}`
+  const storyBranchName = story.id
   const isOnStoryBranch = currentBranch === storyBranchName
 
   // Check if we're on the epic branch (required for creating story branch)
@@ -114,7 +114,7 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
 
       try {
         // Branch name format: epicId-storyId
-        const fullBranchName = `${story.epicId}-${story.id}`
+        const fullBranchName = story.id
 
         // Check if branch exists
         const existsResult = await window.gitAPI.branchExists(projectPath, fullBranchName)
@@ -172,8 +172,8 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
     setSnackbarOpen(true)
   }
 
-  // Generate branch name: epicId-storyId (e.g., "1-1-6-load-built-in-chips-not")
-  const branchName = `${story.epicId}-${story.id}`
+  // Generate branch name: story.id already contains epicId-storyNumber-slug
+  const branchName = story.id
   const gitBranchCommand = `git checkout -b "${branchName}"`
 
   // Git commands for committing (combined add + commit)

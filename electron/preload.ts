@@ -21,6 +21,7 @@ export interface RecentProject {
 }
 
 export type AITool = 'claude-code' | 'cursor' | 'windsurf' | 'roo-code' | 'aider'
+export type ClaudeModel = 'sonnet' | 'opus' | 'haiku'
 
 export interface WindowBounds {
   x: number
@@ -60,6 +61,7 @@ export interface StatusChangeEntry {
 export interface AppSettings {
   themeMode: 'light' | 'dark'
   aiTool: AITool
+  claudeModel: ClaudeModel
   projectPath: string | null
   projectType: ProjectType | null
   selectedEpicId: number | null
@@ -74,6 +76,7 @@ export interface AppSettings {
   allowDirectEpicMerge: boolean // Allow merging epic branches to base without PR
   bmadInGitignore: boolean // When true, bmad folders are gitignored so branch restrictions are relaxed
   bmadInGitignoreUserSet: boolean // When true, user has manually set bmadInGitignore (don't auto-detect)
+  enableEpicBranches: boolean // When true, show epic branch features
   // Human Review feature
   enableHumanReviewColumn: boolean
   humanReviewChecklist: HumanReviewChecklistItem[]
@@ -384,6 +387,7 @@ export interface ChatAPI {
     projectPath: string
     projectType: 'bmm' | 'bmgd'
     tool?: AITool // AI tool to use (defaults to claude-code)
+    model?: ClaudeModel // Claude model to use (only for claude-code)
   }) => Promise<{ success: boolean; error?: string }>
   // Message sending - spawns new process per message, uses --resume for conversation continuity
   sendMessage: (options: {
@@ -392,6 +396,7 @@ export interface ChatAPI {
     message: string
     sessionId?: string // Session ID from previous response for --resume
     tool?: AITool // AI tool to use (defaults to claude-code)
+    model?: ClaudeModel // Claude model to use (only for claude-code)
   }) => Promise<{ success: boolean; error?: string }>
   // Cancel an ongoing message/agent load
   cancelMessage: (agentId: string) => Promise<boolean>
