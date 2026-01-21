@@ -17,7 +17,9 @@ import {
   Chip,
   Switch,
   Slider,
-  CircularProgress
+  CircularProgress,
+  TextField,
+  Autocomplete
 } from '@mui/material'
 import SettingsIcon from '@mui/icons-material/Settings'
 import KeyboardIcon from '@mui/icons-material/Keyboard'
@@ -42,6 +44,8 @@ export default function SettingsMenu() {
   const [branchDialogOpen, setBranchDialogOpen] = useState(false)
   const [cliStatus, setCliStatus] = useState<Record<string, CLIDetectionResult>>({})
   const [detectingCli, setDetectingCli] = useState(false)
+  const [availableBranches, setAvailableBranches] = useState<string[]>([])
+  const [loadingBranches, setLoadingBranches] = useState(false)
   const open = Boolean(anchorEl)
 
   const aiTool = useStore((state) => state.aiTool)
@@ -60,6 +64,7 @@ export default function SettingsMenu() {
   const setAllowDirectEpicMerge = useStore((state) => state.setAllowDirectEpicMerge)
   const enableEpicBranches = useStore((state) => state.enableEpicBranches)
   const setEnableEpicBranches = useStore((state) => state.setEnableEpicBranches)
+  const projectPath = useStore((state) => state.projectPath)
 
   const selectedTool = AI_TOOLS.find((t) => t.id === aiTool) || AI_TOOLS[0]
 
@@ -69,6 +74,28 @@ export default function SettingsMenu() {
       detectCliTools()
     }
   }, [toolDialogOpen])
+
+  // Load branches when branch dialog opens
+  useEffect(() => {
+    if (branchDialogOpen && projectPath) {
+      loadBranches()
+    }
+  }, [branchDialogOpen, projectPath])
+
+  const loadBranches = async () => {
+    if (!projectPath) return
+    setLoadingBranches(true)
+    try {
+      const result = await window.gitAPI.listBranches(projectPath)
+      if (result.branches) {
+        setAvailableBranches(result.branches)
+      }
+    } catch (error) {
+      console.error('Failed to load branches:', error)
+    } finally {
+      setLoadingBranches(false)
+    }
+  }
 
   const detectCliTools = async () => {
     setDetectingCli(true)
@@ -474,45 +501,41 @@ export default function SettingsMenu() {
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             Select your repository's main/base branch. This is used for branch comparisons and story editing restrictions.
           </Typography>
-          <RadioGroup
+          <Autocomplete
+            freeSolo
+            options={availableBranches}
             value={baseBranch}
-            onChange={(e) => setBaseBranch(e.target.value as 'main' | 'master' | 'develop')}
-          >
-            {(['main', 'master', 'develop'] as const).map((branch) => (
-              <Box
-                key={branch}
-                sx={{
-                  p: 1.5,
-                  mb: 1,
-                  border: 1,
-                  borderColor: baseBranch === branch ? 'primary.main' : 'divider',
-                  borderRadius: 1,
-                  cursor: 'pointer',
-                  '&:hover': {
-                    borderColor: 'primary.main',
-                    bgcolor: 'action.hover'
+            onChange={(_, newValue) => {
+              if (newValue) {
+                setBaseBranch(newValue)
+              }
+            }}
+            onInputChange={(_, newValue, reason) => {
+              if (reason === 'input' && newValue) {
+                setBaseBranch(newValue)
+              }
+            }}
+            loading={loadingBranches}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Branch"
+                placeholder="Select or type a branch name"
+                size="small"
+                slotProps={{
+                  input: {
+                    ...params.InputProps,
+                    endAdornment: (
+                      <>
+                        {loadingBranches ? <CircularProgress size={20} /> : null}
+                        {params.InputProps.endAdornment}
+                      </>
+                    )
                   }
                 }}
-                onClick={() => setBaseBranch(branch)}
-              >
-                <FormControlLabel
-                  value={branch}
-                  control={<Radio size="small" />}
-                  label={
-                    <Box>
-                      <Typography fontWeight={500}>{branch}</Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {branch === 'main' && 'Modern default branch name'}
-                        {branch === 'master' && 'Traditional default branch name'}
-                        {branch === 'develop' && 'Development branch (GitFlow)'}
-                      </Typography>
-                    </Box>
-                  }
-                  sx={{ m: 0, width: '100%' }}
-                />
-              </Box>
-            ))}
-          </RadioGroup>
+              />
+            )}
+          />
         </DialogContent>
       </Dialog>
     </>
