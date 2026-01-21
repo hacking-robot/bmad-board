@@ -115,7 +115,7 @@ export default function StoryDialog() {
         return
       }
       try {
-        const branchName = `${selectedStory.epicId}-${selectedStory.id}`
+        const branchName = selectedStory.id
         const result = await window.gitAPI.branchExists(projectPath, branchName)
         setBranchExists(result.exists)
       } catch {
@@ -134,7 +134,7 @@ export default function StoryDialog() {
 
   if (!selectedStory) return null
 
-  const branchName = `${selectedStory.epicId}-${selectedStory.id}`
+  const branchName = selectedStory.id
 
   // Find if a chat teammate is working on this story's branch
   const workingTeammate = (() => {

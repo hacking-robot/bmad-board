@@ -35,7 +35,7 @@ export default function UncommittedChanges() {
     // Try to match branch name pattern: epicId-storyId-...
     // The storyId format is like "1-6" which becomes "1-6-..." in branch
     for (const story of stories) {
-      const storyBranchPrefix = `${story.epicId}-${story.id}`
+      const storyBranchPrefix = story.id
       if (branchName === storyBranchPrefix || branchName.startsWith(`${storyBranchPrefix}-`)) {
         return story
       }
