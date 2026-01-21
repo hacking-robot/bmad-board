@@ -38,15 +38,14 @@ function parseBranchInfo(branchName: string | null, baseBranch: string): BranchI
   // Story branch: epicId-storyId (e.g., "1-1-6-load-chips")
   // Story ID format: epicId-storyNumber-slug
   // So branch format is: epicId-epicId-storyNumber-slug (first epicId is branch prefix)
-  // Actually looking at StoryCard: storyBranchName = `${story.epicId}-${story.id}`
-  // And story.id is like "1-6-load-built-in-chips" (epicId-storyNumber-slug)
-  // So full branch name is like "1-1-6-load-built-in-chips"
-  const storyMatch = branchName.match(/^(\d+)-(\d+-\d+-.+)$/)
+  // Actually looking at StoryCard: storyBranchName = story.id
+  // story.id format is: epicId-storyNumber-slug (e.g., "1-2-load-built-in-chips")
+  const storyMatch = branchName.match(/^(\d+-\d+-.+)$/)
   if (storyMatch) {
     return {
       type: 'story',
-      epicId: parseInt(storyMatch[1], 10),
-      storyId: storyMatch[2] // e.g., "1-6-load-chips"
+      epicId: parseInt(storyMatch[1].split('-')[0], 10),
+      storyId: storyMatch[1] // e.g., "1-6-load-chips"
     }
   }
 

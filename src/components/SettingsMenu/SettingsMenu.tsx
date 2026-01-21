@@ -34,7 +34,7 @@ import ErrorIcon from '@mui/icons-material/Error'
 import DesktopWindowsIcon from '@mui/icons-material/DesktopWindows'
 import FolderOffIcon from '@mui/icons-material/FolderOff'
 import { useStore } from '../../store'
-import { AI_TOOLS, AITool, CLIDetectionResult } from '../../types'
+import { AI_TOOLS, AITool, CLIDetectionResult, CLAUDE_MODELS } from '../../types'
 
 export default function SettingsMenu() {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
@@ -47,6 +47,8 @@ export default function SettingsMenu() {
 
   const aiTool = useStore((state) => state.aiTool)
   const setAITool = useStore((state) => state.setAITool)
+  const claudeModel = useStore((state) => state.claudeModel)
+  const setClaudeModel = useStore((state) => state.setClaudeModel)
   const notificationsEnabled = useStore((state) => state.notificationsEnabled)
   const setNotificationsEnabled = useStore((state) => state.setNotificationsEnabled)
   const enableHumanReviewColumn = useStore((state) => state.enableHumanReviewColumn)
@@ -59,6 +61,8 @@ export default function SettingsMenu() {
   const setAllowDirectEpicMerge = useStore((state) => state.setAllowDirectEpicMerge)
   const bmadInGitignore = useStore((state) => state.bmadInGitignore)
   const setBmadInGitignore = useStore((state) => state.setBmadInGitignore)
+  const enableEpicBranches = useStore((state) => state.enableEpicBranches)
+  const setEnableEpicBranches = useStore((state) => state.setEnableEpicBranches)
 
   const selectedTool = AI_TOOLS.find((t) => t.id === aiTool) || AI_TOOLS[0]
 
@@ -164,7 +168,7 @@ export default function SettingsMenu() {
           </ListItemIcon>
           <ListItemText
             primary="AI Tool"
-            secondary={selectedTool.name}
+            secondary={aiTool === 'claude-code' ? `${selectedTool.name} (${CLAUDE_MODELS.find(m => m.id === claudeModel)?.name || claudeModel})` : selectedTool.name}
             secondaryTypographyProps={{ variant: 'caption' }}
           />
         </MenuItem>
@@ -245,6 +249,21 @@ export default function SettingsMenu() {
           <Switch
             edge="end"
             checked={bmadInGitignore}
+            size="small"
+          />
+        </MenuItem>
+        <MenuItem onClick={() => setEnableEpicBranches(!enableEpicBranches)}>
+          <ListItemIcon>
+            <GitIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText
+            primary="Enable Epic Branches"
+            secondary="Show epic branch controls"
+            secondaryTypographyProps={{ variant: 'caption' }}
+          />
+          <Switch
+            edge="end"
+            checked={enableEpicBranches}
             size="small"
           />
         </MenuItem>
@@ -378,6 +397,33 @@ export default function SettingsMenu() {
               )
             })}
           </RadioGroup>
+
+          {/* Model Selection - only for Claude Code */}
+          {aiTool === 'claude-code' && (
+            <Box sx={{ mt: 3 }}>
+              <Typography variant="subtitle2" gutterBottom>
+                Claude Model
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+                Select which Claude model to use for agent conversations.
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                {CLAUDE_MODELS.map((model) => (
+                  <Chip
+                    key={model.id}
+                    label={model.name}
+                    onClick={() => setClaudeModel(model.id)}
+                    color={claudeModel === model.id ? 'primary' : 'default'}
+                    variant={claudeModel === model.id ? 'filled' : 'outlined'}
+                    sx={{ cursor: 'pointer' }}
+                  />
+                ))}
+              </Box>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                {CLAUDE_MODELS.find(m => m.id === claudeModel)?.description}
+              </Typography>
+            </Box>
+          )}
         </DialogContent>
       </Dialog>
 

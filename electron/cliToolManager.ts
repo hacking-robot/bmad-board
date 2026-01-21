@@ -193,10 +193,13 @@ export function clearDetectionCache(): void {
 /**
  * Build CLI arguments for a tool
  */
+export type ClaudeModel = 'sonnet' | 'opus' | 'haiku'
+
 export interface BuildArgsOptions {
   prompt: string
   sessionId?: string
   verbose?: boolean
+  model?: ClaudeModel // Claude model alias (only for claude-code)
 }
 
 export function buildArgs(toolId: string, options: BuildArgsOptions): string[] {
@@ -209,13 +212,16 @@ export function buildArgs(toolId: string, options: BuildArgsOptions): string[] {
 
   switch (toolId) {
     case 'claude-code':
-      // Claude: --output-format stream-json --print --verbose --dangerously-skip-permissions [--resume ID] -p "prompt"
+      // Claude: --output-format stream-json --print --verbose --dangerously-skip-permissions [--model MODEL] [--resume ID] -p "prompt"
       args.push('--output-format', 'stream-json')
       args.push('--print')
       if (options.verbose !== false) {
         args.push('--verbose')
       }
       args.push('--dangerously-skip-permissions')
+      if (options.model) {
+        args.push('--model', options.model)
+      }
       if (options.sessionId) {
         args.push('--resume', options.sessionId)
       }
