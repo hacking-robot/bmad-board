@@ -266,7 +266,7 @@ export interface GitAPI {
   getCurrentBranch: (projectPath: string) => Promise<{ branch?: string; error?: string }>
   listBranches: (projectPath: string) => Promise<{ branches: string[]; error?: string }>
   checkoutBranch: (projectPath: string, branchName: string) => Promise<{ success: boolean; error?: string }>
-  createBranch: (projectPath: string, branchName: string) => Promise<{ success: boolean; error?: string; alreadyExists?: boolean }>
+  createBranch: (projectPath: string, branchName: string, fromBranch?: string) => Promise<{ success: boolean; error?: string; alreadyExists?: boolean }>
   branchExists: (projectPath: string, branchName: string) => Promise<{ exists: boolean }>
   hasChanges: (projectPath: string) => Promise<{ hasChanges: boolean; error?: string }>
   commit: (projectPath: string, message: string) => Promise<{ success: boolean; error?: string }>
@@ -287,7 +287,7 @@ const gitAPI: GitAPI = {
   getCurrentBranch: (projectPath) => ipcRenderer.invoke('git-current-branch', projectPath),
   listBranches: (projectPath) => ipcRenderer.invoke('git-list-branches', projectPath),
   checkoutBranch: (projectPath, branchName) => ipcRenderer.invoke('git-checkout-branch', projectPath, branchName),
-  createBranch: (projectPath, branchName) => ipcRenderer.invoke('git-create-branch', projectPath, branchName),
+  createBranch: (projectPath, branchName, fromBranch) => ipcRenderer.invoke('git-create-branch', projectPath, branchName, fromBranch),
   branchExists: (projectPath, branchName) => ipcRenderer.invoke('git-branch-exists', projectPath, branchName),
   hasChanges: (projectPath) => ipcRenderer.invoke('git-has-changes', projectPath),
   commit: (projectPath, message) => ipcRenderer.invoke('git-commit', projectPath, message),

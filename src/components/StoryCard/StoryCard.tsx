@@ -90,8 +90,9 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
   // These determine if actions are allowed (separate from actual branch state for UI)
   const canExecuteOnAnyBranch = bmadInGitignore
   const canExecuteStoryActions = isOnStoryBranch || canExecuteOnAnyBranch
-  // When epic branches are disabled, allow creating story branches from base branch
-  const canCreateBranchFromHere = isOnEpicBranch || canExecuteOnAnyBranch || (!enableEpicBranches && isOnBaseBranch)
+  // When epic branches are disabled, we can create story branches from anywhere (they'll be created from base branch)
+  // When epic branches are enabled, must be on the epic branch to create story branches
+  const canCreateBranchFromHere = isOnEpicBranch || canExecuteOnAnyBranch || !enableEpicBranches
 
   // Make card sortable (draggable + reorderable)
   const { attributes, listeners, setNodeRef, transform, transition, isDragging: isBeingDragged } = useSortable({
@@ -220,7 +221,9 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
 
     setCreatingBranch(true)
     try {
-      const result = await window.gitAPI.createBranch(projectPath, branchName)
+      // When epic branches are disabled, create from base branch; otherwise create from current branch
+      const fromBranch = enableEpicBranches ? undefined : baseBranch
+      const result = await window.gitAPI.createBranch(projectPath, branchName, fromBranch)
       if (result.success) {
         setBranchExists(true)
         setCurrentBranch(branchName)
@@ -681,16 +684,17 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
                 {step.command && toolSupportsHeadless && (() => {
                   const agentThread = chatThreads[step.agentId]
                   const isAgentWorking = agentThread?.isTyping || false
-                  // Backlog/ready-for-dev stories can be worked on from epic branch (no story branch exists yet)
+                  // Backlog/ready-for-dev stories can be worked on from epic branch (or base branch when epic branches disabled)
                   // When bmad is gitignored, allow from any branch
-                  const canExecuteFromEpicBranch = (effectiveStatus === 'backlog' || effectiveStatus === 'ready-for-dev') && isOnEpicBranch
-                  const canExecute = canExecuteStoryActions || canExecuteFromEpicBranch
+                  const canExecuteFromParentBranch = (effectiveStatus === 'backlog' || effectiveStatus === 'ready-for-dev') && (enableEpicBranches ? isOnEpicBranch : isOnBaseBranch)
+                  const canExecute = canExecuteStoryActions || canExecuteFromParentBranch
                   const isDisabled = !canExecute || isAgentWorking
+                  const requiredBranch = enableEpicBranches ? `epic-${story.epicId}` : baseBranch
                   const tooltipTitle = isAgentWorking
                     ? agentThread?.thinkingActivity || 'Working...'
                     : canExecute
                       ? 'Send to chat'
-                      : `Switch to branch ${storyBranchName} first`
+                      : `Switch to branch ${requiredBranch} first`
                   return (
                     <Tooltip title={tooltipTitle}>
                       <span>
