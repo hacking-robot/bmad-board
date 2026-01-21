@@ -2,7 +2,7 @@ import { spawn, ChildProcess } from 'child_process'
 import { EventEmitter } from 'events'
 import { BrowserWindow } from 'electron'
 import { getAugmentedEnv, findBinary } from './envUtils'
-import { buildArgs, getToolConfig, supportsHeadless } from './cliToolManager'
+import { buildArgs, getToolConfig, supportsHeadless, ClaudeModel } from './cliToolManager'
 
 // Supported AI tools
 type AITool = 'claude-code' | 'cursor' | 'windsurf' | 'roo-code' | 'aider'
@@ -254,6 +254,7 @@ class ChatAgentManager {
       projectPath: string
       projectType: 'bmm' | 'bmgd'
       tool?: AITool
+      model?: ClaudeModel
     }
   ): { success: boolean; error?: string } {
     const tool = options.tool || 'claude-code'
@@ -281,7 +282,7 @@ class ChatAgentManager {
       
       if (tool === 'claude-code') {
         // Claude: use buildArgs for consistency
-        args = buildArgs('claude-code', { prompt: agentPrompt, verbose: true })
+        args = buildArgs('claude-code', { prompt: agentPrompt, verbose: true, model: options.model })
         binaryName = 'claude'
       } else if (tool === 'cursor') {
         // Cursor: headless mode with message
@@ -401,6 +402,7 @@ class ChatAgentManager {
       message: string
       sessionId?: string // Session ID from previous response for --resume (Claude only)
       tool?: AITool
+      model?: ClaudeModel
     }
   ): { success: boolean; error?: string } {
     const tool = options.tool || 'claude-code'
@@ -427,10 +429,11 @@ class ChatAgentManager {
       
       if (tool === 'claude-code') {
         // Claude: use buildArgs, supports --resume for session continuity
-        args = buildArgs('claude-code', { 
-          prompt, 
+        args = buildArgs('claude-code', {
+          prompt,
           sessionId: options.sessionId,
-          verbose: true 
+          verbose: true,
+          model: options.model
         })
         binaryName = 'claude'
       } else if (tool === 'cursor') {

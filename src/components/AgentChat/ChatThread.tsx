@@ -383,12 +383,14 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
 
         // Send the actual user message with the session ID
         const currentAiTool = useStore.getState().aiTool
+        const currentClaudeModel = useStore.getState().claudeModel
         const result = await window.chatAPI.sendMessage({
           agentId,
           projectPath: projectPath!,
           message: content,
           sessionId: event.sessionId,
-          tool: currentAiTool
+          tool: currentAiTool,
+          model: currentAiTool === 'claude-code' ? currentClaudeModel : undefined
         })
 
         if (!result.success) {
@@ -565,11 +567,13 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
       try {
         const currentProjectType = useStore.getState().projectType || 'bmm'
         const currentAiTool = useStore.getState().aiTool
+        const currentClaudeModel = useStore.getState().claudeModel
         const result = await window.chatAPI.loadAgent({
           agentId,
           projectPath,
           projectType: currentProjectType,
-          tool: currentAiTool
+          tool: currentAiTool,
+          model: currentAiTool === 'claude-code' ? currentClaudeModel : undefined
         })
 
         if (!result.success) {
@@ -600,12 +604,14 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
 
       try {
         const currentAiTool = useStore.getState().aiTool
+        const currentClaudeModel = useStore.getState().claudeModel
         const result = await window.chatAPI.sendMessage({
           agentId,
           projectPath,
           message: content.trim(),
           sessionId: currentSessionId,
-          tool: currentAiTool
+          tool: currentAiTool,
+          model: currentAiTool === 'claude-code' ? currentClaudeModel : undefined
         })
 
         if (!result.success) {

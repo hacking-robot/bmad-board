@@ -42,6 +42,7 @@ export default function BranchSwitcher() {
   const stories = useStore((state) => state.stories)
   const baseBranch = useStore((state) => state.baseBranch)
   const allowDirectEpicMerge = useStore((state) => state.allowDirectEpicMerge)
+  const enableEpicBranches = useStore((state) => state.enableEpicBranches)
   const { loadProjectData } = useProjectData()
 
   // Whether current branch is the base branch
@@ -87,7 +88,7 @@ export default function BranchSwitcher() {
     // Only consider branches that match actual stories (not just any branch starting with epicId-)
     const storyPrefixes = stories
       .filter(s => String(s.epicId) === epicId)
-      .map(s => `${s.epicId}-${s.id}`)
+      .map(s => s.id)
 
     const storyBranches = branchList.filter(branch =>
       storyPrefixes.some(prefix => branch === prefix || branch.startsWith(`${prefix}-`))
@@ -216,21 +217,23 @@ export default function BranchSwitcher() {
   const filteredBranches = useMemo(() => {
     // Build set of valid branch prefixes
     const epicPrefixes = epics.map(e => `epic-${e.id}-`)
-    const storyPrefixes = stories.map(s => `${s.epicId}-${s.id}`)
+    const storyPrefixes = stories.map(s => s.id)
 
     return branches.filter(branch => {
       // Always show base branch
       if (branch === baseBranch) return true
 
-      // Show epic branches
-      if (epicPrefixes.some(prefix => branch.startsWith(prefix))) return true
+      // Show epic branches only if enabled
+      if (epicPrefixes.some(prefix => branch.startsWith(prefix))) {
+        return enableEpicBranches
+      }
 
       // Show story branches
       if (storyPrefixes.some(prefix => branch === prefix || branch.startsWith(`${prefix}-`))) return true
 
       return false
     })
-  }, [branches, epics, stories, baseBranch])
+  }, [branches, epics, stories, baseBranch, enableEpicBranches])
 
   // Group branches into tree structure: main, then epics with their stories nested
   const groupedBranches = useMemo(() => {

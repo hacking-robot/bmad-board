@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import { Epic, Story, StoryContent, StoryStatus, Agent, ProjectType, AgentHistoryEntry, AITool, HumanReviewChecklistItem, StoryReviewState, ChatMessage, AgentThread, StatusChangeEntry, StatusChangeSource } from './types'
+import { Epic, Story, StoryContent, StoryStatus, Agent, ProjectType, AgentHistoryEntry, AITool, ClaudeModel, HumanReviewChecklistItem, StoryReviewState, ChatMessage, AgentThread, StatusChangeEntry, StatusChangeSource } from './types'
 
 export type ViewMode = 'board' | 'chat'
 
@@ -54,7 +54,7 @@ const electronStorage = {
       const parsed = JSON.parse(value)
       if (parsed.state) {
         // Only save the settings we care about
-        const { themeMode, aiTool, projectPath, projectType, selectedEpicId, collapsedColumnsByEpic, agentHistory, recentProjects, notificationsEnabled, baseBranch, allowDirectEpicMerge, bmadInGitignore, bmadInGitignoreUserSet, storyOrder, enableHumanReviewColumn, humanReviewChecklist, humanReviewStates, humanReviewStories, maxThreadMessages, statusHistoryByStory, globalStatusHistory, lastViewedStatusHistoryAt } = parsed.state
+        const { themeMode, aiTool, claudeModel, projectPath, projectType, selectedEpicId, collapsedColumnsByEpic, agentHistory, recentProjects, notificationsEnabled, baseBranch, allowDirectEpicMerge, bmadInGitignore, bmadInGitignoreUserSet, storyOrder, enableHumanReviewColumn, humanReviewChecklist, humanReviewStates, humanReviewStories, maxThreadMessages, statusHistoryByStory, globalStatusHistory, lastViewedStatusHistoryAt, enableEpicBranches } = parsed.state
 
         // Don't persist full output - it can contain characters that break JSON
         // Just save metadata and a small summary
@@ -68,6 +68,7 @@ const electronStorage = {
         debouncedSave({
           themeMode,
           aiTool: aiTool || 'claude-code',
+          claudeModel: claudeModel || 'sonnet',
           projectPath,
           projectType,
           selectedEpicId,
@@ -87,7 +88,8 @@ const electronStorage = {
           maxThreadMessages: maxThreadMessages ?? 100,
           statusHistoryByStory: statusHistoryByStory || {},
           globalStatusHistory: globalStatusHistory || [],
-          lastViewedStatusHistoryAt: lastViewedStatusHistoryAt || 0
+          lastViewedStatusHistoryAt: lastViewedStatusHistoryAt || 0,
+          enableEpicBranches: enableEpicBranches ?? false
         })
       }
     } catch (error) {
@@ -98,6 +100,7 @@ const electronStorage = {
     await window.fileAPI.saveSettings({
       themeMode: 'light',
       aiTool: 'claude-code',
+      claudeModel: 'sonnet',
       projectPath: null,
       projectType: null,
       selectedEpicId: null,
@@ -117,7 +120,8 @@ const electronStorage = {
       maxThreadMessages: 100,
       statusHistoryByStory: {},
       globalStatusHistory: [],
-      lastViewedStatusHistoryAt: 0
+      lastViewedStatusHistoryAt: 0,
+      enableEpicBranches: false
     })
   }
 }
@@ -140,6 +144,10 @@ interface AppState {
   aiTool: AITool
   setAITool: (tool: AITool) => void
 
+  // Claude Model (only applies when aiTool is 'claude-code')
+  claudeModel: ClaudeModel
+  setClaudeModel: (model: ClaudeModel) => void
+
   // Notifications
   notificationsEnabled: boolean
   setNotificationsEnabled: (enabled: boolean) => void
@@ -154,6 +162,8 @@ interface AppState {
   bmadInGitignore: boolean // When true, bmad folders are gitignored so branch restrictions are relaxed
   setBmadInGitignore: (inGitignore: boolean, userSet?: boolean) => void
   bmadInGitignoreUserSet: boolean // When true, user has manually set bmadInGitignore (don't auto-detect)
+  enableEpicBranches: boolean // When true, show epic branch features (GitHub icon in EpicFilter, epic branches in BranchSwitcher)
+  setEnableEpicBranches: (enabled: boolean) => void
 
   // Project
   projectPath: string | null
@@ -323,6 +333,10 @@ export const useStore = create<AppState>()(
       aiTool: 'claude-code',
       setAITool: (tool) => set({ aiTool: tool }),
 
+      // Claude Model
+      claudeModel: 'sonnet',
+      setClaudeModel: (model) => set({ claudeModel: model }),
+
       // Notifications
       notificationsEnabled: false,
       setNotificationsEnabled: (enabled) => set({ notificationsEnabled: enabled }),
@@ -340,6 +354,8 @@ export const useStore = create<AppState>()(
         ...(userSet !== undefined && { bmadInGitignoreUserSet: userSet })
       }),
       bmadInGitignoreUserSet: false,
+      enableEpicBranches: false,
+      setEnableEpicBranches: (enabled) => set({ enableEpicBranches: enabled }),
 
       // Project
       projectPath: null,

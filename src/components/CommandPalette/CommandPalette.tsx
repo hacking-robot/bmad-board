@@ -77,7 +77,7 @@ export default function CommandPalette() {
       const branchSet = new Set<string>()
 
       for (const story of stories) {
-        const branchName = `${story.epicId}-${story.id}`
+        const branchName = story.id
         try {
           const result = await window.gitAPI.branchExists(projectPath, branchName)
           if (result.exists) {
@@ -193,7 +193,7 @@ export default function CommandPalette() {
         return stories
           .filter(story => storiesWithBranches.has(story.id))
           .map((story) => {
-            const branchName = `${story.epicId}-${story.id}`
+            const branchName = story.id
             return {
               id: `diff:${story.id}`,
               label: `${story.epicId}.${story.storyNumber} - ${story.title}`,
