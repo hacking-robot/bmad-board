@@ -169,6 +169,43 @@ export default function BranchSwitcher() {
     }
   }, [projectPath, isOnBaseBranch, baseBranch])
 
+  // Load merge status for all story branches when on base branch with epic branches disabled
+  const loadStoryMergeStatusForBase = useCallback(async (branchList: string[]) => {
+    if (!projectPath || !isOnBaseBranch || enableEpicBranches) return
+
+    // Find all story branches (matching pattern N-N or N-N-*)
+    const storyBranches = branchList.filter(branch => /^\d+-\d+/.test(branch))
+
+    if (storyBranches.length === 0) return
+
+    // Initialize loading state for all story branches
+    setMergeStatus(prev => {
+      const newStatus = { ...prev }
+      for (const branch of storyBranches) {
+        if (!newStatus[branch]) {
+          newStatus[branch] = { merged: false, loading: true }
+        }
+      }
+      return newStatus
+    })
+
+    // Check merge status for each story branch against base
+    for (const branch of storyBranches) {
+      try {
+        const result = await window.gitAPI.isBranchMerged(projectPath, branch, baseBranch)
+        setMergeStatus(prev => ({
+          ...prev,
+          [branch]: { merged: result.merged, loading: false }
+        }))
+      } catch {
+        setMergeStatus(prev => ({
+          ...prev,
+          [branch]: { merged: false, loading: false }
+        }))
+      }
+    }
+  }, [projectPath, isOnBaseBranch, enableEpicBranches, baseBranch])
+
   // Load branches when dropdown opens
   useEffect(() => {
     if (open) {
@@ -189,6 +226,13 @@ export default function BranchSwitcher() {
       loadEpicMergeStatus(branches)
     }
   }, [open, branches, isOnBaseBranch, loadEpicMergeStatus])
+
+  // Load story merge status when on base branch with epic branches disabled (for dropdown display)
+  useEffect(() => {
+    if (open && branches.length > 0 && isOnBaseBranch && !enableEpicBranches) {
+      loadStoryMergeStatusForBase(branches)
+    }
+  }, [open, branches, isOnBaseBranch, enableEpicBranches, loadStoryMergeStatusForBase])
 
   // Check merge status when switching to an epic branch (for read-only mode)
   useEffect(() => {
@@ -244,6 +288,7 @@ export default function BranchSwitcher() {
       isStoryBranch: boolean
       epicId: string | null
       mergeStatus: { merged: boolean; loading: boolean } | null
+      mergeTarget: 'epic' | 'base' | null
     }
 
     const result: BranchItem[] = []
@@ -290,7 +335,8 @@ export default function BranchSwitcher() {
         isEpicBranch: false,
         isStoryBranch: false,
         epicId: null,
-        mergeStatus: null
+        mergeStatus: null,
+        mergeTarget: null
       })
     }
 
@@ -311,7 +357,8 @@ export default function BranchSwitcher() {
           isEpicBranch: true,
           isStoryBranch: false,
           epicId,
-          mergeStatus: showEpicMergeStatus ? (epicMergeStatus[epicBranch] || { merged: false, loading: true }) : null
+          mergeStatus: showEpicMergeStatus ? (epicMergeStatus[epicBranch] || { merged: false, loading: true }) : null,
+          mergeTarget: showEpicMergeStatus ? 'base' : null
         })
       }
 
@@ -326,8 +373,10 @@ export default function BranchSwitcher() {
       })
 
       // Add story branches (indented under epic)
-      // Only show merge status if we're on this epic's branch
-      const showMergeStatus = currentEpicId === epicId
+      // Show merge status if we're on this epic's branch, OR if on base branch with epic branches disabled
+      const showMergeStatus = currentEpicId === epicId || (isOnBaseBranch && !enableEpicBranches)
+      // Determine merge target: if on base branch (epic branches disabled), merge to base; otherwise merge to epic
+      const storyMergeTarget = isOnBaseBranch && !enableEpicBranches ? 'base' : (currentEpicId === epicId ? 'epic' : null)
       for (const branch of storyBranches) {
         result.push({
           id: branch,
@@ -335,13 +384,14 @@ export default function BranchSwitcher() {
           isEpicBranch: false,
           isStoryBranch: true,
           epicId,
-          mergeStatus: showMergeStatus ? (mergeStatus[branch] || { merged: false, loading: true }) : null
+          mergeStatus: showMergeStatus ? (mergeStatus[branch] || { merged: false, loading: true }) : null,
+          mergeTarget: storyMergeTarget
         })
       }
     }
 
     return result
-  }, [filteredBranches, currentEpicId, mergeStatus, baseBranch, isOnBaseBranch, epicMergeStatus])
+  }, [filteredBranches, currentEpicId, mergeStatus, baseBranch, isOnBaseBranch, epicMergeStatus, enableEpicBranches])
 
   const handleClick = () => {
     if (!projectPath || !currentBranch) return
@@ -524,16 +574,16 @@ export default function BranchSwitcher() {
             >
               {branch.label}
             </Typography>
-            {/* Only show merge status when on the parent epic */}
+            {/* Show merge status when on the parent epic or on base branch with epic branches disabled */}
             {branch.mergeStatus && (
               branch.mergeStatus.loading ? (
                 <CircularProgress size={14} sx={{ color: 'text.disabled' }} />
               ) : branch.mergeStatus.merged ? (
-                <Tooltip title="Merged into epic">
+                <Tooltip title={branch.mergeTarget === 'base' ? "Merged into base branch" : "Merged into epic"}>
                   <CheckCircleIcon sx={{ fontSize: 16, color: 'success.main' }} />
                 </Tooltip>
               ) : (
-                <Tooltip title="Merge into epic">
+                <Tooltip title={branch.mergeTarget === 'base' ? "Merge into base branch" : "Merge into epic"}>
                   <IconButton
                     size="small"
                     onClick={(e) => handleMergeBranch(branch.id, e)}

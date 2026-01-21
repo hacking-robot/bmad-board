@@ -72,20 +72,26 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
   const setHasUncommittedChanges = useStore((state) => state.setHasUncommittedChanges)
   const setCurrentBranch = useStore((state) => state.setCurrentBranch)
   const bmadInGitignore = useStore((state) => state.bmadInGitignore)
+  const enableEpicBranches = useStore((state) => state.enableEpicBranches)
+  const baseBranch = useStore((state) => state.baseBranch)
 
   // Compute if we're on this story's branch (derived from store state)
   const storyBranchName = story.id
   const isOnStoryBranch = currentBranch === storyBranchName
 
-  // Check if we're on the epic branch (required for creating story branch)
+  // Check if we're on the epic branch (required for creating story branch when epic branches enabled)
   const epicBranchPrefix = `epic-${story.epicId}-`
   const isOnEpicBranch = currentBranch?.startsWith(epicBranchPrefix) || false
+
+  // Check if we're on the base branch (can create story branch from here when epic branches disabled)
+  const isOnBaseBranch = currentBranch === baseBranch
 
   // When bmad is gitignored, branch restrictions are relaxed since data persists across branches
   // These determine if actions are allowed (separate from actual branch state for UI)
   const canExecuteOnAnyBranch = bmadInGitignore
   const canExecuteStoryActions = isOnStoryBranch || canExecuteOnAnyBranch
-  const canCreateBranchFromHere = isOnEpicBranch || canExecuteOnAnyBranch
+  // When epic branches are disabled, allow creating story branches from base branch
+  const canCreateBranchFromHere = isOnEpicBranch || canExecuteOnAnyBranch || (!enableEpicBranches && isOnBaseBranch)
 
   // Make card sortable (draggable + reorderable)
   const { attributes, listeners, setNodeRef, transform, transition, isDragging: isBeingDragged } = useSortable({
@@ -536,7 +542,7 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
               <Typography variant="body2" fontWeight={500} sx={{ flex: 1 }}>
                 Create Branch
               </Typography>
-              <Tooltip title={!canCreateBranchFromHere ? `Switch to epic-${story.epicId} branch first` : ''}>
+              <Tooltip title={!canCreateBranchFromHere ? `Switch to ${enableEpicBranches ? `epic-${story.epicId}` : baseBranch} branch first` : ''}>
                 <span>
                   <Button
                     size="small"
@@ -582,7 +588,7 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
             </Box>
             {!canCreateBranchFromHere && (
               <Typography variant="caption" color="warning.main" sx={{ mt: 0.5, display: 'block' }}>
-                Switch to epic-{story.epicId} branch first
+                Switch to {enableEpicBranches ? `epic-${story.epicId}` : baseBranch} branch first
               </Typography>
             )}
           </Box>
