@@ -61,15 +61,13 @@ export function parseEpics(
 
     // Match story lines (numbered list)
     if (currentEpic && inStoriesSection) {
-      // Match: 1. As a player, I can place NAND gates...
-      const storyMatch = line.match(/^\d+\.\s+As a .+?, I (?:can|want) (.+?)(?:,| so that)/)
-      if (storyMatch) {
+      // Match any numbered line: 1. Some story text...
+      const numberedMatch = line.match(/^\d+\.\s+(.+)$/)
+      if (numberedMatch) {
         storyNumber++
-        // Extract the main action/title from the story
-        let title = storyMatch[1].trim()
-        // Clean up the title
-        title = title.replace(/^to\s+/, '') // Remove leading "to"
-        title = title.charAt(0).toUpperCase() + title.slice(1) // Capitalize
+        const fullText = numberedMatch[1].trim()
+        // Try to extract a cleaner title from user story format, fall back to full text
+        const title = extractStoryTitle(fullText)
         currentEpic.stories.push({ title, storyNumber })
       }
     }
@@ -112,6 +110,20 @@ export function parseEpics(
       stories
     }
   })
+}
+
+function extractStoryTitle(text: string): string {
+  // Try to extract action from "As a X, I [verb] Y so that Z" format
+  // Matches common verbs: can, want, see, use, have, am able to, etc.
+  const userStoryMatch = text.match(/^As a .+?, I (?:can |want to |see |use |have |am able to |no longer |clearly )?(.+?)(?:,| so that|$)/)
+  if (userStoryMatch) {
+    let title = userStoryMatch[1].trim()
+    title = title.replace(/^to\s+/, '') // Remove leading "to"
+    title = title.charAt(0).toUpperCase() + title.slice(1) // Capitalize
+    return title
+  }
+  // Fall back to full text (truncated if too long)
+  return text.length > 80 ? text.substring(0, 77) + '...' : text
 }
 
 function generateSlug(title: string): string {
