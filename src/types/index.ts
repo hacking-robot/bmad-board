@@ -200,6 +200,18 @@ export interface AgentHistoryEntry {
 // NOTE: Agent actions are now defined in src/data/flow.json
 // Use the useWorkflow hook to access workflow data
 
+// LLM response statistics (from claude CLI --output-format stream-json)
+export interface LLMStats {
+  model: string
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens?: number
+  cacheWriteTokens?: number
+  totalCostUsd?: number
+  durationMs?: number
+  apiDurationMs?: number
+}
+
 // Chat interface types
 export interface ChatMessage {
   id: string
@@ -207,6 +219,7 @@ export interface ChatMessage {
   content: string
   timestamp: number
   status: 'pending' | 'streaming' | 'complete' | 'error'
+  stats?: LLMStats // LLM usage stats for assistant messages
 }
 
 export interface AgentThread {
