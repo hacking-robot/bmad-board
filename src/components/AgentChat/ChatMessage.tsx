@@ -1,7 +1,7 @@
 import { Box, Typography, Paper, IconButton, Tooltip, Link } from '@mui/material'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline'
-import { ChatMessage as ChatMessageType } from '../../types'
+import { ChatMessage as ChatMessageType, LLMStats } from '../../types'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus, vs } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { useStore } from '../../store'
@@ -13,6 +13,38 @@ interface ChatMessageProps {
   message: ChatMessageType
   agentName: string
   agentAvatar: string
+}
+
+// Format LLM stats for display
+function formatStats(stats: LLMStats): string {
+  const parts: string[] = []
+
+  // Model name (shortened)
+  const modelShort = stats.model.includes('opus') ? 'Opus' :
+    stats.model.includes('sonnet') ? 'Sonnet' :
+    stats.model.includes('haiku') ? 'Haiku' :
+    stats.model.split('-')[0] || stats.model
+  parts.push(modelShort)
+
+  // Tokens
+  const totalTokens = stats.inputTokens + stats.outputTokens
+  parts.push(`${totalTokens.toLocaleString()} tokens`)
+
+  // Cost
+  if (stats.totalCostUsd !== undefined) {
+    const costStr = stats.totalCostUsd < 0.01
+      ? `$${stats.totalCostUsd.toFixed(4)}`
+      : `$${stats.totalCostUsd.toFixed(2)}`
+    parts.push(costStr)
+  }
+
+  // Duration
+  if (stats.durationMs !== undefined) {
+    const seconds = (stats.durationMs / 1000).toFixed(1)
+    parts.push(`${seconds}s`)
+  }
+
+  return parts.join(' · ')
 }
 
 // Map file extensions to language names
@@ -353,6 +385,21 @@ export default function ChatMessage({ message, agentName, agentAvatar }: ChatMes
             </ReactMarkdown>
           )}
         </Paper>
+
+        {/* LLM Stats */}
+        {!isUser && message.stats && message.status === 'complete' && (
+          <Typography
+            variant="caption"
+            sx={{
+              display: 'block',
+              mt: 0.5,
+              color: 'text.disabled',
+              fontSize: '0.7rem'
+            }}
+          >
+            {formatStats(message.stats)}
+          </Typography>
+        )}
       </Box>
     </Box>
   )
