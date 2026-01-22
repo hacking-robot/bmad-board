@@ -1064,26 +1064,43 @@ ipcMain.handle('git-changed-files', async (_, projectPath: string, baseBranch: s
   }
   const mergeBase = mergeBaseResult.stdout.trim()
 
-  // Get list of changed files with status
-  const diffResult = runGitCommand(['diff', '--name-status', mergeBase, targetBranch], projectPath)
-  if (diffResult.error) {
-    return { error: 'Failed to get changed files' }
-  }
-
-  // Get the current branch to check if we can get file mtimes
+  // Get the current branch to check if we should include uncommitted changes
   const currentBranchResult = runGitCommand(['rev-parse', '--abbrev-ref', 'HEAD'], projectPath)
   const currentBranch = currentBranchResult.stdout.trim()
   const isOnBranch = currentBranch === featureBranch
 
-  const files = await Promise.all(
-    diffResult.stdout.trim().split('\n').filter(Boolean).map(async line => {
-      const [status, ...pathParts] = line.split('\t')
-      const filePath = pathParts.join('\t')
+  // When on the target branch, compare merge-base to working directory to include uncommitted changes
+  // Otherwise compare merge-base to the branch's committed state
+  const diffTarget = isOnBranch ? '' : targetBranch
+  const diffArgs = diffTarget
+    ? ['diff', '--name-status', mergeBase, diffTarget]
+    : ['diff', '--name-status', mergeBase]
 
+  const diffResult = runGitCommand(diffArgs, projectPath)
+  if (diffResult.error) {
+    return { error: 'Failed to get changed files' }
+  }
+
+  // Build a map of files from committed diff
+  const fileMap = new Map<string, { status: string; mtime: number | null; lastCommitTime: number | null }>()
+
+  // Parse the diff output
+  const diffLines = diffResult.stdout.trim().split('\n').filter(Boolean)
+  for (const line of diffLines) {
+    const [status, ...pathParts] = line.split('\t')
+    const filePath = pathParts.join('\t')
+    if (filePath) {
+      fileMap.set(filePath, { status, mtime: null, lastCommitTime: null })
+    }
+  }
+
+  // Process all files and get their metadata
+  const files = await Promise.all(
+    Array.from(fileMap.entries()).map(async ([filePath, data]) => {
       // Security: Validate file path
       if (!isValidFilePath(filePath) || !isPathWithinProject(projectPath, filePath)) {
         return {
-          status: status as 'A' | 'M' | 'D' | 'R' | 'C',
+          status: data.status as 'A' | 'M' | 'D' | 'R' | 'C',
           path: filePath,
           mtime: null,
           lastCommitTime: null
@@ -1092,7 +1109,7 @@ ipcMain.handle('git-changed-files', async (_, projectPath: string, baseBranch: s
 
       // Get file modification time if we're on the branch and file exists
       let mtime: number | null = null
-      if (isOnBranch && status !== 'D') {
+      if (isOnBranch && data.status !== 'D') {
         try {
           const fullPath = join(projectPath, filePath)
           if (existsSync(fullPath)) {
@@ -1112,7 +1129,7 @@ ipcMain.handle('git-changed-files', async (_, projectPath: string, baseBranch: s
       }
 
       return {
-        status: status as 'A' | 'M' | 'D' | 'R' | 'C',
+        status: data.status as 'A' | 'M' | 'D' | 'R' | 'C',
         path: filePath,
         mtime,
         lastCommitTime
@@ -1554,6 +1571,7 @@ ipcMain.handle('chat-load-agent', async (_, options: {
   projectPath: string
   projectType: 'bmm' | 'bmgd'
   tool?: AITool
+  model?: ClaudeModel
 }) => {
   chatAgentManager.setMainWindow(mainWindow)
   return chatAgentManager.loadAgent(options)
@@ -1565,6 +1583,7 @@ ipcMain.handle('chat-send-message', async (_, options: {
   message: string
   sessionId?: string
   tool?: AITool
+  model?: ClaudeModel
 }) => {
   chatAgentManager.setMainWindow(mainWindow)
   return chatAgentManager.sendMessage(options)

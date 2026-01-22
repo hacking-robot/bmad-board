@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { useStore } from '../../store'
 import { useWorkflow } from '../../hooks/useWorkflow'
 import type { AgentDefinition } from '../../types/flow'
-import type { StoryChatHistory, StoryChatSession, ChatMessage as ChatMessageType } from '../../types'
+import type { StoryChatHistory, StoryChatSession, ChatMessage as ChatMessageType, LLMStats } from '../../types'
 import ChatMessage from './ChatMessage'
 import ChatInput from './ChatInput'
 import TypingIndicator from './TypingIndicator'
@@ -332,11 +332,23 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
             }
           }
 
-          // Handle result - finalize message
+          // Handle result - finalize message with stats
           if (parsed.type === 'result') {
             setChatActivity(agentId, undefined) // Clear activity indicator
             if (currentMessageIdRef.current) {
-              updateChatMessage(agentId, currentMessageIdRef.current, { status: 'complete' })
+              // Extract LLM stats from result
+              const stats: LLMStats | undefined = parsed.usage ? {
+                model: parsed.modelUsage ? Object.keys(parsed.modelUsage)[0] || 'unknown' : 'unknown',
+                inputTokens: parsed.usage.input_tokens || 0,
+                outputTokens: parsed.usage.output_tokens || 0,
+                cacheReadTokens: parsed.usage.cache_read_input_tokens,
+                cacheWriteTokens: parsed.usage.cache_creation_input_tokens,
+                totalCostUsd: parsed.total_cost_usd,
+                durationMs: parsed.duration_ms,
+                apiDurationMs: parsed.duration_api_ms
+              } : undefined
+
+              updateChatMessage(agentId, currentMessageIdRef.current, { status: 'complete', stats })
               incrementUnread(agentId)
               // Show system notification if not viewing this chat and app not focused
               if (useStore.getState().selectedChatAgent !== agentId && agent) {
