@@ -148,7 +148,8 @@ function FileDiff({
   mergeBase,
   branchName,
   themeMode,
-  diffMode
+  diffMode,
+  isCurrentBranch
 }: {
   file: GitChangedFile
   projectPath: string
@@ -156,6 +157,7 @@ function FileDiff({
   branchName: string
   themeMode: 'light' | 'dark'
   diffMode: DiffModeEnum
+  isCurrentBranch: boolean
 }) {
   const [expanded, setExpanded] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -170,13 +172,17 @@ function FileDiff({
   const loadDiff = async () => {
     setLoading(true)
     try {
+      // For the "new" content: use working directory if on current branch (includes uncommitted),
+      // otherwise use committed content from the branch
       const [oldResult, newResult] = await Promise.all([
         file.status === 'A'
           ? Promise.resolve({ content: '' })
           : window.gitAPI.getFileContent(projectPath, file.path, mergeBase),
         file.status === 'D'
           ? Promise.resolve({ content: '' })
-          : window.gitAPI.getFileContent(projectPath, file.path, branchName)
+          : isCurrentBranch
+            ? window.gitAPI.getWorkingFileContent(projectPath, file.path)
+            : window.gitAPI.getFileContent(projectPath, file.path, branchName)
       ])
 
       setDiffData({
@@ -951,6 +957,7 @@ export default function GitDiffDialog({ open, onClose, branchName }: GitDiffDial
                     branchName={branchName}
                     themeMode={themeMode}
                     diffMode={diffMode}
+                    isCurrentBranch={isCurrentBranch}
                   />
                 ))}
               </>

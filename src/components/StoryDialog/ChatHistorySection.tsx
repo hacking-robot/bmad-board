@@ -20,7 +20,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { gruvboxDark, gruvboxLight } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { useStore } from '../../store'
 import { gruvbox } from '../../theme'
-import type { StoryChatHistory, StoryChatSession } from '../../types'
+import type { StoryChatHistory, StoryChatSession, LLMStats } from '../../types'
 
 interface ChatHistorySectionProps {
   storyId: string
@@ -56,6 +56,38 @@ function formatDuration(startTime: number, endTime?: number): string {
   const hours = Math.floor(minutes / 60)
   const remainingMinutes = minutes % 60
   return `${hours}h ${remainingMinutes}m`
+}
+
+// Format LLM stats for display
+function formatStats(stats: LLMStats): string {
+  const parts: string[] = []
+
+  // Model name (shortened)
+  const modelShort = stats.model.includes('opus') ? 'Opus' :
+    stats.model.includes('sonnet') ? 'Sonnet' :
+    stats.model.includes('haiku') ? 'Haiku' :
+    stats.model.split('-')[0] || stats.model
+  parts.push(modelShort)
+
+  // Tokens
+  const totalTokens = stats.inputTokens + stats.outputTokens
+  parts.push(`${totalTokens.toLocaleString()} tokens`)
+
+  // Cost
+  if (stats.totalCostUsd !== undefined) {
+    const costStr = stats.totalCostUsd < 0.01
+      ? `$${stats.totalCostUsd.toFixed(4)}`
+      : `$${stats.totalCostUsd.toFixed(2)}`
+    parts.push(costStr)
+  }
+
+  // Duration
+  if (stats.durationMs !== undefined) {
+    const seconds = (stats.durationMs / 1000).toFixed(1)
+    parts.push(`${seconds}s`)
+  }
+
+  return parts.join(' · ')
 }
 
 // Session component
@@ -109,6 +141,29 @@ function ChatSession({ session, isDark }: { session: StoryChatSession; isDark: b
   const userMessageCount = session.messages.filter(m => m.role === 'user').length
   const duration = formatDuration(session.startTime, session.endTime)
 
+  // Aggregate session stats
+  const sessionStats = useMemo(() => {
+    let totalTokens = 0
+    let totalCost = 0
+    let hasStats = false
+
+    session.messages.forEach(msg => {
+      if (msg.stats) {
+        hasStats = true
+        totalTokens += (msg.stats.inputTokens || 0) + (msg.stats.outputTokens || 0)
+        totalCost += msg.stats.totalCostUsd || 0
+      }
+    })
+
+    if (!hasStats) return null
+
+    return {
+      totalTokens,
+      totalCost,
+      costStr: totalCost < 0.01 ? `$${totalCost.toFixed(4)}` : `$${totalCost.toFixed(2)}`
+    }
+  }, [session.messages])
+
   return (
     <Box
       sx={{
@@ -150,6 +205,14 @@ function ChatSession({ session, isDark }: { session: StoryChatSession; isDark: b
           variant="outlined"
           sx={{ fontSize: '0.75rem', height: 22 }}
         />
+        {sessionStats && (
+          <Chip
+            label={`${sessionStats.totalTokens.toLocaleString()} tokens · ${sessionStats.costStr}`}
+            size="small"
+            variant="outlined"
+            sx={{ fontSize: '0.7rem', height: 22, color: 'text.secondary' }}
+          />
+        )}
         {session.branchName && (
           <Chip
             label={session.branchName}
@@ -220,6 +283,20 @@ function ChatSession({ session, isDark }: { session: StoryChatSession; isDark: b
                   {message.content || '*[Empty message]*'}
                 </ReactMarkdown>
               </Box>
+              {/* LLM Stats */}
+              {message.role === 'assistant' && message.stats && (
+                <Typography
+                  variant="caption"
+                  sx={{
+                    display: 'block',
+                    mt: 0.5,
+                    color: 'text.disabled',
+                    fontSize: '0.7rem'
+                  }}
+                >
+                  {formatStats(message.stats)}
+                </Typography>
+              )}
             </Box>
           ))}
         </Box>
