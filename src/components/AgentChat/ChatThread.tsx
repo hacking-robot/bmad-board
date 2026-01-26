@@ -6,6 +6,10 @@ import { useStore } from '../../store'
 import { useWorkflow } from '../../hooks/useWorkflow'
 import type { AgentDefinition } from '../../types/flow'
 import type { StoryChatHistory, StoryChatSession, ChatMessage as ChatMessageType, LLMStats } from '../../types'
+import { parseOracleResponse } from '../../utils/orchestrationParser'
+import { createHumanQuestion } from '../../utils/oracleContextBuilder'
+import { ORCHESTRATION_LIMITS } from '../../types/orchestration'
+import { autoCommitChanges } from '../../utils/workflowAutomation'
 import ChatMessage from './ChatMessage'
 import ChatInput from './ChatInput'
 import TypingIndicator from './TypingIndicator'
@@ -423,6 +427,18 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
         })
         setChatTyping(agentId, false)
         setChatActivity(agentId, undefined) // Clear activity on error
+      } else if (pendingMessageRef.current && event.code === 0 && !event.sessionId) {
+        // Agent load succeeded but no session ID captured - Claude may have had an issue
+        // This can happen if Claude CLI output format changed or there was a parse error
+        const { assistantMsgId } = pendingMessageRef.current
+        pendingMessageRef.current = null
+        console.error('[ChatThread] Agent load completed but no session ID was captured')
+        updateChatMessage(agentId, assistantMsgId, {
+          content: 'Agent loaded but session could not be established. Try clearing the chat and starting again.',
+          status: 'error'
+        })
+        setChatTyping(agentId, false)
+        setChatActivity(agentId, undefined)
       }
     })
 
@@ -469,6 +485,144 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
           setChatSessionId(agentId, event.sessionId)
         }
       }
+
+      // Orchestration: Handle agent completion and delegation parsing
+      const storeState = useStore.getState()
+      const { orchestration } = storeState
+
+      if (orchestration.automationEnabled) {
+        const isOrchestrator = agent?.agentType === 'orchestrator'
+
+        if (isOrchestrator && event.code === 0) {
+          // Parse Oracle's last response for delegation commands and questions
+          const thread = storeState.chatThreads[agentId]
+          const lastMessages = thread?.messages.slice(-3) || [] // Check recent messages
+          const lastAssistantMsg = [...lastMessages].reverse().find(m => m.role === 'assistant' && m.content)
+
+          if (lastAssistantMsg) {
+            const validAgentIds = agents
+              .filter(a => a.agentType !== 'orchestrator')
+              .map(a => a.id)
+
+            // Get story context for questions
+            const stories = storeState.stories
+            const story = thread?.storyId ? stories.find(s => s.id === thread.storyId) : undefined
+            const storyContext = thread?.storyId ? {
+              storyId: thread.storyId,
+              storyTitle: story?.title
+            } : undefined
+
+            const parsed = parseOracleResponse(lastAssistantMsg.content, validAgentIds, storyContext)
+
+            if (parsed.warnings.length > 0) {
+              console.log('[Orchestration] Parser warnings:', parsed.warnings)
+            }
+
+            // Handle questions - add to pending questions queue
+            if (parsed.hasQuestions) {
+              console.log('[Orchestration] Oracle asking questions:', parsed.questions.length)
+              for (const q of parsed.questions) {
+                const humanQuestion = createHumanQuestion(q.question, q.storyId, q.storyTitle)
+                storeState.addOrchestrationQuestion(humanQuestion)
+              }
+            }
+
+            if (parsed.hasDelegation) {
+              // Limit delegations per response
+              const delegationsToProcess = parsed.delegations.slice(
+                0,
+                ORCHESTRATION_LIMITS.MAX_DELEGATIONS_PER_RESPONSE
+              )
+
+              console.log('[Orchestration] Delegating to agents:', delegationsToProcess)
+
+              // Process first delegation (sequential processing for now)
+              const firstDelegation = delegationsToProcess[0]
+              if (firstDelegation) {
+                // Use a timeout to avoid state conflicts
+                setTimeout(() => {
+                  const currentState = useStore.getState()
+                  // Clear the thread to ensure agent command is sent first (fresh session)
+                  currentState.clearChatThread(firstDelegation.targetAgentId)
+                  window.chatAPI.clearThread(firstDelegation.targetAgentId)
+                  currentState.setPendingChatMessage({
+                    agentId: firstDelegation.targetAgentId,
+                    message: firstDelegation.message,
+                    storyId: firstDelegation.storyId || thread?.storyId
+                  })
+                  currentState.setSelectedChatAgent(firstDelegation.targetAgentId)
+
+                  // Track pending delegation
+                  currentState.addPendingDelegation({
+                    id: uuidv4(),
+                    eventId: uuidv4(), // No specific event for response-triggered delegation
+                    command: firstDelegation,
+                    status: 'executing',
+                    startedAt: Date.now()
+                  })
+
+                  currentState.incrementOrchestrationChainDepth()
+                }, 500)
+              }
+            }
+          }
+        } else if (!isOrchestrator && event.code === 0 && orchestration.autoTriggerOnAgentComplete) {
+          // Non-orchestrator agent completed successfully
+
+          // Get the agent's last message and thread context
+          const agentThread = storeState.chatThreads[agentId]
+          const agentMessages = agentThread?.messages || []
+          const lastAssistantMessage = [...agentMessages]
+            .reverse()
+            .find(m => m.role === 'assistant' && m.content && m.status === 'complete')
+
+          // Truncate long messages to avoid context bloat (keep last 2000 chars)
+          let agentLastMessage = lastAssistantMessage?.content || ''
+          if (agentLastMessage.length > 2000) {
+            agentLastMessage = '...' + agentLastMessage.slice(-2000)
+          }
+
+          // Auto-commit changes if agent was working on a story
+          const currentProjectPath = storeState.projectPath
+          if (agentThread?.storyId && currentProjectPath) {
+            const story = storeState.stories.find(s => s.id === agentThread.storyId)
+            console.log(`[Workflow] Auto-committing changes for story: ${agentThread.storyId}`)
+
+            // Run auto-commit (async but don't block the event queue)
+            autoCommitChanges(
+              currentProjectPath,
+              agentThread.storyId,
+              story?.title,
+              agent?.name
+            ).then(result => {
+              if (result.success) {
+                console.log(`[Workflow] ${result.message}`)
+              } else {
+                console.log(`[Workflow] Auto-commit skipped or failed: ${result.message}`)
+              }
+            }).catch(err => {
+              console.error('[Workflow] Auto-commit error:', err)
+            })
+          }
+
+          // Queue event for Oracle
+          const eventId = uuidv4()
+          storeState.queueOrchestrationEvent({
+            id: eventId,
+            type: 'agent_completion',
+            timestamp: Date.now(),
+            payload: {
+              agentId,
+              agentName: agent?.name,
+              exitCode: event.code,
+              agentLastMessage,
+              storyId: agentThread?.storyId
+            }
+          })
+          console.log('[Orchestration] Queued agent completion event:', agentId)
+        }
+      }
+
       // Reset all refs on process exit
       currentMessageIdRef.current = null
       streamBufferRef.current = ''
@@ -481,7 +635,7 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
       unsubAgentLoaded()
       unsubExit()
     }
-  }, [agentId, projectPath, updateChatMessage, setChatTyping, setChatActivity, incrementUnread, setChatSessionId, createNewAssistantMessage])
+  }, [agentId, projectPath, agent, agents, updateChatMessage, setChatTyping, setChatActivity, incrementUnread, setChatSessionId, createNewAssistantMessage])
 
   // Sync isTyping state with actual process status on mount/agent change
   // This detects crashed processes that didn't send proper exit events
@@ -523,7 +677,10 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
       }
     }
 
-    syncAgentStatus()
+    // Delay the orphan check to allow any in-flight IPC events to be processed first
+    // This prevents false positives when switching between agents or when events are still propagating
+    const timeout = setTimeout(syncAgentStatus, 500)
+    return () => clearTimeout(timeout)
   }, [agentId, setChatTyping, setChatActivity, updateChatMessage])
 
   // Auto-scroll to bottom
@@ -677,14 +834,19 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
   // Track pending message ID to prevent duplicate sends
   const processedPendingRef = useRef<string | null>(null)
 
-  // Handle pending chat messages from other components (e.g., StoryCard)
+  // Handle pending chat messages from other components (e.g., StoryCard, MCP delegation)
   useEffect(() => {
+    console.log(`[ChatThread] useEffect running for ${agentId}, pendingChatMessage:`, pendingChatMessage?.agentId, 'projectPath:', !!projectPath)
+
     if (pendingChatMessage && pendingChatMessage.agentId === agentId && projectPath) {
       // Create a unique key for this pending message to prevent duplicate processing
-      const pendingKey = `${pendingChatMessage.agentId}:${pendingChatMessage.message}`
+      const pendingKey = `${pendingChatMessage.agentId}:${pendingChatMessage.message.slice(0, 50)}`
+
+      console.log(`[ChatThread] Pending message detected for ${agentId}:`, pendingKey)
 
       // Skip if we've already processed this exact message
       if (processedPendingRef.current === pendingKey) {
+        console.log(`[ChatThread] Skipping duplicate pending message for ${agentId}`)
         return
       }
 
@@ -699,6 +861,8 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
       // Clear the pending message first to prevent re-triggering
       const messageToSend = pendingChatMessage.message
       clearPendingChatMessage()
+
+      console.log(`[ChatThread] Sending pending message to ${agentId}`)
 
       // Send the message after a short delay to ensure UI is ready
       setTimeout(() => {

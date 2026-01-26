@@ -1,0 +1,29 @@
+{
+  "id": "ws_da65c99c",
+  "name": "bmadboard",
+  "slug": "bmadboard",
+  "defaults": {
+    "model": "claude-sonnet-4-5-20250929",
+    "permissionMode": "safe",
+    "cyclablePermissionModes": [
+      "safe",
+      "ask",
+      "allow-all"
+    ],
+    "thinkingLevel": "think",
+    "enabledSourceSlugs": []
+  },
+  "localMcpServers": {
+    "enabled": true
+  },
+  "toolDefaults": {
+    "zai-glm": {
+      "model": "glm-4.7",
+      "haikuModel": "glm-4.5-flash",
+      "sonnetModel": "glm-4.7",
+      "opusModel": "glm-4.7"
+    }
+  },
+  "createdAt": 1769274607118,
+  "updatedAt": 1769274607120
+}

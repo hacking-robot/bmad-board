@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { Epic, Story, StoryContent, StoryStatus, Agent, ProjectType, AgentHistoryEntry, AITool, ClaudeModel, HumanReviewChecklistItem, StoryReviewState, ChatMessage, AgentThread, StatusChangeEntry, StatusChangeSource } from './types'
+import type { OrchestrationEvent, PendingDelegation, TimerConfig, HumanQuestion } from './types/orchestration'
+import { ORCHESTRATION_LIMITS } from './types/orchestration'
 
 export type ViewMode = 'board' | 'chat'
 
@@ -14,6 +16,8 @@ const MAX_HISTORY_ENTRIES = 50
 const MAX_RECENT_PROJECTS = 10
 const MAX_STATUS_HISTORY_PER_STORY = 50
 const MAX_GLOBAL_STATUS_HISTORY = 100
+const MAX_ORCHESTRATOR_MESSAGES = 30 // Keep last N messages in orchestrator thread
+const MAX_EVENT_HISTORY = 10 // Keep last N events for Oracle context
 
 // Debounce settings saves to prevent rapid writes that corrupt the file
 let saveTimeout: NodeJS.Timeout | null = null
@@ -288,6 +292,7 @@ interface AppState {
   markChatRead: (agentId: string) => void
   incrementUnread: (agentId: string) => void
   clearChatThread: (agentId: string) => void
+  trimOrchestratorThread: (agentId: string) => void
   setAgentInitialized: (agentId: string, initialized: boolean) => void
   setChatSessionId: (agentId: string, sessionId: string) => void
   // Pending message to send when switching to chat
@@ -306,6 +311,39 @@ interface AppState {
   setStatusHistoryPanelOpen: (open: boolean) => void
   markStatusHistoryViewed: () => void
   getUnreadStatusHistoryCount: () => number
+
+  // Orchestration (Oracle auto-workflow)
+  orchestration: {
+    automationEnabled: boolean
+    autoTriggerOnStatusChange: boolean
+    autoTriggerOnAgentComplete: boolean
+    isProcessing: boolean
+    eventQueue: OrchestrationEvent[]
+    eventHistory: OrchestrationEvent[]
+    pendingDelegations: PendingDelegation[]
+    lastOracleCall: number
+    debounceMs: number
+    chainDepth: number
+    timerConfig: TimerConfig
+    pendingQuestions: HumanQuestion[]
+  }
+  setOrchestrationAutomationEnabled: (enabled: boolean) => void
+  setOrchestrationAutoTriggerOnStatusChange: (enabled: boolean) => void
+  setOrchestrationAutoTriggerOnAgentComplete: (enabled: boolean) => void
+  queueOrchestrationEvent: (event: OrchestrationEvent) => void
+  processNextOrchestrationEvent: () => OrchestrationEvent | null
+  clearOrchestrationEventQueue: () => void
+  addPendingDelegation: (d: PendingDelegation) => void
+  completeDelegation: (id: string, success: boolean, error?: string) => void
+  setOrchestrationIsProcessing: (processing: boolean) => void
+  setOrchestrationLastOracleCall: (timestamp: number) => void
+  incrementOrchestrationChainDepth: () => void
+  resetOrchestrationChainDepth: () => void
+  setOrchestrationTimerConfig: (config: Partial<TimerConfig>) => void
+  addOrchestrationQuestion: (question: HumanQuestion) => void
+  answerOrchestrationQuestion: (id: string, answer: string) => void
+  dismissOrchestrationQuestion: (id: string) => void
+  cleanupOrchestrationQuestions: () => void
 
   // Computed - filtered stories
   getFilteredStories: () => Story[]
@@ -751,6 +789,29 @@ export const useStore = create<AppState>()(
           }
         }
       })),
+      trimOrchestratorThread: (agentId) => set((state) => {
+        const thread = state.chatThreads[agentId]
+        if (!thread || thread.messages.length <= MAX_ORCHESTRATOR_MESSAGES) {
+          return state
+        }
+
+        // Keep only the last N messages
+        const trimmedMessages = thread.messages.slice(-MAX_ORCHESTRATOR_MESSAGES)
+
+        console.log(`[Orchestration] Trimming ${agentId} thread from ${thread.messages.length} to ${trimmedMessages.length} messages`)
+
+        return {
+          chatThreads: {
+            ...state.chatThreads,
+            [agentId]: {
+              ...thread,
+              messages: trimmedMessages,
+              // Clear session so next message starts fresh with trimmed context
+              sessionId: undefined
+            }
+          }
+        }
+      }),
       setAgentInitialized: (agentId, initialized) => set((state) => {
         const thread = state.chatThreads[agentId] || {
           agentId,
@@ -821,15 +882,18 @@ export const useStore = create<AppState>()(
         // Skip if no actual change
         if (oldStatus === newStatus) return state
 
+        const timestamp = Date.now()
+        const entryId = `${timestamp}-${Math.random().toString(36).slice(2, 11)}`
+
         const entry: StatusChangeEntry = {
-          id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          id: entryId,
           storyId,
           storyTitle,
           epicId,
           storyNumber,
           oldStatus,
           newStatus,
-          timestamp: Date.now(),
+          timestamp,
           source
         }
 
@@ -840,12 +904,42 @@ export const useStore = create<AppState>()(
         // Update global history
         const newGlobalHistory = [entry, ...state.globalStatusHistory].slice(0, MAX_GLOBAL_STATUS_HISTORY)
 
+        // Check if orchestration should be notified
+        const { orchestration } = state
+        const shouldQueueEvent =
+          orchestration.automationEnabled &&
+          orchestration.autoTriggerOnStatusChange &&
+          source === 'user' // Only trigger on user-initiated changes
+
+        const orchestrationUpdate = shouldQueueEvent
+          ? {
+              orchestration: {
+                ...orchestration,
+                eventQueue: [
+                  ...orchestration.eventQueue,
+                  {
+                    id: entryId,
+                    type: 'status_change' as const,
+                    timestamp,
+                    payload: {
+                      storyId,
+                      storyTitle,
+                      oldStatus,
+                      newStatus
+                    }
+                  }
+                ]
+              }
+            }
+          : {}
+
         return {
           statusHistoryByStory: {
             ...state.statusHistoryByStory,
             [storyId]: newStoryHistory
           },
-          globalStatusHistory: newGlobalHistory
+          globalStatusHistory: newGlobalHistory,
+          ...orchestrationUpdate
         }
       }),
       getStatusHistoryForStory: (storyId) => {
@@ -859,6 +953,173 @@ export const useStore = create<AppState>()(
         const { globalStatusHistory, lastViewedStatusHistoryAt } = get()
         return globalStatusHistory.filter(entry => entry.timestamp > lastViewedStatusHistoryAt).length
       },
+
+      // Orchestration (Oracle auto-workflow) - not persisted
+      orchestration: {
+        automationEnabled: false,
+        autoTriggerOnStatusChange: true,
+        autoTriggerOnAgentComplete: true,
+        isProcessing: false,
+        eventQueue: [],
+        eventHistory: [],
+        pendingDelegations: [],
+        lastOracleCall: 0,
+        debounceMs: ORCHESTRATION_LIMITS.DEBOUNCE_MS,
+        chainDepth: 0,
+        timerConfig: {
+          enabled: false,
+          intervalMs: ORCHESTRATION_LIMITS.DEFAULT_TIMER_INTERVAL_MS,
+          lastTick: 0
+        },
+        pendingQuestions: []
+      },
+      setOrchestrationAutomationEnabled: (enabled) => set((state) => ({
+        orchestration: { ...state.orchestration, automationEnabled: enabled }
+      })),
+      setOrchestrationAutoTriggerOnStatusChange: (enabled) => set((state) => ({
+        orchestration: { ...state.orchestration, autoTriggerOnStatusChange: enabled }
+      })),
+      setOrchestrationAutoTriggerOnAgentComplete: (enabled) => set((state) => ({
+        orchestration: { ...state.orchestration, autoTriggerOnAgentComplete: enabled }
+      })),
+      queueOrchestrationEvent: (event) => set((state) => ({
+        orchestration: {
+          ...state.orchestration,
+          eventQueue: [...state.orchestration.eventQueue, event]
+        }
+      })),
+      processNextOrchestrationEvent: () => {
+        const { orchestration } = get()
+        if (orchestration.eventQueue.length === 0) return null
+        const [next, ...rest] = orchestration.eventQueue
+
+        // Add to history (keep last N events)
+        const newHistory = [...orchestration.eventHistory, next].slice(-MAX_EVENT_HISTORY)
+
+        set((state) => ({
+          orchestration: {
+            ...state.orchestration,
+            eventQueue: rest,
+            eventHistory: newHistory,
+            isProcessing: true
+          }
+        }))
+        return next
+      },
+      clearOrchestrationEventQueue: () => set((state) => ({
+        orchestration: {
+          ...state.orchestration,
+          eventQueue: [],
+          isProcessing: false
+        }
+      })),
+      addPendingDelegation: (d) => set((state) => ({
+        orchestration: {
+          ...state.orchestration,
+          pendingDelegations: [...state.orchestration.pendingDelegations, d]
+        }
+      })),
+      completeDelegation: (id, success, error) => set((state) => ({
+        orchestration: {
+          ...state.orchestration,
+          pendingDelegations: state.orchestration.pendingDelegations.map((d) =>
+            d.id === id
+              ? {
+                  ...d,
+                  status: success ? 'completed' as const : 'failed' as const,
+                  completedAt: Date.now(),
+                  error
+                }
+              : d
+          )
+        }
+      })),
+      setOrchestrationIsProcessing: (processing) => set((state) => ({
+        orchestration: { ...state.orchestration, isProcessing: processing }
+      })),
+      setOrchestrationLastOracleCall: (timestamp) => set((state) => ({
+        orchestration: { ...state.orchestration, lastOracleCall: timestamp }
+      })),
+      incrementOrchestrationChainDepth: () => set((state) => ({
+        orchestration: {
+          ...state.orchestration,
+          chainDepth: state.orchestration.chainDepth + 1
+        }
+      })),
+      resetOrchestrationChainDepth: () => set((state) => ({
+        orchestration: { ...state.orchestration, chainDepth: 0 }
+      })),
+      setOrchestrationTimerConfig: (config) => set((state) => ({
+        orchestration: {
+          ...state.orchestration,
+          timerConfig: { ...state.orchestration.timerConfig, ...config }
+        }
+      })),
+      addOrchestrationQuestion: (question) => set((state) => {
+        // Limit number of pending questions
+        const pending = state.orchestration.pendingQuestions.filter(q => q.status === 'pending')
+        if (pending.length >= ORCHESTRATION_LIMITS.MAX_PENDING_QUESTIONS) {
+          console.warn('[Orchestration] Max pending questions reached, ignoring new question')
+          return state
+        }
+        return {
+          orchestration: {
+            ...state.orchestration,
+            pendingQuestions: [...state.orchestration.pendingQuestions, question]
+          }
+        }
+      }),
+      answerOrchestrationQuestion: (id, answer) => set((state) => {
+        const question = state.orchestration.pendingQuestions.find(q => q.id === id)
+        if (!question) return state
+
+        // Update question status
+        const updatedQuestions = state.orchestration.pendingQuestions.map(q =>
+          q.id === id ? { ...q, status: 'answered' as const, answer } : q
+        )
+
+        // Queue human_response event so Oracle can use the answer
+        const responseEvent: OrchestrationEvent = {
+          id: `hr-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
+          type: 'human_response',
+          timestamp: Date.now(),
+          payload: {
+            questionId: id,
+            question: question.question,
+            answer,
+            storyId: question.context.storyId,
+            storyTitle: question.context.storyTitle
+          }
+        }
+
+        return {
+          orchestration: {
+            ...state.orchestration,
+            pendingQuestions: updatedQuestions,
+            eventQueue: [...state.orchestration.eventQueue, responseEvent]
+          }
+        }
+      }),
+      dismissOrchestrationQuestion: (id) => set((state) => ({
+        orchestration: {
+          ...state.orchestration,
+          pendingQuestions: state.orchestration.pendingQuestions.map(q =>
+            q.id === id ? { ...q, status: 'dismissed' as const } : q
+          )
+        }
+      })),
+      cleanupOrchestrationQuestions: () => set((state) => {
+        // Remove answered/dismissed questions older than 1 hour
+        const oneHourAgo = Date.now() - 3600000
+        return {
+          orchestration: {
+            ...state.orchestration,
+            pendingQuestions: state.orchestration.pendingQuestions.filter(
+              q => q.status === 'pending' || q.timestamp > oneHourAgo
+            )
+          }
+        }
+      }),
 
       // Computed
       getFilteredStories: () => {

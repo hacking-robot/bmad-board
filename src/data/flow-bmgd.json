@@ -239,6 +239,22 @@
   },
   "agents": [
     {
+      "id": "oracle",
+      "name": "Oracle",
+      "role": "Orchestrator",
+      "avatar": "OR",
+      "agentType": "orchestrator",
+      "description": "Autonomous Game Project Manager - monitors project state, delegates work to appropriate agents, performs quality gates, and moves game stories through the workflow.",
+      "whenToUse": "Automatically triggered when workflow automation is enabled. Monitors story status changes and agent completions to coordinate the game development process.",
+      "color": "#7C3AED",
+      "commands": [],
+      "examplePrompts": [
+        "Review the current project state and suggest next actions",
+        "Move game stories forward based on their current status",
+        "Delegate code review for completed game features"
+      ]
+    },
+    {
       "id": "game-designer",
       "name": "Samus Shepard",
       "role": "Game Designer",

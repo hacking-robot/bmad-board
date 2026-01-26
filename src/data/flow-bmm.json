@@ -227,6 +227,22 @@
   },
   "agents": [
     {
+      "id": "oracle",
+      "name": "Oracle",
+      "role": "Orchestrator",
+      "avatar": "OR",
+      "agentType": "orchestrator",
+      "description": "Autonomous Project Manager - monitors project state, delegates work to appropriate agents, performs quality gates, and moves stories through the workflow.",
+      "whenToUse": "Automatically triggered when workflow automation is enabled. Monitors story status changes and agent completions to coordinate the development process.",
+      "color": "#7C3AED",
+      "commands": [],
+      "examplePrompts": [
+        "Review the current project state and suggest next actions",
+        "Move stories forward based on their current status",
+        "Delegate code review for completed stories"
+      ]
+    },
+    {
       "id": "analyst",
       "name": "Mary",
       "role": "Analyst",

@@ -364,6 +364,9 @@ class ChatAgentManager {
       // Handle exit - send agent-loaded event with session ID
       proc.on('exit', (code, signal) => {
         console.log('[ChatAgentManager] Agent load completed:', { agentId: options.agentId, code, signal, sessionId: capturedSessionId })
+        if (code === 0 && !capturedSessionId) {
+          console.warn('[ChatAgentManager] WARNING: Agent load succeeded but no session ID was captured. This may indicate Claude CLI output format has changed or there was a parse error.')
+        }
         this.runningProcesses.delete(options.agentId)
         this.sendToRenderer('chat:agent-loaded', {
           agentId: options.agentId,
@@ -377,6 +380,7 @@ class ChatAgentManager {
       // Handle errors
       proc.on('error', (error) => {
         console.error('[ChatAgentManager] Agent load error:', error)
+        this.runningProcesses.delete(options.agentId)
         this.sendToRenderer('chat:agent-loaded', {
           agentId: options.agentId,
           code: -1,
@@ -529,6 +533,7 @@ class ChatAgentManager {
       // Handle errors
       proc.on('error', (error) => {
         console.error('[ChatAgentManager] Process error:', error)
+        this.runningProcesses.delete(options.agentId)
         this.sendToRenderer('chat:exit', {
           agentId: options.agentId,
           code: -1,

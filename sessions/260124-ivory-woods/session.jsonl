@@ -1,0 +1,8 @@
+{"id":"260124-ivory-woods","workspaceRootPath":"~/Documents/Projects/bmadboard","createdAt":1769279798945,"lastUsedAt":1769279976344,"name":"Greet the user","sdkSessionId":"c82b175a-3a66-4162-8849-8359c138d18c","isFlagged":false,"permissionMode":"safe","lastReadMessageId":"msg-1769279777312-yo1hl9","sdkCwd":"~/Documents/Projects/bmadboard/sessions/260124-ivory-woods","messageCount":7,"lastMessageRole":"user","preview":"Hi","tokenUsage":{"inputTokens":0,"outputTokens":54,"totalTokens":54,"contextTokens":0,"costUsd":0.1137012,"cacheReadTokens":0,"cacheCreationTokens":0,"contextWindow":200000},"lastFinalMessageId":"msg-1769279777312-yo1hl9"}
+{"id":"msg-1769278942068-k4nc0x","type":"user","content":"Hi","timestamp":1769278942068}
+{"id":"msg-1769278945833-ai608w","type":"assistant","content":"Hello! I'm Craft Agent, powered by Claude Code. How can I help you today?","timestamp":1769278945833,"isIntermediate":false,"turnId":"msg_202601250222241b5ac5c8359d4b99"}
+{"id":"msg-1769279534160-yevwzs","type":"user","content":"Hi","timestamp":1769279534160}
+{"id":"msg-1769279538498-26dic6","type":"assistant","content":"Hi there! I'm Craft Agent - how can I help you today?","timestamp":1769279538498,"isIntermediate":false,"turnId":"msg_20260125023216151e1223f7274b85"}
+{"id":"msg-1769279773751-lk5xni","type":"user","content":"Hi","timestamp":1769279773751}
+{"id":"msg-1769279777312-yo1hl9","type":"assistant","content":"Hello! I'm here to help. What would you like to work on today?","timestamp":1769279777312,"isIntermediate":false,"turnId":"msg_20260125023616e016cf57e24245d9"}
+{"id":"msg-1769279798945-c594w2","type":"user","content":"Hi","timestamp":1769279798945}

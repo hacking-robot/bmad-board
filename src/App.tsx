@@ -1,4 +1,4 @@
-import { useMemo, useEffect } from 'react'
+import { useMemo, useEffect, useCallback, useRef } from 'react'
 import { ThemeProvider, CssBaseline, Box, CircularProgress, IconButton, Tooltip } from '@mui/material'
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
@@ -17,6 +17,25 @@ import HelpPanel from './components/HelpPanel'
 import StatusBar from './components/StatusBar'
 import { AgentChat } from './components/AgentChat'
 import StatusHistoryPanel from './components/StatusHistoryPanel/StatusHistoryPanel'
+import { ensureStoryBranch, mergeStoryBranch, autoCommitChanges } from './utils/workflowAutomation'
+
+// Map BMM agent IDs to BMGD agent IDs (for cross-project compatibility)
+const BMM_TO_BMGD_AGENT_MAP: Record<string, string> = {
+  'dev': 'game-dev',
+  'sm': 'game-scrum-master',
+  'architect': 'game-architect',
+  'tea': 'game-qa',
+  'barry': 'game-solo-dev'
+}
+
+// Map BMGD agent IDs to BMM agent IDs (for cross-project compatibility)
+const BMGD_TO_BMM_AGENT_MAP: Record<string, string> = {
+  'game-dev': 'dev',
+  'game-scrum-master': 'sm',
+  'game-architect': 'architect',
+  'game-qa': 'tea',
+  'game-solo-dev': 'barry'
+}
 
 const AGENT_PANEL_WIDTH = 500
 
@@ -32,6 +51,15 @@ export default function App() {
   const viewMode = useStore((state) => state.viewMode)
   const toggleViewMode = useStore((state) => state.toggleViewMode)
   const aiTool = useStore((state) => state.aiTool)
+  const setPendingChatMessage = useStore((state) => state.setPendingChatMessage)
+  const setSelectedChatAgent = useStore((state) => state.setSelectedChatAgent)
+  const setViewMode = useStore((state) => state.setViewMode)
+  const clearChatThread = useStore((state) => state.clearChatThread)
+  const currentBranch = useStore((state) => state.currentBranch)
+  const baseBranch = useStore((state) => state.baseBranch)
+  const enableEpicBranches = useStore((state) => state.enableEpicBranches)
+  const setCurrentBranch = useStore((state) => state.setCurrentBranch)
+  const projectType = useStore((state) => state.projectType)
 
   // Agent features available for tools with headless CLI support
   const selectedToolInfo = AI_TOOLS.find(t => t.id === aiTool)
@@ -57,6 +85,144 @@ export default function App() {
     window.addEventListener('open-help-panel', handleOpen)
     return () => window.removeEventListener('open-help-panel', handleOpen)
   }, [setHelpPanelOpen])
+
+  // Track ongoing delegations to prevent duplicates
+  const delegationInProgressRef = useRef<string | null>(null)
+
+  // Handle delegation with automatic branch management
+  const handleDelegation = useCallback(async (data: { agentId: string; message: string; storyId?: string }) => {
+    // Map agent ID to the correct one for the current project type
+    let targetAgentId = data.agentId
+    if (projectType === 'bmgd' && BMM_TO_BMGD_AGENT_MAP[data.agentId]) {
+      targetAgentId = BMM_TO_BMGD_AGENT_MAP[data.agentId]
+      console.log(`[MCP] Mapped agent ${data.agentId} to ${targetAgentId} for BMGD project`)
+    } else if (projectType === 'bmm' && BMGD_TO_BMM_AGENT_MAP[data.agentId]) {
+      targetAgentId = BMGD_TO_BMM_AGENT_MAP[data.agentId]
+      console.log(`[MCP] Mapped agent ${data.agentId} to ${targetAgentId} for BMM project`)
+    }
+
+    // Create a key to identify this delegation
+    const delegationKey = `${targetAgentId}:${data.storyId || 'no-story'}`
+
+    // Skip if this delegation is already in progress
+    if (delegationInProgressRef.current === delegationKey) {
+      console.log(`[MCP] Skipping duplicate delegation for: ${delegationKey}`)
+      return
+    }
+
+    delegationInProgressRef.current = delegationKey
+    console.log('[MCP] Delegation request:', { ...data, targetAgentId })
+
+    // Clear the agent's chat thread to start fresh (avoid stale context)
+    clearChatThread(targetAgentId)
+    window.chatAPI.clearThread(targetAgentId)
+
+    // Story ID IS the branch name for story branches (e.g., "1-2-user-login")
+    const branchName = data.storyId || undefined
+
+    // If there's a story, ensure we're on the correct branch BEFORE delegating
+    if (data.storyId && projectPath) {
+      console.log(`[Workflow] Ensuring correct branch for story: ${data.storyId}`)
+      const branchResult = await ensureStoryBranch({
+        projectPath,
+        storyId: data.storyId,
+        baseBranch: baseBranch || 'main',
+        enableEpicBranches: enableEpicBranches || false,
+        currentBranch: currentBranch || baseBranch || 'main'
+      })
+
+      if (branchResult.success) {
+        console.log(`[Workflow] Branch ready: ${branchResult.message}`)
+        // Update current branch in store if it changed
+        if (branchResult.branchName && branchResult.branchName !== currentBranch) {
+          setCurrentBranch(branchResult.branchName)
+        }
+      } else {
+        console.error(`[Workflow] Failed to ensure branch: ${branchResult.error}`)
+        // Continue anyway - agent can handle branch creation
+      }
+    }
+
+    // Switch to chat view and send message to the target agent
+    console.log(`[MCP] Setting pending message for agent: ${targetAgentId}`)
+    setPendingChatMessage({
+      agentId: targetAgentId,
+      message: data.message,
+      storyId: data.storyId,
+      branchName
+    })
+    setSelectedChatAgent(targetAgentId)
+    setViewMode('chat')
+    console.log(`[MCP] Switched to chat view with agent: ${targetAgentId}`)
+
+    // Reset delegation guard after a delay to allow for legitimate new delegations
+    setTimeout(() => {
+      delegationInProgressRef.current = null
+    }, 2000)
+  }, [clearChatThread, projectPath, baseBranch, enableEpicBranches, currentBranch, setCurrentBranch, setPendingChatMessage, setSelectedChatAgent, setViewMode, projectType])
+
+  // Listen for MCP API events from the orchestrator
+  useEffect(() => {
+    // Handle delegation requests from MCP API (Oracle orchestrator)
+    const cleanupDelegate = window.fileAPI.onMcpDelegateToAgent((data) => {
+      handleDelegation(data)
+    })
+
+    // Handle story status changes from MCP API
+    const cleanupStatus = window.fileAPI.onStoryStatusChanged(async (data) => {
+      console.log('[MCP] Story status changed:', data)
+
+      // When a story moves to 'done', commit any changes and merge the branch
+      if (data.newStatus === 'done' && data.storyId && projectPath) {
+        const storeState = useStore.getState()
+        const story = storeState.stories.find(s => s.id === data.storyId)
+
+        // First, commit any uncommitted changes
+        console.log(`[Workflow] Story ${data.storyId} moved to done - committing and merging`)
+        const commitResult = await autoCommitChanges(
+          projectPath,
+          data.storyId,
+          story?.title,
+          'Workflow'
+        )
+        if (commitResult.success) {
+          console.log(`[Workflow] ${commitResult.message}`)
+        }
+
+        // Then merge the story branch to parent
+        const mergeResult = await mergeStoryBranch({
+          projectPath,
+          storyId: data.storyId,
+          baseBranch: baseBranch || 'main',
+          enableEpicBranches: enableEpicBranches || false,
+          currentBranch: currentBranch || baseBranch || 'main'
+        })
+
+        if (mergeResult.success) {
+          console.log(`[Workflow] ${mergeResult.message}`)
+          // Update current branch in store after merge (we're now on parent branch)
+          const newBranch = await window.gitAPI.getCurrentBranch(projectPath)
+          if (newBranch.branch && newBranch.branch !== currentBranch) {
+            setCurrentBranch(newBranch.branch)
+          }
+        } else {
+          console.error(`[Workflow] Merge failed: ${mergeResult.error}`)
+        }
+      }
+    })
+
+    // Handle branch changes from MCP API
+    // Note: App should reload project data when branch changes are detected
+    const cleanupBranch = window.fileAPI.onBranchChanged((data) => {
+      console.log('[MCP] Branch changed:', data)
+    })
+
+    return () => {
+      cleanupDelegate()
+      cleanupStatus()
+      cleanupBranch()
+    }
+  }, [handleDelegation])
 
   const theme = useMemo(
     () => (themeMode === 'dark' ? darkTheme : lightTheme),

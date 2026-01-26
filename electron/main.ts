@@ -5,12 +5,17 @@ import { existsSync, watch, FSWatcher } from 'fs'
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 import { agentManager } from './agentManager'
 import { detectTool, detectAllTools, clearDetectionCache } from './cliToolManager'
+import { startMcpApiServer, stopMcpApiServer, updateMcpApiContext } from './mcpApiServer'
 
 // Set app name (shows in menu bar on macOS)
 app.setName('BMad Board')
 
 let mainWindow: BrowserWindow | null = null
 let watchDebounceTimer: NodeJS.Timeout | null = null
+
+// Track current project state for MCP API server
+let currentProjectPath: string | null = null
+let currentProjectType: ProjectType | null = null
 
 // Settings file path in user data directory
 const getSettingsPath = () => join(app.getPath('userData'), 'settings.json')
@@ -181,6 +186,337 @@ async function saveSettings(settings: Partial<AppSettings>): Promise<boolean> {
   } catch (error) {
     console.error('Failed to save settings:', error)
     return false
+  }
+}
+
+// =====================================================
+// MCP API Helper Functions
+// These functions are used by the MCP API server to
+// read project state and perform actions
+// =====================================================
+
+// Parse epics from epics.md file
+async function parseEpicsFromFile(projectPath: string, projectType: ProjectType): Promise<unknown[]> {
+  try {
+    const epicsPath = projectType === 'bmgd'
+      ? join(projectPath, '_bmad-output', 'epics.md')
+      : join(projectPath, '_bmad-output', 'planning-artifacts', 'epics.md')
+
+    if (!existsSync(epicsPath)) {
+      return []
+    }
+
+    const content = await readFile(epicsPath, 'utf-8')
+    const epics: unknown[] = []
+    const epicRegex = /^##\s*Epic\s*(\d+)[:\s-]*(.*)$/gim
+
+    let match
+    while ((match = epicRegex.exec(content)) !== null) {
+      epics.push({
+        id: parseInt(match[1], 10),
+        title: match[2].trim(),
+        description: ''
+      })
+    }
+
+    return epics
+  } catch (error) {
+    console.error('Failed to parse epics:', error)
+    return []
+  }
+}
+
+// Parse stories from story files
+async function parseStoriesFromFiles(projectPath: string, projectType: ProjectType): Promise<unknown[]> {
+  try {
+    const storiesDir = projectType === 'bmgd'
+      ? join(projectPath, '_bmad-output', 'stories')
+      : join(projectPath, '_bmad-output', 'implementation-artifacts')
+
+    if (!existsSync(storiesDir)) {
+      return []
+    }
+
+    // Get sprint status for story statuses
+    const sprintStatusPath = projectType === 'bmgd'
+      ? join(projectPath, '_bmad-output', 'sprint-status.yaml')
+      : join(storiesDir, 'sprint-status.yaml')
+
+    let statusMap: Record<string, string> = {}
+    if (existsSync(sprintStatusPath)) {
+      const statusContent = await readFile(sprintStatusPath, 'utf-8')
+      const parsed = parseYaml(statusContent)
+      statusMap = parsed?.development_status || {}
+    }
+
+    const stories: unknown[] = []
+    const files = await readdir(storiesDir)
+
+    for (const file of files) {
+      if (!file.endsWith('.md') || file === 'README.md') continue
+
+      const filePath = join(storiesDir, file)
+      const fileStat = await stat(filePath)
+      if (!fileStat.isFile()) continue
+
+      const content = await readFile(filePath, 'utf-8')
+
+      // Extract story ID and title from filename and content
+      const storyId = file.replace('.md', '')
+      const titleMatch = content.match(/^#\s*(.+)$/m)
+      const title = titleMatch ? titleMatch[1].trim() : storyId
+
+      // Extract epic ID from story ID (e.g., "1-2-feature" -> epic 1)
+      const epicMatch = storyId.match(/^(\d+)-/)
+      const epicId = epicMatch ? parseInt(epicMatch[1], 10) : 1
+
+      // Get status from sprint-status.yaml
+      const status = statusMap[storyId] || 'backlog'
+
+      stories.push({
+        id: storyId,
+        title,
+        epicId,
+        status,
+        filePath
+      })
+    }
+
+    return stories
+  } catch (error) {
+    console.error('Failed to parse stories:', error)
+    return []
+  }
+}
+
+// Get story details including content
+async function getStoryDetails(storyId: string): Promise<unknown> {
+  if (!currentProjectPath || !currentProjectType) {
+    return { error: 'No project loaded' }
+  }
+
+  try {
+    const storiesDir = currentProjectType === 'bmgd'
+      ? join(currentProjectPath, '_bmad-output', 'stories')
+      : join(currentProjectPath, '_bmad-output', 'implementation-artifacts')
+
+    const storyPath = join(storiesDir, `${storyId}.md`)
+
+    if (!existsSync(storyPath)) {
+      return { error: 'Story not found' }
+    }
+
+    const content = await readFile(storyPath, 'utf-8')
+
+    // Parse sections from markdown
+    const sections: Record<string, string> = {}
+    const sectionRegex = /^##\s*(.+)$/gm
+    let lastSectionName = 'overview'
+    let lastSectionStart = 0
+
+    const matches = [...content.matchAll(sectionRegex)]
+
+    for (let i = 0; i < matches.length; i++) {
+      const match = matches[i]
+      if (i > 0) {
+        sections[lastSectionName] = content.slice(lastSectionStart, match.index).trim()
+      }
+      lastSectionName = match[1].toLowerCase().replace(/\s+/g, '_')
+      lastSectionStart = (match.index || 0) + match[0].length
+    }
+
+    if (matches.length > 0) {
+      sections[lastSectionName] = content.slice(lastSectionStart).trim()
+    } else {
+      sections['content'] = content
+    }
+
+    return {
+      id: storyId,
+      content,
+      sections
+    }
+  } catch (error) {
+    console.error('Failed to get story details:', error)
+    return { error: String(error) }
+  }
+}
+
+// Update story status (for MCP API)
+async function updateStoryStatusForMcp(storyId: string, newStatus: string): Promise<{ success: boolean; error?: string }> {
+  if (!currentProjectPath || !currentProjectType) {
+    return { success: false, error: 'No project loaded' }
+  }
+
+  try {
+    const sprintStatusPath = currentProjectType === 'bmgd'
+      ? join(currentProjectPath, '_bmad-output', 'sprint-status.yaml')
+      : join(currentProjectPath, '_bmad-output', 'implementation-artifacts', 'sprint-status.yaml')
+
+    if (!existsSync(sprintStatusPath)) {
+      return { success: false, error: 'sprint-status.yaml not found' }
+    }
+
+    const content = await readFile(sprintStatusPath, 'utf-8')
+    const sprintStatus = parseYaml(content)
+
+    if (!sprintStatus.development_status) {
+      sprintStatus.development_status = {}
+    }
+    sprintStatus.development_status[storyId] = newStatus
+
+    const updatedContent = stringifyYaml(sprintStatus, {
+      lineWidth: 0,
+      nullStr: ''
+    })
+    await writeFile(sprintStatusPath, updatedContent, 'utf-8')
+
+    // Notify renderer of the change
+    if (mainWindow) {
+      mainWindow.webContents.send('story-status-changed', { storyId, newStatus, source: 'mcp' })
+    }
+
+    return { success: true }
+  } catch (error) {
+    console.error('Failed to update story status:', error)
+    return { success: false, error: String(error) }
+  }
+}
+
+// Load agents from flow JSON files
+function loadAgentsFromFlow(projectType: ProjectType): unknown[] {
+  try {
+    // In development, flow files are in src/data/
+    // In production, they're bundled in the asar under dist/
+    const isDev = !app.isPackaged
+
+    let flowPath: string
+    if (isDev) {
+      // Development: read from source directory
+      flowPath = projectType === 'bmgd'
+        ? join(__dirname, '..', 'src', 'data', 'flow-bmgd.json')
+        : join(__dirname, '..', 'src', 'data', 'flow-bmm.json')
+    } else {
+      // Production: read from bundled location
+      flowPath = projectType === 'bmgd'
+        ? join(app.getAppPath(), 'dist', 'data', 'flow-bmgd.json')
+        : join(app.getAppPath(), 'dist', 'data', 'flow-bmm.json')
+    }
+
+    if (!existsSync(flowPath)) {
+      console.warn('Flow file not found:', flowPath)
+      // Return basic agent list as fallback
+      return [
+        { id: 'dev', name: 'Developer', role: 'DEV' },
+        { id: 'pm', name: 'PM', role: 'PM' },
+        { id: 'architect', name: 'Architect', role: 'Architect' },
+        { id: 'sm', name: 'Scrum Master', role: 'SM' }
+      ]
+    }
+
+    const { readFileSync } = require('fs')
+    const flowContent = readFileSync(flowPath, 'utf-8')
+    const flow = JSON.parse(flowContent)
+    return flow.agents || []
+  } catch (error) {
+    console.error('Failed to load agents from flow:', error)
+    return []
+  }
+}
+
+// Initialize MCP API server with context
+async function initializeMcpApiServer() {
+  try {
+    await startMcpApiServer({
+      mainWindow,
+      projectPath: currentProjectPath,
+      projectType: currentProjectType,
+
+      getEpics: async () => {
+        if (!currentProjectPath || !currentProjectType) return []
+        return parseEpicsFromFile(currentProjectPath, currentProjectType)
+      },
+
+      getStories: async () => {
+        if (!currentProjectPath || !currentProjectType) return []
+        return parseStoriesFromFiles(currentProjectPath, currentProjectType)
+      },
+
+      getAgents: () => {
+        if (!currentProjectType) return []
+        return loadAgentsFromFlow(currentProjectType)
+      },
+
+      getCurrentBranch: async () => {
+        if (!currentProjectPath) return null
+        const result = runGitCommand(['rev-parse', '--abbrev-ref', 'HEAD'], currentProjectPath)
+        return result.error ? null : result.stdout.trim()
+      },
+
+      hasUncommittedChanges: async () => {
+        if (!currentProjectPath) return false
+        const result = runGitCommand(['status', '--porcelain'], currentProjectPath)
+        return !result.error && result.stdout.trim().length > 0
+      },
+
+      updateStoryStatus: updateStoryStatusForMcp,
+
+      gitCheckout: async (branchName: string) => {
+        if (!currentProjectPath) return { success: false, error: 'No project loaded' }
+        if (!isValidGitRef(branchName)) return { success: false, error: 'Invalid branch name' }
+        const result = runGitCommand(['checkout', branchName], currentProjectPath)
+        if (result.error) {
+          return { success: false, error: result.error }
+        }
+        // Notify renderer of branch change
+        if (mainWindow) {
+          mainWindow.webContents.send('branch-changed', { branchName })
+        }
+        return { success: true }
+      },
+
+      gitCreateBranch: async (branchName: string, fromBranch?: string) => {
+        if (!currentProjectPath) return { success: false, error: 'No project loaded' }
+        if (!isValidGitRef(branchName)) return { success: false, error: 'Invalid branch name' }
+        if (fromBranch && !isValidGitRef(fromBranch)) return { success: false, error: 'Invalid source branch' }
+
+        const args = fromBranch ? ['checkout', '-b', branchName, fromBranch] : ['checkout', '-b', branchName]
+        const result = runGitCommand(args, currentProjectPath)
+        if (result.error) {
+          return { success: false, error: result.error }
+        }
+        return { success: true }
+      },
+
+      gitCommit: async (message: string) => {
+        if (!currentProjectPath) return { success: false, error: 'No project loaded' }
+        if (!message || message.length > 1000) return { success: false, error: 'Invalid commit message' }
+
+        const addResult = runGitCommand(['add', '.'], currentProjectPath)
+        if (addResult.error) {
+          return { success: false, error: `Failed to stage: ${addResult.error}` }
+        }
+
+        const commitResult = runGitCommand(['commit', '-m', message], currentProjectPath)
+        if (commitResult.error) {
+          return { success: false, error: commitResult.error }
+        }
+        return { success: true }
+      },
+
+      delegateToAgent: (agentId: string, message: string, storyId?: string) => {
+        // Send delegation request to renderer
+        if (mainWindow) {
+          mainWindow.webContents.send('mcp-delegate-to-agent', { agentId, message, storyId })
+        }
+      },
+
+      getStoryDetails
+    })
+
+    console.log('[Main] MCP API server initialized')
+  } catch (error) {
+    console.error('[Main] Failed to initialize MCP API server:', error)
   }
 }
 
@@ -429,15 +765,23 @@ function createMenu() {
   Menu.setApplicationMenu(menu)
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   createWindow()
   createMenu()
+
+  // Start MCP API server for orchestrator integration
+  await initializeMcpApiServer()
 })
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
   }
+})
+
+app.on('quit', () => {
+  // Stop MCP API server on quit
+  stopMcpApiServer()
 })
 
 app.on('activate', () => {
@@ -587,6 +931,15 @@ function stopWatching() {
 }
 
 ipcMain.handle('start-watching', async (_, projectPath: string, projectType: ProjectType) => {
+  // Update current project state for MCP API
+  currentProjectPath = projectPath
+  currentProjectType = projectType
+  updateMcpApiContext({
+    projectPath,
+    projectType,
+    mainWindow
+  })
+
   startWatching(projectPath, projectType)
   return true
 })

@@ -36,6 +36,7 @@ export interface AgentDefinition {
   color: string
   commands: string[]
   examplePrompts: string[]
+  agentType?: 'orchestrator' | 'worker' // orchestrator = Oracle, worker = regular agents
 }
 
 export interface WorkflowConfig {

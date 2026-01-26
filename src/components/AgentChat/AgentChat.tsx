@@ -5,9 +5,12 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import { v4 as uuidv4 } from 'uuid'
 import { useStore } from '../../store'
 import { useWorkflow } from '../../hooks/useWorkflow'
+import { useOrchestration } from '../../hooks/useOrchestration'
 import type { StoryChatHistory, StoryChatSession } from '../../types'
 import AgentSidebar from './AgentSidebar'
 import ChatThread from './ChatThread'
+import OrchestrationControl from '../OrchestrationControl'
+import HumanQuestionPanel from '../HumanQuestionPanel'
 
 const SIDEBAR_WIDTH = 240
 
@@ -22,6 +25,9 @@ export default function AgentChat() {
 
   // Get agents from workflow (based on current project type)
   const { agents } = useWorkflow()
+
+  // Initialize orchestration processing (polls event queue)
+  useOrchestration()
 
   const handleClearChat = useCallback(async () => {
     if (!selectedChatAgent) return
@@ -76,12 +82,19 @@ export default function AgentChat() {
   }, [selectedChatAgent, chatThreads, agents, projectPath, stories, clearChatThread])
 
   // Select first agent if none selected or current selection invalid for project type
+  // BUT don't reset if there's a pending message for the currently selected agent
+  const pendingChatMessage = useStore((state) => state.pendingChatMessage)
   useEffect(() => {
     const validAgent = agents.find((a) => a.id === selectedChatAgent)
-    if (!validAgent && agents.length > 0) {
+    // Don't reset if there's a pending message - the agent might be from a different project type
+    // but we should still try to send the message
+    if (!validAgent && agents.length > 0 && !pendingChatMessage) {
+      console.log(`[AgentChat] Resetting invalid agent ${selectedChatAgent} to ${agents[0].id}`)
       setSelectedChatAgent(agents[0].id)
+    } else if (!validAgent && pendingChatMessage) {
+      console.log(`[AgentChat] Agent ${selectedChatAgent} not found but pending message exists - not resetting`)
     }
-  }, [selectedChatAgent, setSelectedChatAgent, agents])
+  }, [selectedChatAgent, setSelectedChatAgent, agents, pendingChatMessage])
 
   // Load thread from storage when agent is selected
   useEffect(() => {
@@ -102,6 +115,9 @@ export default function AgentChat() {
   }, [selectedChatAgent, chatThreads])
 
   const selectedAgent = agents.find((a) => a.id === selectedChatAgent)
+
+  // Debug logging
+  console.log(`[AgentChat] Rendering with selectedChatAgent: ${selectedChatAgent}, selectedAgent: ${selectedAgent?.name}`)
 
   return (
     <Box
@@ -201,8 +217,18 @@ export default function AgentChat() {
               </Tooltip>
             </Box>
 
-            {/* Chat Thread */}
-            <ChatThread agentId={selectedChatAgent!} />
+            {/* Human Questions Panel - show for orchestrator agents when there are questions */}
+            {selectedAgent.agentType === 'orchestrator' && (
+              <HumanQuestionPanel />
+            )}
+
+            {/* Chat Thread - key forces remount when agent changes */}
+            <ChatThread key={selectedChatAgent} agentId={selectedChatAgent!} />
+
+            {/* Orchestration Control - show for orchestrator agents */}
+            {selectedAgent.agentType === 'orchestrator' && (
+              <OrchestrationControl />
+            )}
           </>
         ) : (
           <Box

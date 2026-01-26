@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "bmadboard": {
+      "command": "node",
+      "args": ["mcp-server/dist/index.js"],
+      "env": {
+        "BMADBOARD_API_URL": "http://127.0.0.1:45678"
+      }
+    }
+  }
+}

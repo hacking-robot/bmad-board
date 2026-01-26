@@ -103,6 +103,10 @@ export interface FileAPI {
   checkBmadInGitignore: (projectPath: string) => Promise<{ inGitignore: boolean; error?: string }>
   onFilesChanged: (callback: () => void) => () => void
   onShowKeyboardShortcuts: (callback: () => void) => () => void
+  // MCP API events
+  onMcpDelegateToAgent: (callback: (data: { agentId: string; message: string; storyId?: string }) => void) => () => void
+  onStoryStatusChanged: (callback: (data: { storyId: string; newStatus: string; source: string }) => void) => () => void
+  onBranchChanged: (callback: (data: { branchName: string }) => void) => () => void
 }
 
 const fileAPI: FileAPI = {
@@ -126,6 +130,22 @@ const fileAPI: FileAPI = {
     const listener = () => callback()
     ipcRenderer.on('show-keyboard-shortcuts', listener)
     return () => ipcRenderer.removeListener('show-keyboard-shortcuts', listener)
+  },
+  // MCP API events
+  onMcpDelegateToAgent: (callback: (data: { agentId: string; message: string; storyId?: string }) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: { agentId: string; message: string; storyId?: string }) => callback(data)
+    ipcRenderer.on('mcp-delegate-to-agent', listener)
+    return () => ipcRenderer.removeListener('mcp-delegate-to-agent', listener)
+  },
+  onStoryStatusChanged: (callback: (data: { storyId: string; newStatus: string; source: string }) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: { storyId: string; newStatus: string; source: string }) => callback(data)
+    ipcRenderer.on('story-status-changed', listener)
+    return () => ipcRenderer.removeListener('story-status-changed', listener)
+  },
+  onBranchChanged: (callback: (data: { branchName: string }) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: { branchName: string }) => callback(data)
+    ipcRenderer.on('branch-changed', listener)
+    return () => ipcRenderer.removeListener('branch-changed', listener)
   }
 }
 
