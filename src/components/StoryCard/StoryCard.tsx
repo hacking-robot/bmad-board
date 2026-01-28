@@ -429,6 +429,27 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
             {story.title}
           </Typography>
 
+          {/* User story from epics.md - shown for stories without a story file */}
+          {!story.filePath && story.epicDescription && (
+            <Tooltip title={story.epicDescription} arrow placement="bottom">
+              <Typography
+                variant="caption"
+                sx={{
+                  mt: 1,
+                  color: 'text.secondary',
+                  fontStyle: 'italic',
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                  lineHeight: 1.3
+                }}
+              >
+                {story.epicDescription}
+              </Typography>
+            </Tooltip>
+          )}
+
           {/* File indicator */}
           {story.filePath && (
             <Tooltip title="This story has a markdown file with full requirements and acceptance criteria" arrow placement="bottom">

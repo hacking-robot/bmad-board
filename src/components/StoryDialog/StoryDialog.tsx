@@ -91,6 +91,7 @@ export default function StoryDialog() {
   const selectedStory = useStore((state) => state.selectedStory)
   const storyContent = useStore((state) => state.storyContent)
   const setSelectedStory = useStore((state) => state.setSelectedStory)
+  const epics = useStore((state) => state.epics)
   const humanReviewChecklist = useStore((state) => state.humanReviewChecklist)
   const humanReviewStates = useStore((state) => state.humanReviewStates)
   const toggleReviewItem = useStore((state) => state.toggleReviewItem)
@@ -152,6 +153,7 @@ export default function StoryDialog() {
   const effectiveStatus = getEffectiveStatus(selectedStory)
   const epicColor = EPIC_COLORS[(selectedStory.epicId - 1) % EPIC_COLORS.length]
   const statusConfig = STATUS_COLUMNS.find((c) => c.status === effectiveStatus)
+  const selectedEpic = epics.find((e) => e.id === selectedStory.epicId)
 
   return (
     <>
@@ -263,13 +265,192 @@ export default function StoryDialog() {
             <Typography color="text.secondary">Loading story content...</Typography>
           </Box>
         ) : !storyContent ? (
-          <Box sx={{ p: 3 }}>
-            <Typography color="text.secondary">
-              No story file available. This story is still in backlog.
-            </Typography>
+          <Box>
+            {/* Epic Context (Collapsible) - for stories without files */}
+            {selectedEpic && selectedEpic.goal && (
+              <Accordion elevation={0} disableGutters defaultExpanded={false}>
+                <AccordionSummary
+                  expandIcon={<ExpandMoreIcon />}
+                  sx={{ px: 3, bgcolor: 'action.hover' }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    <Box
+                      sx={{
+                        width: 10,
+                        height: 10,
+                        borderRadius: '50%',
+                        bgcolor: epicColor,
+                        flexShrink: 0
+                      }}
+                    />
+                    <Typography variant="subtitle2" fontWeight={600}>
+                      Epic {selectedEpic.id}: {selectedEpic.name}
+                    </Typography>
+                  </Box>
+                </AccordionSummary>
+                <AccordionDetails sx={{ px: 3, py: 2 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>Goal:</strong> {selectedEpic.goal}
+                  </Typography>
+                </AccordionDetails>
+              </Accordion>
+            )}
+
+            {/* User Story from epics.md */}
+            {selectedStory.epicDescription && (
+              <Box sx={{ p: 3 }}>
+                <Typography variant="h6" gutterBottom>
+                  User Story
+                </Typography>
+                <Box
+                  sx={{
+                    bgcolor: 'action.hover',
+                    borderRadius: 2,
+                    p: 2
+                  }}
+                >
+                  <Typography variant="body2" sx={{ fontStyle: 'italic' }}>
+                    {selectedStory.epicDescription}
+                  </Typography>
+                </Box>
+              </Box>
+            )}
+
+            {/* Acceptance Criteria Preview */}
+            {selectedStory.acceptanceCriteriaPreview && selectedStory.acceptanceCriteriaPreview.length > 0 && (
+              <>
+                <Divider />
+                <Box sx={{ p: 3 }}>
+                  <Typography variant="h6" gutterBottom>
+                    Acceptance Criteria
+                  </Typography>
+                  <List dense disablePadding>
+                    {selectedStory.acceptanceCriteriaPreview.map((ac, index) => (
+                      <ListItem key={index} sx={{ px: 0, py: 0.5 }}>
+                        <ListItemIcon sx={{ minWidth: 32 }}>
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              bgcolor: 'primary.main',
+                              color: 'white',
+                              width: 20,
+                              height: 20,
+                              borderRadius: '50%',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontWeight: 600
+                            }}
+                          >
+                            {index + 1}
+                          </Typography>
+                        </ListItemIcon>
+                        <ListItemText primary={ac} primaryTypographyProps={{ variant: 'body2' }} />
+                      </ListItem>
+                    ))}
+                  </List>
+                </Box>
+              </>
+            )}
+
+            {/* Technical Notes */}
+            {selectedStory.technicalNotes && (
+              <>
+                <Divider />
+                <Accordion elevation={0} disableGutters defaultExpanded>
+                  <AccordionSummary
+                    expandIcon={<ExpandMoreIcon />}
+                    sx={{ px: 3, bgcolor: 'action.hover' }}
+                  >
+                    <Typography variant="h6">Technical Notes</Typography>
+                  </AccordionSummary>
+                  <AccordionDetails sx={{ p: 3 }}>
+                    <Box
+                      sx={{
+                        '& p': { mb: 1 },
+                        '& ul, & ol': { pl: 3, mb: 1 }
+                      }}
+                    >
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: CodeBlock }}>
+                        {selectedStory.technicalNotes}
+                      </ReactMarkdown>
+                    </Box>
+                  </AccordionDetails>
+                </Accordion>
+              </>
+            )}
+
+            {/* FRs Addressed */}
+            {selectedStory.frsAddressed && selectedStory.frsAddressed.length > 0 && (
+              <>
+                <Divider />
+                <Box sx={{ p: 3 }}>
+                  <Typography variant="h6" gutterBottom>
+                    Functional Requirements Addressed
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                    {selectedStory.frsAddressed.map((fr, index) => (
+                      <Box
+                        key={index}
+                        sx={{
+                          px: 1.5,
+                          py: 0.5,
+                          bgcolor: 'warning.main',
+                          color: 'white',
+                          borderRadius: 1,
+                          fontSize: '0.875rem',
+                          fontWeight: 500
+                        }}
+                      >
+                        {fr}
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+              </>
+            )}
+
+            {/* No content message - only show if no metadata at all */}
+            {!selectedStory.epicDescription && !selectedStory.acceptanceCriteriaPreview && !selectedStory.technicalNotes && !selectedStory.frsAddressed && (
+              <Box sx={{ p: 3 }}>
+                <Typography color="text.secondary">
+                  No story file available. This story is still in backlog.
+                </Typography>
+              </Box>
+            )}
           </Box>
         ) : (
           <Box>
+            {/* Epic Context (Collapsible) */}
+            {selectedEpic && selectedEpic.goal && (
+              <Accordion elevation={0} disableGutters defaultExpanded={false}>
+                <AccordionSummary
+                  expandIcon={<ExpandMoreIcon />}
+                  sx={{ px: 3, bgcolor: 'action.hover' }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    <Box
+                      sx={{
+                        width: 10,
+                        height: 10,
+                        borderRadius: '50%',
+                        bgcolor: epicColor,
+                        flexShrink: 0
+                      }}
+                    />
+                    <Typography variant="subtitle2" fontWeight={600}>
+                      Epic {selectedEpic.id}: {selectedEpic.name}
+                    </Typography>
+                  </Box>
+                </AccordionSummary>
+                <AccordionDetails sx={{ px: 3, py: 2 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>Goal:</strong> {selectedEpic.goal}
+                  </Typography>
+                </AccordionDetails>
+              </Accordion>
+            )}
+
             {/* Story Description */}
             <Box sx={{ p: 3 }}>
               <Typography variant="h6" gutterBottom>
