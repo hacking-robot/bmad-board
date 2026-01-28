@@ -29,8 +29,14 @@ export interface Story {
   slug: string
   status: StoryStatus
   filePath?: string
-  // Parsed content (loaded on demand)
+  // User story description from epics.md (for stories without story files)
+  epicDescription?: string
+  // Parsed content (loaded on demand from story file)
   content?: StoryContent
+  // Additional metadata from epics.md (for stories without story files)
+  acceptanceCriteriaPreview?: string[]  // First 3 AC items from epics.md
+  technicalNotes?: string               // Technical Notes section
+  frsAddressed?: string[]               // FRs addressed list
 }
 
 export interface StoryContent {

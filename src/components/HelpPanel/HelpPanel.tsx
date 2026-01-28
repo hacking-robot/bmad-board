@@ -13,10 +13,12 @@ import InfoIcon from '@mui/icons-material/Info'
 import GroupIcon from '@mui/icons-material/Group'
 import AccountTreeIcon from '@mui/icons-material/AccountTree'
 import TerminalIcon from '@mui/icons-material/Terminal'
+import FlagIcon from '@mui/icons-material/Flag'
 import OverviewTab from './OverviewTab'
 import AgentsTab from './AgentsTab'
 import WorkflowTab from './WorkflowTab'
 import CommandsTab from './CommandsTab'
+import EpicsTab from './EpicsTab'
 
 interface TabPanelProps {
   children?: React.ReactNode
@@ -145,6 +147,12 @@ export default function HelpPanel({ open, onClose, initialTab = 0 }: HelpPanelPr
             label="Commands"
             sx={{ minHeight: 48 }}
           />
+          <Tab
+            icon={<FlagIcon />}
+            iconPosition="start"
+            label="Epics"
+            sx={{ minHeight: 48 }}
+          />
         </Tabs>
       </Box>
 
@@ -160,6 +168,9 @@ export default function HelpPanel({ open, onClose, initialTab = 0 }: HelpPanelPr
         </TabPanel>
         <TabPanel value={tabValue} index={3}>
           <CommandsTab />
+        </TabPanel>
+        <TabPanel value={tabValue} index={4}>
+          <EpicsTab />
         </TabPanel>
       </DialogContent>
     </Dialog>
