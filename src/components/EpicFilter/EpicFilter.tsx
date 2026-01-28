@@ -19,19 +19,25 @@ import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import GitHubIcon from '@mui/icons-material/GitHub'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import CheckIcon from '@mui/icons-material/Check'
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import { useStore } from '../../store'
 import { useProjectData } from '../../hooks/useProjectData'
 import { EPIC_COLORS } from '../../types'
+import { usePlanningArtifacts, getArtifactTypeLabel, getArtifactTypeColor, PlanningArtifact } from '../../hooks/usePlanningArtifacts'
+import DescriptionIcon from '@mui/icons-material/Description'
+import ArtifactViewer from '../HelpPanel/ArtifactViewer'
 
 export default function EpicFilter() {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
   const [gitAnchor, setGitAnchor] = useState<null | HTMLElement>(null)
+  const [infoAnchor, setInfoAnchor] = useState<null | HTMLElement>(null)
   const [copiedCommand, setCopiedCommand] = useState<string | null>(null)
   const [checkingBranch, setCheckingBranch] = useState(false)
   const [branchError, setBranchError] = useState<string | null>(null)
   const [actionInProgress, setActionInProgress] = useState(false)
   const [createMode, setCreateMode] = useState(false)
   const [hasUncommittedChanges, setHasUncommittedChanges] = useState(false)
+  const [selectedArtifact, setSelectedArtifact] = useState<PlanningArtifact | null>(null)
   const open = Boolean(anchorEl)
 
   const epics = useStore((state) => state.epics)
@@ -40,6 +46,7 @@ export default function EpicFilter() {
   const projectPath = useStore((state) => state.projectPath)
   const enableEpicBranches = useStore((state) => state.enableEpicBranches)
   const { loadProjectData } = useProjectData()
+  const { artifacts } = usePlanningArtifacts()
 
   const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     setAnchorEl(event.currentTarget)
@@ -91,6 +98,25 @@ export default function EpicFilter() {
     setActionInProgress(false)
     setCreateMode(false)
     setHasUncommittedChanges(false)
+  }
+
+  const handleInfoClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    setInfoAnchor(event.currentTarget)
+  }
+
+  const handleInfoClose = () => {
+    setInfoAnchor(null)
+  }
+
+  // Calculate story counts by status for selected epic
+  const getStoryCountsByStatus = (epicId: number) => {
+    const epic = epics.find((e) => e.id === epicId)
+    if (!epic) return {}
+    const counts: Record<string, number> = {}
+    epic.stories.forEach((s) => {
+      counts[s.status] = (counts[s.status] || 0) + 1
+    })
+    return counts
   }
 
   // Check if branch exists and for uncommitted changes when popover opens
@@ -207,6 +233,18 @@ export default function EpicFilter() {
             <Typography variant="body2">All Epics</Typography>
           )}
         </Button>
+
+        {selectedEpic && (
+          <Tooltip title="Epic info">
+            <IconButton
+              onClick={handleInfoClick}
+              size="small"
+              sx={{ color: 'text.secondary' }}
+            >
+              <InfoOutlinedIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
 
         {selectedEpic && enableEpicBranches && (
           <Tooltip title="Git branch commands">
@@ -329,6 +367,157 @@ export default function EpicFilter() {
         </Popover>
       )}
 
+      {/* Epic Info Popover */}
+      {selectedEpic && (
+        <Popover
+          open={Boolean(infoAnchor)}
+          anchorEl={infoAnchor}
+          onClose={handleInfoClose}
+          anchorOrigin={{
+            vertical: 'bottom',
+            horizontal: 'center'
+          }}
+          transformOrigin={{
+            vertical: 'top',
+            horizontal: 'center'
+          }}
+          slotProps={{
+            paper: {
+              sx: {
+                p: 2,
+                maxWidth: 400,
+                maxHeight: 500,
+                overflow: 'auto',
+                borderRadius: 1.5
+              }
+            }
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+            <Box
+              sx={{
+                width: 12,
+                height: 12,
+                borderRadius: '50%',
+                bgcolor: EPIC_COLORS[(selectedEpic.id - 1) % EPIC_COLORS.length],
+                flexShrink: 0
+              }}
+            />
+            <Typography variant="subtitle1" fontWeight={600}>
+              Epic {selectedEpic.id}: {selectedEpic.name}
+            </Typography>
+          </Box>
+
+          {selectedEpic.goal && (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                Goal
+              </Typography>
+              <Typography variant="body2" sx={{ mt: 0.5, color: 'text.primary' }}>
+                {selectedEpic.goal}
+              </Typography>
+            </Box>
+          )}
+
+          <Box>
+            <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ mb: 1, display: 'block' }}>
+              Story Status
+            </Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+              {(() => {
+                const counts = getStoryCountsByStatus(selectedEpic.id)
+                const statusOrder = ['backlog', 'ready-for-dev', 'in-progress', 'review', 'done']
+                return statusOrder.map((status) => {
+                  const count = counts[status] || 0
+                  if (count === 0) return null
+                  const statusColors: Record<string, string> = {
+                    'backlog': '#9e9e9e',
+                    'ready-for-dev': '#2196f3',
+                    'in-progress': '#ff9800',
+                    'review': '#9c27b0',
+                    'done': '#4caf50'
+                  }
+                  return (
+                    <Box
+                      key={status}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 0.5,
+                        px: 1,
+                        py: 0.25,
+                        borderRadius: 1,
+                        bgcolor: 'action.hover',
+                        fontSize: '0.75rem'
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: '50%',
+                          bgcolor: statusColors[status] || 'text.disabled'
+                        }}
+                      />
+                      <Typography variant="caption">
+                        {status.replace(/-/g, ' ')}: {count}
+                      </Typography>
+                    </Box>
+                  )
+                })
+              })()}
+            </Box>
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+              Total: {selectedEpic.stories.length} stories
+            </Typography>
+          </Box>
+
+          {/* Planning Artifacts */}
+          {artifacts.length > 0 && (
+            <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: 'divider' }}>
+              <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ mb: 1, display: 'block' }}>
+                Planning Documents
+              </Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                {artifacts.map((artifact) => (
+                  <Box
+                    key={artifact.path}
+                    onClick={() => setSelectedArtifact(artifact)}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1,
+                      p: 0.5,
+                      borderRadius: 0.5,
+                      cursor: 'pointer',
+                      '&:hover': { bgcolor: 'action.selected' }
+                    }}
+                  >
+                    <DescriptionIcon sx={{ fontSize: 14, color: getArtifactTypeColor(artifact.type) }} />
+                    <Typography variant="caption" sx={{ flex: 1 }}>
+                      {artifact.displayName}
+                    </Typography>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        fontSize: '0.65rem',
+                        px: 0.5,
+                        py: 0.125,
+                        borderRadius: 0.5,
+                        bgcolor: getArtifactTypeColor(artifact.type),
+                        color: 'white'
+                      }}
+                    >
+                      {getArtifactTypeLabel(artifact.type)}
+                    </Typography>
+                  </Box>
+                ))}
+              </Box>
+            </Box>
+          )}
+        </Popover>
+      )}
+
       <Menu
         anchorEl={anchorEl}
         open={open}
@@ -394,6 +583,12 @@ export default function EpicFilter() {
           )
         })}
       </Menu>
+
+      {/* Artifact Viewer Dialog */}
+      <ArtifactViewer
+        artifact={selectedArtifact}
+        onClose={() => setSelectedArtifact(null)}
+      />
     </>
   )
 }

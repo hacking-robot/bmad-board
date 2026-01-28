@@ -2,11 +2,17 @@ import { Epic, Story } from '../types'
 import type { SprintStatusData } from './parseSprintStatus'
 import { getStoryStatus, getEpicStatus } from './parseSprintStatus'
 
+interface ParsedStory {
+  title: string
+  storyNumber: number
+  description: string // Full user story text from epics.md
+}
+
 interface ParsedEpic {
   id: number
   name: string
   goal: string
-  stories: { title: string; storyNumber: number }[]
+  stories: ParsedStory[]
 }
 
 export function parseEpics(
@@ -68,7 +74,7 @@ export function parseEpics(
         const fullText = numberedMatch[1].trim()
         // Try to extract a cleaner title from user story format, fall back to full text
         const title = extractStoryTitle(fullText)
-        currentEpic.stories.push({ title, storyNumber })
+        currentEpic.stories.push({ title, storyNumber, description: fullText })
       }
     }
 
@@ -98,7 +104,8 @@ export function parseEpics(
         storyNumber: story.storyNumber,
         title: story.title,
         slug,
-        status: getStoryStatus(sprintStatus, storyKey)
+        status: getStoryStatus(sprintStatus, storyKey),
+        epicDescription: story.description || undefined
       }
     })
 
