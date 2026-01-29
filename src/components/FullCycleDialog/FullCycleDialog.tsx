@@ -18,7 +18,7 @@ export default function FullCycleDialog() {
   const setSelectedChatAgent = useStore((state) => state.setSelectedChatAgent)
   const setViewMode = useStore((state) => state.setViewMode)
 
-  const { fullCycle, steps, cancel, start } = useFullCycle()
+  const { fullCycle, steps, cancel, retry } = useFullCycle()
 
   // Get the current step's agent ID
   const currentStepConfig = steps[fullCycle.currentStep]
@@ -50,9 +50,7 @@ export default function FullCycleDialog() {
   }
 
   const handleRetry = () => {
-    if (fullCycle.storyId) {
-      start(fullCycle.storyId)
-    }
+    retry()
   }
 
   const handleOpenChat = () => {

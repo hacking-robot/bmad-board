@@ -316,6 +316,7 @@ interface AppState {
   setFullCycleError: (error: string) => void
   completeFullCycle: () => void
   cancelFullCycle: () => void
+  retryFullCycle: () => void
   setFullCycleMinimized: (minimized: boolean) => void
   setFullCycleSessionId: (sessionId: string) => void
   skipFullCycleStep: (stepIndex: number) => void
@@ -947,6 +948,32 @@ export const useStore = create<AppState>()(
           error: 'Cancelled by user'
         }
       })),
+      retryFullCycle: () => set((state) => {
+        // Find the first step that isn't completed or skipped
+        const stepStatuses = state.fullCycle.stepStatuses
+        let resumeStep = 0
+        for (let i = 0; i < stepStatuses.length; i++) {
+          if (stepStatuses[i] !== 'completed' && stepStatuses[i] !== 'skipped') {
+            resumeStep = i
+            break
+          }
+        }
+        // Reset the status of failed/pending steps to pending
+        const newStatuses = stepStatuses.map((s, i) =>
+          i >= resumeStep ? 'pending' as FullCycleStepStatus : s
+        )
+        return {
+          fullCycle: {
+            ...state.fullCycle,
+            isRunning: true,
+            currentStep: resumeStep,
+            error: null,
+            stepStatus: 'pending',
+            stepStatuses: newStatuses,
+            stepStartTime: Date.now()
+          }
+        }
+      }),
       setFullCycleMinimized: (minimized) => set((state) => ({
         fullCycle: {
           ...state.fullCycle,

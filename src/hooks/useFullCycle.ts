@@ -17,6 +17,7 @@ export function useFullCycle() {
   const startFullCycle = useStore((state) => state.startFullCycle)
   const appendFullCycleLog = useStore((state) => state.appendFullCycleLog)
   const cancelFullCycle = useStore((state) => state.cancelFullCycle)
+  const retryFullCycleStore = useStore((state) => state.retryFullCycle)
 
   // Get steps based on project type
   const getSteps = useCallback((): FullCycleStep[] => {
@@ -66,10 +67,36 @@ export function useFullCycle() {
     appendFullCycleLog('Full cycle cancelled')
   }, [fullCycle.isRunning, fullCycle.currentStep, getSteps, cancelFullCycle, appendFullCycleLog])
 
+  // Retry from the failed step (preserves completed steps)
+  const retry = useCallback(() => {
+    if (!fullCycle.storyId) return
+
+    const story = stories.find((s) => s.id === fullCycle.storyId)
+    if (!story) {
+      console.error('Story not found:', fullCycle.storyId)
+      return
+    }
+
+    // Find first non-completed step for logging
+    const stepStatuses = fullCycle.stepStatuses
+    let resumeStep = 0
+    for (let i = 0; i < stepStatuses.length; i++) {
+      if (stepStatuses[i] !== 'completed' && stepStatuses[i] !== 'skipped') {
+        resumeStep = i
+        break
+      }
+    }
+
+    const steps = getSteps()
+    appendFullCycleLog(`\n=== Retrying from step ${resumeStep + 1}: ${steps[resumeStep]?.name} ===`)
+    retryFullCycleStore()
+  }, [fullCycle.storyId, fullCycle.stepStatuses, stories, getSteps, appendFullCycleLog, retryFullCycleStore])
+
   return {
     fullCycle,
     steps: getSteps(),
     start,
-    cancel
+    cancel,
+    retry
   }
 }

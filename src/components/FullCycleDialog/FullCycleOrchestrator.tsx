@@ -1,7 +1,10 @@
 import { useEffect, useRef, useCallback } from 'react'
+import { v4 as uuidv4 } from 'uuid'
 import { useStore } from '../../store'
+import { useWorkflow } from '../../hooks/useWorkflow'
 import { FULL_CYCLE_STEPS_BMM, FULL_CYCLE_STEPS_BMGD, FullCycleStep } from '../../types/fullCycle'
 import { transformCommand } from '../../utils/commandTransform'
+import type { StoryChatHistory, StoryChatSession } from '../../types'
 
 /**
  * FullCycleOrchestrator - Runs the full cycle automation in the background
@@ -15,14 +18,16 @@ export default function FullCycleOrchestrator() {
   const projectType = useStore((state) => state.projectType)
   const stories = useStore((state) => state.stories)
   const aiTool = useStore((state) => state.aiTool)
+
+  // Get agent definitions from workflow
+  const { agents } = useWorkflow()
   const claudeModel = useStore((state) => state.claudeModel)
   const baseBranch = useStore((state) => state.baseBranch)
   const enableEpicBranches = useStore((state) => state.enableEpicBranches)
   const setCurrentBranch = useStore((state) => state.setCurrentBranch)
   const setHasUncommittedChanges = useStore((state) => state.setHasUncommittedChanges)
 
-  // Chat state
-  const chatThreads = useStore((state) => state.chatThreads)
+  // Chat state (use useStore.getState() for chatThreads to get latest after clear)
   const addChatMessage = useStore((state) => state.addChatMessage)
   const updateChatMessage = useStore((state) => state.updateChatMessage)
   const setChatTyping = useStore((state) => state.setChatTyping)
@@ -50,6 +55,55 @@ export default function FullCycleOrchestrator() {
     return projectType === 'bmgd' ? FULL_CYCLE_STEPS_BMGD : FULL_CYCLE_STEPS_BMM
   }, [projectType])
 
+  // Save chat history before clearing - preserves conversation for story card
+  const saveChatHistoryAndClear = useCallback(async (agentId: string, storyId: string) => {
+    if (!projectPath) return
+
+    // Read directly from store to get latest state
+    const thread = useStore.getState().chatThreads[agentId]
+    const agent = agents.find(a => a.id === agentId)
+    const story = stories.find(s => s.id === storyId)
+
+    // Save to history if thread has messages
+    if (thread && thread.messages.length > 0 && agent) {
+      try {
+        const now = Date.now()
+        let history: StoryChatHistory | null = await window.chatAPI.loadStoryChatHistory(projectPath, storyId)
+
+        if (!history) {
+          history = {
+            storyId,
+            storyTitle: story?.title || storyId,
+            sessions: [],
+            lastUpdated: now
+          }
+        }
+
+        // Create a new session for this chat
+        const newSession: StoryChatSession = {
+          sessionId: uuidv4(),
+          agentId,
+          agentName: agent.name,
+          agentRole: agent.role,
+          messages: thread.messages,
+          startTime: thread.messages[0]?.timestamp || now,
+          endTime: now,
+          branchName: thread.branchName
+        }
+        history.sessions.push(newSession)
+        history.lastUpdated = now
+
+        await window.chatAPI.saveStoryChatHistory(projectPath, storyId, history)
+        appendFullCycleLog(`Saved ${agentId} chat to history`)
+      } catch (error) {
+        console.error('Failed to save chat history:', error)
+      }
+    }
+
+    // Clear the thread
+    clearChatThread(agentId)
+  }, [projectPath, agents, stories, clearChatThread, appendFullCycleLog])
+
   // Execute an agent step - mimics ChatThread's handleSendMessage
   const executeAgentStep = useCallback(async (
     agentId: string,
@@ -65,8 +119,8 @@ export default function FullCycleOrchestrator() {
     // Set context for this agent's thread
     setThreadContext(agentId, storyId, branchName)
 
-    // Get current session (if any)
-    const currentThread = chatThreads[agentId]
+    // Get current session (if any) - read directly from store to get latest state after clear
+    const currentThread = useStore.getState().chatThreads[agentId]
     const hasSession = !!currentThread?.sessionId
 
     // Add user message to the chat thread
@@ -106,28 +160,81 @@ export default function FullCycleOrchestrator() {
         }
       }
 
-      // Detect if output contains a question prompt that needs auto-response
-      const isQuestionPrompt = (text: string): boolean => {
-        // Common patterns for agent questions requiring user choice
+      // Detect if output contains a multiple-choice prompt (e.g., "Choose [1], [2], [3]")
+      const isMultipleChoicePrompt = (text: string): boolean => {
+        // Only match actual numbered choice patterns, not general questions
         const patterns = [
           /Choose \[\d+\]/i,
           /Select \[\d+\]/i,
-          /\[\d+\].*\[\d+\]/,  // Multiple numbered options
-          /Which option/i,
-          /What should I do/i,
-          /Do you want me to/i,
-          /Should I proceed/i,
-          /\?\s*$/  // Ends with question mark
+          /\[\d+\].*\[\d+\].*\[\d+\]/,  // At least 3 numbered options like [1]...[2]...[3]
+          /Option \d+.*Option \d+/i,  // "Option 1... Option 2..."
         ]
         return patterns.some(p => p.test(text))
       }
 
-      // Subscribe to output to detect question prompts
-      // ChatThread handles display, we just track content for question detection
+      // Detect if output asks about committing (we handle commits directly, so decline)
+      const isCommitQuestion = (text: string): boolean => {
+        const patterns = [
+          /do you want me to commit/i,
+          /should I commit/i,
+          /want me to commit/i,
+          /shall I commit/i,
+          /commit these changes\?/i
+        ]
+        return patterns.some(p => p.test(text))
+      }
+
+      // Subscribe to output to detect question prompts AND update message content
+      // Parse stream-json format to extract text (same as ChatThread)
       const unsubOutput = window.chatAPI.onChatOutput((event) => {
         if (event.agentId !== agentId) return
-        if (event.chunk) {
-          accumulatedOutput += event.chunk
+        if (event.isAgentLoad) return // Skip agent load output
+        if (!event.chunk) return
+
+        accumulatedOutput += event.chunk
+
+        // Parse stream-json to extract text for message display
+        const lines = event.chunk.split('\n').filter(Boolean)
+        for (const line of lines) {
+          try {
+            const parsed = JSON.parse(line)
+
+            // Handle content_block_delta - streaming text
+            if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
+              const currentContent = useStore.getState().chatThreads[agentId]?.messages.find(
+                m => m.id === assistantMsgId
+              )?.content || ''
+              updateChatMessage(agentId, assistantMsgId, {
+                content: currentContent + parsed.delta.text,
+                status: 'streaming'
+              })
+            }
+
+            // Handle assistant message (complete message format)
+            if (parsed.type === 'assistant' && parsed.message?.content) {
+              for (const block of parsed.message.content) {
+                if (block.type === 'text' && block.text) {
+                  const currentContent = useStore.getState().chatThreads[agentId]?.messages.find(
+                    m => m.id === assistantMsgId
+                  )?.content || ''
+                  updateChatMessage(agentId, assistantMsgId, {
+                    content: currentContent + block.text,
+                    status: 'streaming'
+                  })
+                }
+              }
+            }
+
+            // Handle result type (final content)
+            if (parsed.type === 'result' && parsed.result) {
+              updateChatMessage(agentId, assistantMsgId, {
+                content: parsed.result,
+                status: 'complete'
+              })
+            }
+          } catch {
+            // Not JSON, ignore (could be raw output from non-claude tools)
+          }
         }
       })
 
@@ -221,16 +328,16 @@ export default function FullCycleOrchestrator() {
           return
         }
 
-        // Check if output contains a question that needs auto-response
-        if (isQuestionPrompt(accumulatedOutput) && currentSessionId) {
-          appendFullCycleLog(`Detected question prompt, auto-responding with "1" (fix automatically)`)
+        // Helper to send an auto-response
+        const sendAutoResponse = async (response: string, logMessage: string): Promise<boolean> => {
+          appendFullCycleLog(logMessage)
 
           // Add auto-response message to chat
           const autoResponseMsgId = `fullcycle-auto-${Date.now()}`
           addChatMessage(agentId, {
             id: autoResponseMsgId,
             role: 'user',
-            content: '1',
+            content: response,
             timestamp: Date.now(),
             status: 'complete'
           })
@@ -255,8 +362,8 @@ export default function FullCycleOrchestrator() {
             const result = await window.chatAPI.sendMessage({
               agentId,
               projectPath,
-              message: '1',
-              sessionId: currentSessionId,
+              message: response,
+              sessionId: currentSessionId!,
               tool: aiTool,
               model: aiTool === 'claude-code' ? claudeModel : undefined
             })
@@ -267,16 +374,36 @@ export default function FullCycleOrchestrator() {
               setChatTyping(agentId, false)
               appendFullCycleLog(`Failed to send auto-response: ${result.error}`)
               resolve('error')
+              return false
+            } else {
+              appendFullCycleLog(`Auto-response sent, waiting for agent to complete...`)
+              return true
             }
-            // Otherwise, wait for next exit event
           } catch (err) {
             resolved = true
             cleanup()
             setChatTyping(agentId, false)
             appendFullCycleLog(`Failed to send auto-response: ${err}`)
             resolve('error')
+            return false
           }
+        }
+
+        // Check for commit questions - we handle commits directly, so just complete
+        if (isCommitQuestion(accumulatedOutput)) {
+          resolved = true
+          cleanup()
+          setChatTyping(agentId, false)
+          appendFullCycleLog(`${agentId} completed (commit handled by app)`)
+          resolve('success')
           return
+        }
+
+        // Check for multiple choice prompts - auto-select option 1 (fix automatically)
+        if (isMultipleChoicePrompt(accumulatedOutput) && currentSessionId) {
+          const sent = await sendAutoResponse('1', 'Detected multiple choice prompt, auto-responding with "1" (fix automatically)')
+          if (sent) return // Wait for next exit event
+          return // Error already handled
         }
 
         // No question detected, mark as complete
@@ -342,7 +469,6 @@ export default function FullCycleOrchestrator() {
     projectType,
     aiTool,
     claudeModel,
-    chatThreads,
     appendFullCycleLog,
     addChatMessage,
     updateChatMessage,
@@ -387,12 +513,9 @@ export default function FullCycleOrchestrator() {
 
           const agentId = step.agentId!
 
-          // Clear chat thread before key steps to start fresh without polluted context
-          const stepsThatNeedFreshContext = ['create-story', 'implement', 'code-review-1', 'code-review-2']
-          if (stepsThatNeedFreshContext.includes(step.id)) {
-            appendFullCycleLog(`Clearing ${agentId} chat for fresh context`)
-            clearChatThread(agentId)
-          }
+          // Save chat history and clear thread before each agent step for fresh LLM context
+          // This ensures each step starts clean, but auto-responses within a step (like "1" for fix) preserve context
+          await saveChatHistoryAndClear(agentId, story.id)
 
           const command = transformCommand(step.command!, aiTool)
           const fullCommand = `${command} ${story.id}`
@@ -428,6 +551,9 @@ export default function FullCycleOrchestrator() {
           }
 
           if (step.gitAction === 'commit') {
+            // Small delay to ensure filesystem has synced after previous operations
+            await new Promise(r => setTimeout(r, 500))
+
             const changesResult = await window.gitAPI.hasChanges(projectPath)
             if (currentRunIdRef.current !== runId) return 'error'
 
@@ -440,7 +566,8 @@ export default function FullCycleOrchestrator() {
             const message = `${commitType}(${branchName}): ${step.commitMessage?.replace(/^(fix|docs|feat): /, '') || 'update'}`
 
             appendFullCycleLog(`Committing: ${message}`)
-            const result = await window.gitAPI.commit(projectPath, message)
+            // Use noVerify to bypass pre-commit hooks in automated workflow
+            const result = await window.gitAPI.commit(projectPath, message, true)
 
             if (currentRunIdRef.current !== runId) return 'error'
 
@@ -451,6 +578,56 @@ export default function FullCycleOrchestrator() {
 
             setHasUncommittedChanges(false)
             appendFullCycleLog('Committed successfully')
+            return 'success'
+          }
+
+          if (step.gitAction === 'merge') {
+            // Safety check: commit any remaining uncommitted changes before switching branches
+            await new Promise(r => setTimeout(r, 500))
+            const preCheckChanges = await window.gitAPI.hasChanges(projectPath)
+            if (currentRunIdRef.current !== runId) return 'error'
+
+            if (preCheckChanges.hasChanges) {
+              appendFullCycleLog('Found uncommitted changes, committing before merge...')
+              const safetyCommit = await window.gitAPI.commit(
+                projectPath,
+                `chore(${branchName}): auto-commit before merge`,
+                true
+              )
+              if (!safetyCommit.success) {
+                appendFullCycleLog(`Failed to commit changes: ${safetyCommit.error}`)
+                return 'error'
+              }
+              setHasUncommittedChanges(false)
+            }
+
+            // Checkout base branch
+            appendFullCycleLog(`Checking out ${baseBranch}...`)
+            const checkoutResult = await window.gitAPI.checkoutBranch(projectPath, baseBranch)
+            if (currentRunIdRef.current !== runId) return 'error'
+
+            if (!checkoutResult.success) {
+              appendFullCycleLog(`Failed to checkout ${baseBranch}: ${checkoutResult.error}`)
+              return 'error'
+            }
+
+            setCurrentBranch(baseBranch)
+
+            // Merge story branch into base
+            appendFullCycleLog(`Merging ${branchName} into ${baseBranch}...`)
+            const mergeResult = await window.gitAPI.mergeBranch(projectPath, branchName)
+            if (currentRunIdRef.current !== runId) return 'error'
+
+            if (!mergeResult.success) {
+              if (mergeResult.hasConflicts) {
+                appendFullCycleLog(`Merge conflicts detected - manual resolution required`)
+              } else {
+                appendFullCycleLog(`Failed to merge: ${mergeResult.error}`)
+              }
+              return 'error'
+            }
+
+            appendFullCycleLog(`Successfully merged ${branchName} into ${baseBranch}`)
             return 'success'
           }
 
@@ -494,15 +671,21 @@ export default function FullCycleOrchestrator() {
     updateFullCycleStep,
     setCurrentBranch,
     setHasUncommittedChanges,
-    clearChatThread
+    saveChatHistoryAndClear
   ])
 
-  // Run all steps sequentially
-  const runAllSteps = useCallback(async (runId: string, storyId: string) => {
+  // Run all steps sequentially (skips already completed/skipped steps on retry)
+  const runAllSteps = useCallback(async (runId: string, storyId: string, startFromStep: number, stepStatuses: string[]) => {
     const steps = getSteps()
 
-    for (let i = 0; i < steps.length; i++) {
+    for (let i = startFromStep; i < steps.length; i++) {
       if (currentRunIdRef.current !== runId) return
+
+      // Skip steps that are already completed or skipped (from previous run)
+      if (stepStatuses[i] === 'completed' || stepStatuses[i] === 'skipped') {
+        appendFullCycleLog(`Skipping ${steps[i]?.name} (already ${stepStatuses[i]})`)
+        continue
+      }
 
       const result = await executeStep(i, runId, storyId)
 
@@ -524,10 +707,9 @@ export default function FullCycleOrchestrator() {
     }
   }, [getSteps, executeStep, skipFullCycleStep, advanceFullCycleStep, setFullCycleError, appendFullCycleLog, completeFullCycle])
 
-  // Watch for new full cycle runs to start
+  // Watch for new full cycle runs to start (or retry)
   useEffect(() => {
     if (!fullCycle.isRunning) return
-    if (fullCycle.currentStep !== 0) return
     if (fullCycle.error) return
     if (!fullCycle.storyId) return
     if (isProcessingRef.current) return
@@ -537,11 +719,13 @@ export default function FullCycleOrchestrator() {
     isProcessingRef.current = true
     const runId = currentRunIdRef.current
     const storyId = fullCycle.storyId
+    const startFromStep = fullCycle.currentStep
+    const stepStatuses = [...fullCycle.stepStatuses]
 
-    runAllSteps(runId, storyId).finally(() => {
+    runAllSteps(runId, storyId, startFromStep, stepStatuses).finally(() => {
       isProcessingRef.current = false
     })
-  }, [fullCycle.isRunning, fullCycle.currentStep, fullCycle.error, fullCycle.storyId, runAllSteps])
+  }, [fullCycle.isRunning, fullCycle.currentStep, fullCycle.error, fullCycle.storyId, fullCycle.stepStatuses, runAllSteps])
 
   // Reset run ID when cycle completes or is cancelled
   useEffect(() => {

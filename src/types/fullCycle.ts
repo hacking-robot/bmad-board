@@ -13,7 +13,7 @@ export interface FullCycleStep {
   agentId?: string
   command?: string
   // For git steps
-  gitAction?: 'create-branch' | 'commit'
+  gitAction?: 'create-branch' | 'commit' | 'merge'
   commitMessage?: string
 }
 
@@ -132,6 +132,21 @@ export const FULL_CYCLE_STEPS_BMM: FullCycleStep[] = [
     name: 'Mark Done',
     type: 'status',
     description: 'Update story status to done'
+  },
+  {
+    id: 'commit-done',
+    name: 'Commit Status',
+    type: 'git',
+    description: 'Commit the done status update',
+    gitAction: 'commit',
+    commitMessage: 'docs: mark story as done'
+  },
+  {
+    id: 'merge-to-base',
+    name: 'Merge to Base',
+    type: 'git',
+    description: 'Merge story branch back to base branch',
+    gitAction: 'merge'
   }
 ]
 
@@ -213,5 +228,20 @@ export const FULL_CYCLE_STEPS_BMGD: FullCycleStep[] = [
     name: 'Mark Done',
     type: 'status',
     description: 'Update story status to done'
+  },
+  {
+    id: 'commit-done',
+    name: 'Commit Status',
+    type: 'git',
+    description: 'Commit the done status update',
+    gitAction: 'commit',
+    commitMessage: 'docs: mark story as done'
+  },
+  {
+    id: 'merge-to-base',
+    name: 'Merge to Base',
+    type: 'git',
+    description: 'Merge story branch back to base branch',
+    gitAction: 'merge'
   }
 ]
