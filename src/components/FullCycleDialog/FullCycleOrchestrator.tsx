@@ -21,6 +21,7 @@ export default function FullCycleOrchestrator() {
   const projectType = useStore((state) => state.projectType)
   const stories = useStore((state) => state.stories)
   const aiTool = useStore((state) => state.aiTool)
+  const customEndpoint = useStore((state) => state.customEndpoint)
 
   // Get agent definitions from workflow
   const { agents } = useWorkflow()
@@ -301,7 +302,8 @@ export default function FullCycleOrchestrator() {
               message: response,
               sessionId: currentSessionId!,
               tool: aiTool,
-              model: aiTool === 'claude-code' ? claudeModel : undefined
+              model: aiTool === 'claude-code' ? claudeModel : undefined,
+              customEndpoint: aiTool === 'custom-endpoint' ? customEndpoint : undefined
             })
 
             if (!result.success) {
@@ -399,7 +401,8 @@ export default function FullCycleOrchestrator() {
           projectPath,
           projectType: projectType || 'bmm',
           tool: aiTool,
-          model: aiTool === 'claude-code' ? claudeModel : undefined
+          model: aiTool === 'claude-code' ? claudeModel : undefined,
+          customEndpoint: aiTool === 'custom-endpoint' ? customEndpoint : undefined
         }).catch((err) => {
           if (!resolved) {
             resolved = true
@@ -423,7 +426,8 @@ export default function FullCycleOrchestrator() {
           message: command,
           sessionId: currentThread.sessionId,
           tool: aiTool,
-          model: aiTool === 'claude-code' ? claudeModel : undefined
+          model: aiTool === 'claude-code' ? claudeModel : undefined,
+          customEndpoint: aiTool === 'custom-endpoint' ? customEndpoint : undefined
         }).catch((err) => {
           if (!resolved) {
             resolved = true

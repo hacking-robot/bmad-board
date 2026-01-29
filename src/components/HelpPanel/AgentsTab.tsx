@@ -7,11 +7,16 @@ import { AI_TOOLS, AITool, ProjectType } from '../../types'
 import { useWorkflow } from '../../hooks/useWorkflow'
 import { transformCommand } from '../../utils/commandTransform'
 
+// Check if tool uses Claude CLI syntax
+function usesClaudeSyntax(aiTool: AITool): boolean {
+  return aiTool === 'claude-code' || aiTool === 'custom-endpoint'
+}
+
 // Format agent invocation command based on AI tool
-// Claude Code: /bmad:bmm:agents:pm
+// Claude Code/Custom Endpoint: /bmad:bmm:agents:pm
 // Others: @pm
 function formatAgentInvocation(agentId: string, aiTool: AITool, projectType: ProjectType | null): string {
-  if (aiTool === 'claude-code') {
+  if (usesClaudeSyntax(aiTool)) {
     const pt = projectType || 'bmm'
     return `/bmad:${pt}:agents:${agentId}`
   }
@@ -53,7 +58,7 @@ export default function AgentsTab() {
     <Box>
       <Alert severity="info" sx={{ mb: 2 }}>
         Commands shown for <strong>{selectedTool.name}</strong>. Agent invocations use{' '}
-        <code style={{ fontWeight: 600 }}>{aiTool === 'claude-code' ? `/bmad:${projectType || 'bmm'}:agents:...` : `${selectedTool.agentPrefix}agent`}</code> syntax.
+        <code style={{ fontWeight: 600 }}>{usesClaudeSyntax(aiTool) ? `/bmad:${projectType || 'bmm'}:agents:...` : `${selectedTool.agentPrefix}agent`}</code> syntax.
         Change your tool in Settings.
       </Alert>
 

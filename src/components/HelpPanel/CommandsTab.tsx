@@ -12,11 +12,16 @@ interface Command {
   category: 'workflow' | 'agent' | 'story' | 'utility'
 }
 
+// Check if tool uses Claude CLI syntax
+function usesClaudeSyntax(aiTool: AITool): boolean {
+  return aiTool === 'claude-code' || aiTool === 'custom-endpoint'
+}
+
 // Transform command based on AI tool
-// Claude Code uses full paths: /bmad:bmm:workflows:workflow-init
+// Claude Code/Custom Endpoint uses full paths: /bmad:bmm:workflows:workflow-init
 // Others use simplified: *workflow-init
 function formatCommand(baseCommand: string, aiTool: AITool, projectType: ProjectType | null): string {
-  if (aiTool === 'claude-code') {
+  if (usesClaudeSyntax(aiTool)) {
     const pt = projectType || 'bmm'
     return `/bmad:${pt}:workflows:${baseCommand}`
   }
@@ -24,10 +29,10 @@ function formatCommand(baseCommand: string, aiTool: AITool, projectType: Project
 }
 
 // Format agent invocation command
-// Claude Code: /bmad:bmm:agents:pm
+// Claude Code/Custom Endpoint: /bmad:bmm:agents:pm
 // Others: @pm
 function formatAgentInvocation(agentId: string, aiTool: AITool, projectType: ProjectType | null): string {
-  if (aiTool === 'claude-code') {
+  if (usesClaudeSyntax(aiTool)) {
     const pt = projectType || 'bmm'
     return `/bmad:${pt}:agents:${agentId}`
   }
@@ -274,15 +279,15 @@ export default function CommandsTab() {
     <Box>
       <Alert severity="info" sx={{ mb: 2 }}>
         Using <strong>{selectedTool.name}</strong>. To invoke teammates, use{' '}
-        <code style={{ fontWeight: 600 }}>{aiTool === 'claude-code' ? `/bmad:${projectType || 'bmm'}:agents:...` : `${selectedTool.agentPrefix}agent`}</code> syntax
+        <code style={{ fontWeight: 600 }}>{usesClaudeSyntax(aiTool) ? `/bmad:${projectType || 'bmm'}:agents:...` : `${selectedTool.agentPrefix}agent`}</code> syntax
         (e.g., <code>{formatAgentInvocation('pm', aiTool, projectType)}</code>, <code>{formatAgentInvocation('dev', aiTool, projectType)}</code>).
         Change your tool in Settings.
       </Alert>
 
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Use these <code>{aiTool === 'claude-code' ? '/bmad:...' : '*'}commands</code> to trigger BMAD workflows.
-        {aiTool === 'claude-code'
-          ? ' Claude Code uses full path slash commands.'
+        Use these <code>{usesClaudeSyntax(aiTool) ? '/bmad:...' : '*'}commands</code> to trigger BMAD workflows.
+        {usesClaudeSyntax(aiTool)
+          ? ' Claude CLI uses full path slash commands.'
           : ' Commands starting with * work universally across AI tools.'}
       </Typography>
 

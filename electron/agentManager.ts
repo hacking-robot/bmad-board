@@ -2,10 +2,10 @@ import { spawn, ChildProcess } from 'child_process'
 import { EventEmitter } from 'events'
 import { BrowserWindow } from 'electron'
 import { getAugmentedEnv, findBinary } from './envUtils'
-import { buildArgs, getToolConfig, supportsHeadless, ClaudeModel } from './cliToolManager'
+import { buildArgs, getToolConfig, supportsHeadless, ClaudeModel, CustomEndpointConfig } from './cliToolManager'
 
 // Supported AI tools
-type AITool = 'claude-code' | 'cursor' | 'windsurf' | 'roo-code' | 'aider'
+type AITool = 'claude-code' | 'custom-endpoint' | 'cursor' | 'windsurf' | 'roo-code' | 'aider'
 
 export interface AgentInfo {
   id: string
@@ -255,6 +255,7 @@ class ChatAgentManager {
       projectType: 'bmm' | 'bmgd'
       tool?: AITool
       model?: ClaudeModel
+      customEndpoint?: CustomEndpointConfig | null
     }
   ): { success: boolean; error?: string } {
     const tool = options.tool || 'claude-code'
@@ -280,9 +281,14 @@ class ChatAgentManager {
       let args: string[]
       let binaryName: string
       
-      if (tool === 'claude-code') {
-        // Claude: use buildArgs for consistency
-        args = buildArgs('claude-code', { prompt: agentPrompt, verbose: true, model: options.model })
+      if (tool === 'claude-code' || tool === 'custom-endpoint') {
+        // Claude or custom endpoint: use buildArgs for consistency
+        args = buildArgs(tool, {
+          prompt: agentPrompt,
+          verbose: true,
+          model: options.model,
+          customModelName: options.customEndpoint?.modelName
+        })
         binaryName = 'claude'
       } else if (tool === 'cursor') {
         // Cursor: headless mode with message
@@ -301,15 +307,28 @@ class ChatAgentManager {
       console.log('[ChatAgentManager] Tool:', tool)
       console.log('[ChatAgentManager] Project path (cwd):', options.projectPath)
       console.log(`[ChatAgentManager] Full command: ${binaryName}`, args.join(' '))
+      if (tool === 'custom-endpoint' && options.customEndpoint) {
+        console.log('[ChatAgentManager] Custom endpoint:', options.customEndpoint.name, '(' + options.customEndpoint.baseUrl + ')')
+      }
       console.log('[ChatAgentManager] ================================')
 
       // Find the binary using augmented PATH
       const binaryPath = findBinary(binaryName) || binaryName
 
+      // Build environment - inject custom endpoint vars if configured
+      let env = getAugmentedEnv()
+      if (tool === 'custom-endpoint' && options.customEndpoint) {
+        env = {
+          ...env,
+          ANTHROPIC_BASE_URL: options.customEndpoint.baseUrl,
+          ANTHROPIC_AUTH_TOKEN: options.customEndpoint.apiKey
+        }
+      }
+
       const proc = spawn(binaryPath, args, {
         cwd: options.projectPath,
         stdio: ['ignore', 'pipe', 'pipe'],
-        env: getAugmentedEnv()
+        env
       })
 
       console.log('[ChatAgentManager] Agent load process spawned, PID:', proc.pid)
@@ -403,6 +422,7 @@ class ChatAgentManager {
       sessionId?: string // Session ID from previous response for --resume (Claude only)
       tool?: AITool
       model?: ClaudeModel
+      customEndpoint?: CustomEndpointConfig | null
     }
   ): { success: boolean; error?: string } {
     const tool = options.tool || 'claude-code'
@@ -427,13 +447,14 @@ class ChatAgentManager {
       let args: string[]
       let binaryName: string
       
-      if (tool === 'claude-code') {
-        // Claude: use buildArgs, supports --resume for session continuity
-        args = buildArgs('claude-code', {
+      if (tool === 'claude-code' || tool === 'custom-endpoint') {
+        // Claude or custom endpoint: use buildArgs, supports --resume for session continuity
+        args = buildArgs(tool, {
           prompt,
           sessionId: options.sessionId,
           verbose: true,
-          model: options.model
+          model: options.model,
+          customModelName: options.customEndpoint?.modelName
         })
         binaryName = 'claude'
       } else if (tool === 'cursor') {
@@ -454,15 +475,28 @@ class ChatAgentManager {
       console.log('[ChatAgentManager] Project path (cwd):', options.projectPath)
       console.log('[ChatAgentManager] Session ID:', options.sessionId || 'none (or not supported)')
       console.log(`[ChatAgentManager] Full command: ${binaryName}`, args.join(' '))
+      if (tool === 'custom-endpoint' && options.customEndpoint) {
+        console.log('[ChatAgentManager] Custom endpoint:', options.customEndpoint.name, '(' + options.customEndpoint.baseUrl + ')')
+      }
       console.log('[ChatAgentManager] ================================')
 
       // Find the binary using augmented PATH
       const binaryPath = findBinary(binaryName) || binaryName
 
+      // Build environment - inject custom endpoint vars if configured
+      let env = getAugmentedEnv()
+      if (tool === 'custom-endpoint' && options.customEndpoint) {
+        env = {
+          ...env,
+          ANTHROPIC_BASE_URL: options.customEndpoint.baseUrl,
+          ANTHROPIC_AUTH_TOKEN: options.customEndpoint.apiKey
+        }
+      }
+
       const proc = spawn(binaryPath, args, {
         cwd: options.projectPath,
         stdio: ['ignore', 'pipe', 'pipe'],
-        env: getAugmentedEnv()
+        env
       })
 
       console.log('[ChatAgentManager] Process spawned, PID:', proc.pid)
