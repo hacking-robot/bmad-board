@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { useStore } from '../store'
 import { parseSprintStatus } from '../utils/parseSprintStatus'
 import { parseEpicsUnified, getAllStories } from '../utils/parseEpicsUnified'
@@ -217,6 +217,16 @@ export function useProjectData() {
     }
   }, [setStoryContent])
 
+  // Refs to hold latest callbacks - allows file watcher effect to call them without re-running
+  const loadProjectDataRef = useRef(loadProjectData)
+  const loadStoryContentRef = useRef(loadStoryContent)
+
+  // Keep refs up to date
+  useEffect(() => {
+    loadProjectDataRef.current = loadProjectData
+    loadStoryContentRef.current = loadStoryContent
+  }, [loadProjectData, loadStoryContent])
+
   // Load project data when path changes or after hydration
   useEffect(() => {
     if (_hasHydrated && projectPath && projectType) {
@@ -232,37 +242,42 @@ export function useProjectData() {
           })
         }
       }, 100)
-
-      // Start watching for file changes
-      window.fileAPI.startWatching(projectPath, projectType)
-      setIsWatching(true)
-
-      // Listen for file changes
-      const cleanup = window.fileAPI.onFilesChanged(() => {
-        // Skip reload if user is currently dragging (they already triggered a reload)
-        const { isUserDragging } = useStore.getState()
-        if (isUserDragging) {
-          return
-        }
-        loadProjectData()
-        // Also reload story content if a story dialog is open
-        // Get current selectedStory from store since it may have changed
-        const currentSelectedStory = useStore.getState().selectedStory
-        if (currentSelectedStory?.filePath) {
-          loadStoryContent(currentSelectedStory)
-        }
-      })
-
-      // Cleanup watcher and listener on unmount or path change
-      return () => {
-        cleanup()
-        window.fileAPI.stopWatching()
-        setIsWatching(false)
-      }
     }
   // Note: setBmadInGitignore is stable (Zustand setter) and intentionally omitted from deps
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [_hasHydrated, projectPath, projectType, loadProjectData, loadStoryContent, setIsWatching])
+  }, [_hasHydrated, projectPath, projectType, loadProjectData])
+
+  // File watcher setup - separate effect with minimal deps to avoid repeated start/stop
+  useEffect(() => {
+    if (!_hasHydrated || !projectPath || !projectType) return
+
+    // Start watching for file changes
+    window.fileAPI.startWatching(projectPath, projectType)
+    setIsWatching(true)
+
+    // Listen for file changes - use refs to get latest callbacks without triggering effect
+    const cleanup = window.fileAPI.onFilesChanged(() => {
+      // Skip reload if user is currently dragging (they already triggered a reload)
+      const { isUserDragging, selectedStory } = useStore.getState()
+      if (isUserDragging) {
+        return
+      }
+      // Call the latest callbacks via refs
+      loadProjectDataRef.current()
+      // Also reload story content if a story dialog is open
+      if (selectedStory?.filePath) {
+        loadStoryContentRef.current(selectedStory)
+      }
+    })
+
+    // Cleanup watcher and listener on unmount or path change
+    return () => {
+      cleanup()
+      window.fileAPI.stopWatching()
+      setIsWatching(false)
+    }
+  // Only re-run when project path/type actually changes, not on callback recreation
+  }, [_hasHydrated, projectPath, projectType, setIsWatching])
 
   // Load story content when selected story changes
   useEffect(() => {
