@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { Epic, Story, StoryContent, StoryStatus, Agent, ProjectType, AgentHistoryEntry, AITool, ClaudeModel, HumanReviewChecklistItem, StoryReviewState, ChatMessage, AgentThread, StatusChangeEntry, StatusChangeSource } from './types'
+import { FullCycleState, FullCycleStepType, FullCycleStepStatus, initialFullCycleState } from './types/fullCycle'
 
 export type ViewMode = 'board' | 'chat'
 
@@ -306,6 +307,21 @@ interface AppState {
   setStatusHistoryPanelOpen: (open: boolean) => void
   markStatusHistoryViewed: () => void
   getUnreadStatusHistoryCount: () => number
+
+  // Full Cycle Automation
+  fullCycle: FullCycleState
+  startFullCycle: (storyId: string, totalSteps: number) => void
+  updateFullCycleStep: (step: number, name: string, type: FullCycleStepType) => void
+  appendFullCycleLog: (log: string) => void
+  setFullCycleError: (error: string) => void
+  completeFullCycle: () => void
+  cancelFullCycle: () => void
+  setFullCycleMinimized: (minimized: boolean) => void
+  setFullCycleSessionId: (sessionId: string) => void
+  skipFullCycleStep: (stepIndex: number) => void
+  advanceFullCycleStep: () => void
+  fullCycleDialogOpen: boolean
+  setFullCycleDialogOpen: (open: boolean) => void
 
   // Computed - filtered stories
   getFilteredStories: () => Story[]
@@ -859,6 +875,116 @@ export const useStore = create<AppState>()(
         const { globalStatusHistory, lastViewedStatusHistoryAt } = get()
         return globalStatusHistory.filter(entry => entry.timestamp > lastViewedStatusHistoryAt).length
       },
+
+      // Full Cycle Automation
+      fullCycle: initialFullCycleState,
+      fullCycleDialogOpen: false,
+      setFullCycleDialogOpen: (open) => set({ fullCycleDialogOpen: open }),
+      startFullCycle: (storyId, totalSteps) => set({
+        fullCycle: {
+          ...initialFullCycleState,
+          isRunning: true,
+          storyId,
+          totalSteps,
+          stepStatuses: new Array(totalSteps).fill('pending' as FullCycleStepStatus),
+          startTime: Date.now(),
+          stepStartTime: Date.now()
+        },
+        fullCycleDialogOpen: true
+      }),
+      updateFullCycleStep: (step, name, type) => set((state) => {
+        const newStatuses = [...state.fullCycle.stepStatuses]
+        newStatuses[step] = 'running'
+        return {
+          fullCycle: {
+            ...state.fullCycle,
+            currentStep: step,
+            stepName: name,
+            stepType: type,
+            stepStatus: 'running',
+            stepStatuses: newStatuses,
+            stepStartTime: Date.now()
+          }
+        }
+      }),
+      appendFullCycleLog: (log) => set((state) => ({
+        fullCycle: {
+          ...state.fullCycle,
+          logs: [...state.fullCycle.logs, log]
+        }
+      })),
+      setFullCycleError: (error) => set((state) => {
+        const newStatuses = [...state.fullCycle.stepStatuses]
+        if (state.fullCycle.currentStep < newStatuses.length) {
+          newStatuses[state.fullCycle.currentStep] = 'error'
+        }
+        return {
+          fullCycle: {
+            ...state.fullCycle,
+            error,
+            stepStatus: 'error',
+            stepStatuses: newStatuses
+          }
+        }
+      }),
+      completeFullCycle: () => set((state) => {
+        const newStatuses = state.fullCycle.stepStatuses.map((s) =>
+          s === 'running' ? 'completed' : s
+        )
+        return {
+          fullCycle: {
+            ...state.fullCycle,
+            isRunning: false,
+            stepStatus: 'completed',
+            stepStatuses: newStatuses
+          }
+        }
+      }),
+      cancelFullCycle: () => set((state) => ({
+        fullCycle: {
+          ...state.fullCycle,
+          isRunning: false,
+          error: 'Cancelled by user'
+        }
+      })),
+      setFullCycleMinimized: (minimized) => set((state) => ({
+        fullCycle: {
+          ...state.fullCycle,
+          minimized
+        }
+      })),
+      setFullCycleSessionId: (sessionId) => set((state) => ({
+        fullCycle: {
+          ...state.fullCycle,
+          sessionId
+        }
+      })),
+      skipFullCycleStep: (stepIndex) => set((state) => {
+        const newStatuses = [...state.fullCycle.stepStatuses]
+        newStatuses[stepIndex] = 'skipped'
+        return {
+          fullCycle: {
+            ...state.fullCycle,
+            currentStep: stepIndex + 1,
+            stepStatus: 'skipped',
+            stepStatuses: newStatuses
+          }
+        }
+      }),
+      advanceFullCycleStep: () => set((state) => {
+        const newStatuses = [...state.fullCycle.stepStatuses]
+        if (state.fullCycle.currentStep < newStatuses.length) {
+          newStatuses[state.fullCycle.currentStep] = 'completed'
+        }
+        return {
+          fullCycle: {
+            ...state.fullCycle,
+            currentStep: state.fullCycle.currentStep + 1,
+            stepStatus: 'completed',
+            stepStatuses: newStatuses
+          }
+        }
+      }),
 
       // Computed
       getFilteredStories: () => {

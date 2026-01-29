@@ -17,6 +17,7 @@ import HelpPanel from './components/HelpPanel'
 import StatusBar from './components/StatusBar'
 import { AgentChat } from './components/AgentChat'
 import StatusHistoryPanel from './components/StatusHistoryPanel/StatusHistoryPanel'
+import { FullCycleDialog, FullCycleOrchestrator } from './components/FullCycleDialog'
 
 const AGENT_PANEL_WIDTH = 500
 
@@ -224,6 +225,8 @@ export default function App() {
             {enableAgents && !showChatView && toolSupportsHeadless && <AgentPanel />}
             <StoryDialog />
             <StatusHistoryPanel />
+            <FullCycleDialog />
+            <FullCycleOrchestrator />
           </>
         )}
       </Box>
