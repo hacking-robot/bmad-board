@@ -114,10 +114,18 @@ export type AgentStatus = 'running' | 'completed' | 'error' | 'interrupted'
 export type ProjectType = 'bmm' | 'bmgd'
 
 // AI Tool types - determines command syntax
-export type AITool = 'claude-code' | 'cursor' | 'windsurf' | 'roo-code' | 'aider'
+export type AITool = 'claude-code' | 'custom-endpoint' | 'cursor' | 'windsurf' | 'roo-code' | 'aider'
 
 // Claude model aliases for --model flag
 export type ClaudeModel = 'sonnet' | 'opus' | 'haiku'
+
+// Custom Anthropic-compatible endpoint configuration (e.g., GLM, Kimi)
+export interface CustomEndpointConfig {
+  name: string           // User-friendly name (e.g., "GLM", "Kimi")
+  baseUrl: string        // e.g., "https://api.moonshot.ai/anthropic/"
+  apiKey: string         // API key for authentication
+  modelName: string      // Custom model name (e.g., "kimi-k2", "glm-4.7")
+}
 
 export const CLAUDE_MODELS: { id: ClaudeModel; name: string; description: string }[] = [
   { id: 'sonnet', name: 'Sonnet', description: 'Fast and capable (default)' },
@@ -142,11 +150,18 @@ export interface CLIDetectionResult {
 }
 
 export const AI_TOOLS: { id: AITool; name: string; agentPrefix: string; description: string; cli: CLIToolInfo }[] = [
-  { 
-    id: 'claude-code', 
-    name: 'Claude Code', 
-    agentPrefix: '/', 
+  {
+    id: 'claude-code',
+    name: 'Claude Code',
+    agentPrefix: '/',
     description: 'Anthropic CLI - uses /agent slash commands',
+    cli: { cliCommand: 'claude', hasStreamJson: true, hasResume: true, supportsHeadless: true }
+  },
+  {
+    id: 'custom-endpoint',
+    name: 'Custom Endpoint',
+    agentPrefix: '/',
+    description: 'Anthropic-compatible API (GLM, Kimi, etc.)',
     cli: { cliCommand: 'claude', hasStreamJson: true, hasResume: true, supportsHeadless: true }
   },
   { 

@@ -1,6 +1,13 @@
 import { AITool, AI_TOOLS } from '../types'
 
 /**
+ * Check if tool uses Claude CLI syntax (slash commands)
+ */
+function usesClaudeSyntax(aiTool: AITool): boolean {
+  return aiTool === 'claude-code' || aiTool === 'custom-endpoint'
+}
+
+/**
  * Transform a BMAD command based on the selected AI tool.
  *
  * Commands in flow JSON are stored in Claude Code format:
@@ -8,7 +15,7 @@ import { AITool, AI_TOOLS } from '../types'
  * - Workflow commands: /bmad:bmm:workflows:dev-story
  *
  * Transformations:
- * - Claude Code: Keep as-is (slash commands)
+ * - Claude Code/Custom Endpoint: Keep as-is (slash commands)
  * - Cursor/Windsurf/Roo: Convert to universal * syntax
  */
 export function transformCommand(command: string | null | undefined, aiTool: AITool): string {
@@ -16,8 +23,8 @@ export function transformCommand(command: string | null | undefined, aiTool: AIT
 
   const tool = AI_TOOLS.find(t => t.id === aiTool)
 
-  if (aiTool === 'claude-code') {
-    // Claude Code uses slash commands as-is
+  if (usesClaudeSyntax(aiTool)) {
+    // Claude CLI uses slash commands as-is
     return command
   }
 
