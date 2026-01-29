@@ -35,7 +35,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import ErrorIcon from '@mui/icons-material/Error'
 import DesktopWindowsIcon from '@mui/icons-material/DesktopWindows'
 import { useStore } from '../../store'
-import { AI_TOOLS, AITool, CLIDetectionResult, CLAUDE_MODELS } from '../../types'
+import { AI_TOOLS, AITool, CLIDetectionResult, CLAUDE_MODELS, CustomEndpointConfig } from '../../types'
 
 export default function SettingsMenu() {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
@@ -52,6 +52,16 @@ export default function SettingsMenu() {
   const setAITool = useStore((state) => state.setAITool)
   const claudeModel = useStore((state) => state.claudeModel)
   const setClaudeModel = useStore((state) => state.setClaudeModel)
+  const customEndpoint = useStore((state) => state.customEndpoint)
+  const setCustomEndpoint = useStore((state) => state.setCustomEndpoint)
+
+  // Local state for custom endpoint form
+  const [customEndpointForm, setCustomEndpointForm] = useState<CustomEndpointConfig>({
+    name: '',
+    baseUrl: '',
+    apiKey: '',
+    modelName: ''
+  })
   const notificationsEnabled = useStore((state) => state.notificationsEnabled)
   const setNotificationsEnabled = useStore((state) => state.setNotificationsEnabled)
   const enableHumanReviewColumn = useStore((state) => state.enableHumanReviewColumn)
@@ -74,6 +84,13 @@ export default function SettingsMenu() {
       detectCliTools()
     }
   }, [toolDialogOpen])
+
+  // Sync custom endpoint form with stored config when dialog opens
+  useEffect(() => {
+    if (toolDialogOpen && customEndpoint) {
+      setCustomEndpointForm(customEndpoint)
+    }
+  }, [toolDialogOpen, customEndpoint])
 
   // Load branches when branch dialog opens
   useEffect(() => {
@@ -192,7 +209,13 @@ export default function SettingsMenu() {
           </ListItemIcon>
           <ListItemText
             primary="AI Tool"
-            secondary={aiTool === 'claude-code' ? `${selectedTool.name} (${CLAUDE_MODELS.find(m => m.id === claudeModel)?.name || claudeModel})` : selectedTool.name}
+            secondary={
+              aiTool === 'claude-code'
+                ? `${selectedTool.name} (${CLAUDE_MODELS.find(m => m.id === claudeModel)?.name || claudeModel})`
+                : aiTool === 'custom-endpoint' && customEndpoint
+                  ? `${customEndpoint.name || 'Custom'} (${customEndpoint.modelName})`
+                  : selectedTool.name
+            }
             secondaryTypographyProps={{ variant: 'caption' }}
           />
         </MenuItem>
@@ -431,6 +454,88 @@ export default function SettingsMenu() {
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
                 {CLAUDE_MODELS.find(m => m.id === claudeModel)?.description}
               </Typography>
+            </Box>
+          )}
+
+          {/* Custom Endpoint Configuration */}
+          {aiTool === 'custom-endpoint' && (
+            <Box sx={{ mt: 3 }}>
+              <Typography variant="subtitle2" gutterBottom>
+                Custom Endpoint Configuration
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+                Configure an Anthropic-compatible API endpoint (e.g., GLM, Kimi).
+              </Typography>
+
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <TextField
+                  label="Name"
+                  placeholder="e.g., Kimi K2, GLM"
+                  size="small"
+                  value={customEndpointForm.name}
+                  onChange={(e) => setCustomEndpointForm(prev => ({ ...prev, name: e.target.value }))}
+                  helperText="A friendly name for this endpoint"
+                />
+
+                <TextField
+                  label="Base URL"
+                  placeholder="https://api.moonshot.ai/anthropic/"
+                  size="small"
+                  value={customEndpointForm.baseUrl}
+                  onChange={(e) => setCustomEndpointForm(prev => ({ ...prev, baseUrl: e.target.value }))}
+                  helperText="The Anthropic-compatible API endpoint URL"
+                />
+
+                <TextField
+                  label="API Key"
+                  type="password"
+                  placeholder="Your API key"
+                  size="small"
+                  value={customEndpointForm.apiKey}
+                  onChange={(e) => setCustomEndpointForm(prev => ({ ...prev, apiKey: e.target.value }))}
+                  helperText="API key for authentication"
+                />
+
+                <TextField
+                  label="Model Name"
+                  placeholder="e.g., kimi-k2, glm-4.7"
+                  size="small"
+                  value={customEndpointForm.modelName}
+                  onChange={(e) => setCustomEndpointForm(prev => ({ ...prev, modelName: e.target.value }))}
+                  helperText="The model identifier to use"
+                />
+
+                <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end', mt: 1 }}>
+                  {customEndpoint && (
+                    <Chip
+                      label="Clear"
+                      color="error"
+                      variant="outlined"
+                      size="small"
+                      onClick={() => {
+                        setCustomEndpoint(null)
+                        setCustomEndpointForm({ name: '', baseUrl: '', apiKey: '', modelName: '' })
+                      }}
+                      sx={{ cursor: 'pointer' }}
+                    />
+                  )}
+                  <Chip
+                    label="Save Configuration"
+                    color="primary"
+                    variant="filled"
+                    size="small"
+                    disabled={!customEndpointForm.baseUrl || !customEndpointForm.apiKey || !customEndpointForm.modelName}
+                    onClick={() => setCustomEndpoint(customEndpointForm)}
+                    sx={{ cursor: 'pointer' }}
+                  />
+                </Box>
+
+                {customEndpoint && (
+                  <Typography variant="caption" color="success.main" sx={{ display: 'block' }}>
+                    Configuration saved: {customEndpoint.name || 'Custom'} ({customEndpoint.modelName})
+                  </Typography>
+                )}
+              </Box>
             </Box>
           )}
         </DialogContent>

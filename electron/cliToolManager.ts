@@ -37,6 +37,16 @@ const CLI_TOOLS: Record<string, CLIToolConfig> = {
     supportsHeadless: true,
     extraFlags: ['--dangerously-skip-permissions']
   },
+  'custom-endpoint': {
+    id: 'custom-endpoint',
+    cliCommand: 'claude', // Uses claude CLI with custom env vars
+    versionFlag: '--version',
+    hasStreamJson: true,
+    hasResume: true,
+    hasPromptFlag: true,
+    supportsHeadless: true,
+    extraFlags: ['--dangerously-skip-permissions']
+  },
   'cursor': {
     id: 'cursor',
     cliCommand: 'cursor',
@@ -200,6 +210,7 @@ export interface BuildArgsOptions {
   sessionId?: string
   verbose?: boolean
   model?: ClaudeModel // Claude model alias (only for claude-code)
+  customModelName?: string // Custom model name for custom-endpoint
 }
 
 export function buildArgs(toolId: string, options: BuildArgsOptions): string[] {
@@ -212,6 +223,7 @@ export function buildArgs(toolId: string, options: BuildArgsOptions): string[] {
 
   switch (toolId) {
     case 'claude-code':
+    case 'custom-endpoint':
       // Claude: --output-format stream-json --print --verbose --dangerously-skip-permissions [--model MODEL] [--resume ID] -p "prompt"
       args.push('--output-format', 'stream-json')
       args.push('--print')
@@ -219,7 +231,10 @@ export function buildArgs(toolId: string, options: BuildArgsOptions): string[] {
         args.push('--verbose')
       }
       args.push('--dangerously-skip-permissions')
-      if (options.model) {
+      // For custom-endpoint, use the custom model name; for claude-code, use the model alias
+      if (toolId === 'custom-endpoint' && options.customModelName) {
+        args.push('--model', options.customModelName)
+      } else if (options.model) {
         args.push('--model', options.model)
       }
       if (options.sessionId) {
@@ -251,6 +266,14 @@ export function buildArgs(toolId: string, options: BuildArgsOptions): string[] {
   return args
 }
 
+// Custom endpoint configuration (mirrors the type in src/types)
+export interface CustomEndpointConfig {
+  name: string
+  baseUrl: string
+  apiKey: string
+  modelName: string
+}
+
 /**
  * Spawn a CLI tool process
  */
@@ -260,6 +283,8 @@ export interface SpawnToolOptions {
   cwd: string
   sessionId?: string
   verbose?: boolean
+  model?: ClaudeModel
+  customEndpoint?: CustomEndpointConfig | null
 }
 
 export interface SpawnToolResult {
@@ -292,14 +317,27 @@ export async function spawnTool(options: SpawnToolOptions): Promise<SpawnToolRes
   const args = buildArgs(options.toolId, {
     prompt: options.prompt,
     sessionId: options.sessionId,
-    verbose: options.verbose
+    verbose: options.verbose,
+    model: options.model,
+    customModelName: options.customEndpoint?.modelName
   })
+
+  // Build environment - inject custom endpoint vars if configured
+  let env = getAugmentedEnv()
+  if (options.toolId === 'custom-endpoint' && options.customEndpoint) {
+    env = {
+      ...env,
+      ANTHROPIC_BASE_URL: options.customEndpoint.baseUrl,
+      ANTHROPIC_AUTH_TOKEN: options.customEndpoint.apiKey
+    }
+    console.log(`[CLIToolManager] Using custom endpoint: ${options.customEndpoint.name} (${options.customEndpoint.baseUrl})`)
+  }
 
   // Spawn options
   const spawnOptions: SpawnOptions = {
     cwd: options.cwd,
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: getAugmentedEnv()
+    env
   }
 
   console.log(`[CLIToolManager] Spawning ${config.cliCommand} with args:`, args)

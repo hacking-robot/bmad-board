@@ -20,8 +20,16 @@ export interface RecentProject {
   name: string
 }
 
-export type AITool = 'claude-code' | 'cursor' | 'windsurf' | 'roo-code' | 'aider'
+export type AITool = 'claude-code' | 'custom-endpoint' | 'cursor' | 'windsurf' | 'roo-code' | 'aider'
 export type ClaudeModel = 'sonnet' | 'opus' | 'haiku'
+
+// Custom Anthropic-compatible endpoint configuration
+export interface CustomEndpointConfig {
+  name: string
+  baseUrl: string
+  apiKey: string
+  modelName: string
+}
 
 export interface WindowBounds {
   x: number
@@ -62,6 +70,7 @@ export interface AppSettings {
   themeMode: 'light' | 'dark'
   aiTool: AITool
   claudeModel: ClaudeModel
+  customEndpoint: CustomEndpointConfig | null
   projectPath: string | null
   projectType: ProjectType | null
   selectedEpicId: number | null
@@ -388,6 +397,7 @@ export interface ChatAPI {
     projectType: 'bmm' | 'bmgd'
     tool?: AITool // AI tool to use (defaults to claude-code)
     model?: ClaudeModel // Claude model to use (only for claude-code)
+    customEndpoint?: CustomEndpointConfig | null // Custom endpoint config (for custom-endpoint tool)
   }) => Promise<{ success: boolean; error?: string }>
   // Message sending - spawns new process per message, uses --resume for conversation continuity
   sendMessage: (options: {
@@ -397,6 +407,7 @@ export interface ChatAPI {
     sessionId?: string // Session ID from previous response for --resume
     tool?: AITool // AI tool to use (defaults to claude-code)
     model?: ClaudeModel // Claude model to use (only for claude-code)
+    customEndpoint?: CustomEndpointConfig | null // Custom endpoint config (for custom-endpoint tool)
   }) => Promise<{ success: boolean; error?: string }>
   // Cancel an ongoing message/agent load
   cancelMessage: (agentId: string) => Promise<boolean>

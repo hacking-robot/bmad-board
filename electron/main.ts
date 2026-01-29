@@ -1576,6 +1576,7 @@ ipcMain.handle('chat-load-agent', async (_, options: {
   projectType: 'bmm' | 'bmgd'
   tool?: AITool
   model?: ClaudeModel
+  customEndpoint?: { name: string; baseUrl: string; apiKey: string; modelName: string } | null
 }) => {
   chatAgentManager.setMainWindow(mainWindow)
   return chatAgentManager.loadAgent(options)
@@ -1588,6 +1589,7 @@ ipcMain.handle('chat-send-message', async (_, options: {
   sessionId?: string
   tool?: AITool
   model?: ClaudeModel
+  customEndpoint?: { name: string; baseUrl: string; apiKey: string; modelName: string } | null
 }) => {
   chatAgentManager.setMainWindow(mainWindow)
   return chatAgentManager.sendMessage(options)

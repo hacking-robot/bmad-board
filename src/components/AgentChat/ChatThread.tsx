@@ -128,12 +128,14 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
         const currentProjectType = useStore.getState().projectType || 'bmm'
         const currentAiTool = useStore.getState().aiTool
         const currentClaudeModel = useStore.getState().claudeModel
+        const currentCustomEndpoint = useStore.getState().customEndpoint
         const result = await window.chatAPI.loadAgent({
           agentId,
           projectPath,
           projectType: currentProjectType,
           tool: currentAiTool,
-          model: currentAiTool === 'claude-code' ? currentClaudeModel : undefined
+          model: currentAiTool === 'claude-code' ? currentClaudeModel : undefined,
+          customEndpoint: currentAiTool === 'custom-endpoint' ? currentCustomEndpoint : undefined
         })
 
         if (!result.success) {
@@ -161,13 +163,15 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
       try {
         const currentAiTool = useStore.getState().aiTool
         const currentClaudeModel = useStore.getState().claudeModel
+        const currentCustomEndpoint = useStore.getState().customEndpoint
         const result = await window.chatAPI.sendMessage({
           agentId,
           projectPath,
           message: content.trim(),
           sessionId: currentSessionId,
           tool: currentAiTool,
-          model: currentAiTool === 'claude-code' ? currentClaudeModel : undefined
+          model: currentAiTool === 'claude-code' ? currentClaudeModel : undefined,
+          customEndpoint: currentAiTool === 'custom-endpoint' ? currentCustomEndpoint : undefined
         })
 
         if (!result.success) {

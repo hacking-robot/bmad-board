@@ -283,6 +283,7 @@ export function useChatMessageHandler() {
         // Send the actual user message
         const currentAiTool = useStore.getState().aiTool
         const currentClaudeModel = useStore.getState().claudeModel
+        const currentCustomEndpoint = useStore.getState().customEndpoint
         const currentProjectPath = useStore.getState().projectPath
 
         if (!currentProjectPath) return
@@ -293,7 +294,8 @@ export function useChatMessageHandler() {
           message: content,
           sessionId: event.sessionId,
           tool: currentAiTool,
-          model: currentAiTool === 'claude-code' ? currentClaudeModel : undefined
+          model: currentAiTool === 'claude-code' ? currentClaudeModel : undefined,
+          customEndpoint: currentAiTool === 'custom-endpoint' ? currentCustomEndpoint : undefined
         })
 
         if (!result.success) {

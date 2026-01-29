@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import { Epic, Story, StoryContent, StoryStatus, Agent, ProjectType, AgentHistoryEntry, AITool, ClaudeModel, HumanReviewChecklistItem, StoryReviewState, ChatMessage, AgentThread, StatusChangeEntry, StatusChangeSource } from './types'
+import { Epic, Story, StoryContent, StoryStatus, Agent, ProjectType, AgentHistoryEntry, AITool, ClaudeModel, CustomEndpointConfig, HumanReviewChecklistItem, StoryReviewState, ChatMessage, AgentThread, StatusChangeEntry, StatusChangeSource } from './types'
 import { FullCycleState, FullCycleStepType, FullCycleStepStatus, initialFullCycleState } from './types/fullCycle'
 
 export type ViewMode = 'board' | 'chat'
@@ -55,7 +55,7 @@ const electronStorage = {
       const parsed = JSON.parse(value)
       if (parsed.state) {
         // Only save the settings we care about
-        const { themeMode, aiTool, claudeModel, projectPath, projectType, selectedEpicId, collapsedColumnsByEpic, agentHistory, recentProjects, notificationsEnabled, baseBranch, allowDirectEpicMerge, bmadInGitignore, bmadInGitignoreUserSet, storyOrder, enableHumanReviewColumn, humanReviewChecklist, humanReviewStates, humanReviewStories, maxThreadMessages, statusHistoryByStory, globalStatusHistory, lastViewedStatusHistoryAt, enableEpicBranches } = parsed.state
+        const { themeMode, aiTool, claudeModel, customEndpoint, projectPath, projectType, selectedEpicId, collapsedColumnsByEpic, agentHistory, recentProjects, notificationsEnabled, baseBranch, allowDirectEpicMerge, bmadInGitignore, bmadInGitignoreUserSet, storyOrder, enableHumanReviewColumn, humanReviewChecklist, humanReviewStates, humanReviewStories, maxThreadMessages, statusHistoryByStory, globalStatusHistory, lastViewedStatusHistoryAt, enableEpicBranches } = parsed.state
 
         // Don't persist full output - it can contain characters that break JSON
         // Just save metadata and a small summary
@@ -70,6 +70,7 @@ const electronStorage = {
           themeMode,
           aiTool: aiTool || 'claude-code',
           claudeModel: claudeModel || 'sonnet',
+          customEndpoint: customEndpoint || null,
           projectPath,
           projectType,
           selectedEpicId,
@@ -102,6 +103,7 @@ const electronStorage = {
       themeMode: 'light',
       aiTool: 'claude-code',
       claudeModel: 'sonnet',
+      customEndpoint: null,
       projectPath: null,
       projectType: null,
       selectedEpicId: null,
@@ -148,6 +150,10 @@ interface AppState {
   // Claude Model (only applies when aiTool is 'claude-code')
   claudeModel: ClaudeModel
   setClaudeModel: (model: ClaudeModel) => void
+
+  // Custom Endpoint (for Anthropic-compatible APIs like GLM, Kimi)
+  customEndpoint: CustomEndpointConfig | null
+  setCustomEndpoint: (config: CustomEndpointConfig | null) => void
 
   // Notifications
   notificationsEnabled: boolean
@@ -353,6 +359,10 @@ export const useStore = create<AppState>()(
       // Claude Model
       claudeModel: 'sonnet',
       setClaudeModel: (model) => set({ claudeModel: model }),
+
+      // Custom Endpoint
+      customEndpoint: null,
+      setCustomEndpoint: (config) => set({ customEndpoint: config }),
 
       // Notifications
       notificationsEnabled: false,
