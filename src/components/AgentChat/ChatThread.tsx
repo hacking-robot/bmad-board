@@ -1,156 +1,15 @@
 import { useEffect, useRef, useCallback } from 'react'
 import { Box } from '@mui/material'
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso'
-import { v4 as uuidv4 } from 'uuid'
 import { useStore } from '../../store'
 import { useWorkflow } from '../../hooks/useWorkflow'
-import type { AgentDefinition } from '../../types/flow'
-import type { StoryChatHistory, StoryChatSession, ChatMessage as ChatMessageType, LLMStats } from '../../types'
+import { useChatMessageHandlerContext } from '../../hooks/useChatMessageHandler'
 import ChatMessage from './ChatMessage'
 import ChatInput from './ChatInput'
 import TypingIndicator from './TypingIndicator'
 
-// Helper to show system notification for new messages
-function showChatNotification(agent: AgentDefinition, messageContent: string) {
-  const notificationsEnabled = useStore.getState().notificationsEnabled
-  if (!notificationsEnabled) return
-
-  // Only show if app is not focused
-  if (document.hasFocus()) return
-
-  // Show system notification
-  const preview = messageContent.length > 100
-    ? messageContent.substring(0, 100) + '...'
-    : messageContent
-
-  window.fileAPI.showNotification(
-    `Message from ${agent.name}`,
-    preview || `${agent.name} sent a response`
-  )
-}
-
 interface ChatThreadProps {
   agentId: string
-}
-
-// Debounce utility for saving threads
-let saveTimeout: NodeJS.Timeout | null = null
-function debouncedSaveThread(agentId: string, thread: unknown) {
-  if (saveTimeout) clearTimeout(saveTimeout)
-  saveTimeout = setTimeout(() => {
-    window.chatAPI.saveThread(agentId, thread as Parameters<typeof window.chatAPI.saveThread>[1])
-  }, 1000)
-}
-
-// Debounce utility for saving story chat history (2s debounce)
-let storyChatSaveTimeout: NodeJS.Timeout | null = null
-const SESSION_MERGE_THRESHOLD_MS = 30 * 60 * 1000 // 30 minutes
-
-async function debouncedSaveStoryChatHistory(
-  projectPath: string,
-  storyId: string,
-  storyTitle: string,
-  agentId: string,
-  agentName: string,
-  agentRole: string,
-  messages: ChatMessageType[],
-  branchName?: string
-) {
-  if (storyChatSaveTimeout) clearTimeout(storyChatSaveTimeout)
-  storyChatSaveTimeout = setTimeout(async () => {
-    try {
-      // Load existing history
-      let history: StoryChatHistory | null = await window.chatAPI.loadStoryChatHistory(projectPath, storyId)
-      const now = Date.now()
-
-      if (!history) {
-        // Create new history
-        history = {
-          storyId,
-          storyTitle,
-          sessions: [],
-          lastUpdated: now
-        }
-      }
-
-      // Find the most recent session for this agent
-      const recentSession = history.sessions
-        .filter(s => s.agentId === agentId)
-        .sort((a, b) => (b.endTime || b.startTime) - (a.endTime || a.startTime))[0]
-
-      // Check if we should merge into existing session (within 30 minutes)
-      const withinTimeWindow = recentSession &&
-        (now - (recentSession.endTime || recentSession.startTime)) < SESSION_MERGE_THRESHOLD_MS
-
-      // Check if current messages are a continuation of the stored session
-      // If stored session has messages not in current thread, chat was cleared - don't merge
-      const isContinuation = recentSession && recentSession.messages.length > 0 && messages.length > 0 &&
-        recentSession.messages.some(storedMsg =>
-          messages.some(currentMsg => currentMsg.id === storedMsg.id)
-        )
-
-      const shouldMerge = withinTimeWindow && isContinuation
-
-      if (shouldMerge && recentSession) {
-        // Update existing session with current messages (which includes old + new)
-        recentSession.messages = messages
-        recentSession.endTime = now
-        recentSession.branchName = branchName
-      } else {
-        // Create new session
-        const newSession: StoryChatSession = {
-          sessionId: uuidv4(),
-          agentId,
-          agentName,
-          agentRole,
-          messages,
-          startTime: messages.length > 0 ? messages[0].timestamp : now,
-          endTime: now,
-          branchName
-        }
-        history.sessions.push(newSession)
-      }
-
-      history.lastUpdated = now
-
-      // Save to both locations
-      await window.chatAPI.saveStoryChatHistory(projectPath, storyId, history)
-    } catch (error) {
-      console.error('Failed to save story chat history:', error)
-    }
-  }, 2000)
-}
-
-// Map Claude tool names to human-readable activity descriptions
-function getToolActivity(toolName: string, input?: Record<string, unknown>): string {
-  const toolMap: Record<string, (input?: Record<string, unknown>) => string> = {
-    Read: (i) => i?.file_path ? `Reading ${(i.file_path as string).split('/').pop()}` : 'Reading file',
-    Edit: (i) => i?.file_path ? `Editing ${(i.file_path as string).split('/').pop()}` : 'Editing file',
-    Write: (i) => i?.file_path ? `Writing ${(i.file_path as string).split('/').pop()}` : 'Writing file',
-    Glob: () => 'Searching for files',
-    Grep: (i) => i?.pattern ? `Searching for "${i.pattern}"` : 'Searching code',
-    Bash: (i) => i?.command ? `Running: ${(i.command as string).split(' ')[0]}` : 'Running command',
-    Task: () => 'Launching subagent',
-    WebFetch: () => 'Fetching web content',
-    WebSearch: (i) => i?.query ? `Searching: "${i.query}"` : 'Searching web',
-    TodoWrite: () => 'Updating task list',
-    NotebookEdit: () => 'Editing notebook',
-    AskUserQuestion: () => 'Preparing question',
-    EnterPlanMode: () => 'Planning approach',
-    ExitPlanMode: () => 'Finalizing plan',
-  }
-
-  const formatter = toolMap[toolName]
-  if (formatter) {
-    return formatter(input)
-  }
-
-  // Handle MCP tools (mcp__*)
-  if (toolName.startsWith('mcp__')) {
-    return 'Using MCP tool'
-  }
-
-  return `Using ${toolName}`
 }
 
 export default function ChatThread({ agentId }: ChatThreadProps) {
@@ -160,9 +19,6 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
   const addChatMessage = useStore((state) => state.addChatMessage)
   const updateChatMessage = useStore((state) => state.updateChatMessage)
   const setChatTyping = useStore((state) => state.setChatTyping)
-  const incrementUnread = useStore((state) => state.incrementUnread)
-  const setChatSessionId = useStore((state) => state.setChatSessionId)
-
   const setChatActivity = useStore((state) => state.setChatActivity)
   const setThreadContext = useStore((state) => state.setThreadContext)
   const pendingChatMessage = useStore((state) => state.pendingChatMessage)
@@ -173,315 +29,12 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
   const isTyping = thread?.isTyping || false
   const thinkingActivity = thread?.thinkingActivity
 
-  // Use refs for values that need to be accessed in event handlers
-  const currentMessageIdRef = useRef<string | null>(null)
-  const streamBufferRef = useRef<string>('')
-  const pendingMessageRef = useRef<{ content: string; assistantMsgId: string } | null>(null)
-  const isLoadingAgentRef = useRef<boolean>(false)
-  const messageCompletedRef = useRef<boolean>(false) // Track if last message was completed (result received)
-  const toolUsedRef = useRef<boolean>(false) // Track if a tool_use block was seen (next text = new turn)
-
   // Get agents from workflow (based on current project type)
   const { agents } = useWorkflow()
   const agent = agents.find((a) => a.id === agentId)
 
-  // Save thread when messages change
-  useEffect(() => {
-    if (thread && thread.messages.length > 0) {
-      debouncedSaveThread(agentId, thread)
-
-      // Also save to story chat history if this thread is linked to a story
-      if (thread.storyId && projectPath && agent) {
-        // Get the story title from the store
-        const stories = useStore.getState().stories
-        const story = stories.find(s => s.id === thread.storyId)
-        const storyTitle = story?.title || thread.storyId
-
-        debouncedSaveStoryChatHistory(
-          projectPath,
-          thread.storyId,
-          storyTitle,
-          agentId,
-          agent.name,
-          agent.role,
-          thread.messages,
-          thread.branchName
-        )
-      }
-    }
-  }, [agentId, thread, projectPath, agent])
-
-  // Helper to create a new assistant message for a new response turn
-  const createNewAssistantMessage = useCallback(() => {
-    const newMsgId = `msg-${Date.now()}`
-    addChatMessage(agentId, {
-      id: newMsgId,
-      role: 'assistant',
-      content: '',
-      timestamp: Date.now(),
-      status: 'streaming'
-    })
-    currentMessageIdRef.current = newMsgId
-    streamBufferRef.current = ''
-    messageCompletedRef.current = false
-    toolUsedRef.current = false
-    return newMsgId
-  }, [agentId, addChatMessage])
-
-  // Subscribe to chat events
-  useEffect(() => {
-    // Handle chat output
-    const unsubOutput = window.chatAPI.onChatOutput((event) => {
-      if (event.agentId !== agentId) return
-
-      // Skip message creation during agent load - show as status instead
-      if (event.isAgentLoad) {
-        // Update activity to show agent is loading
-        setChatActivity(agentId, 'Loading agent...')
-        return
-      }
-
-      // Parse stream-json output and extract text
-      const chunk = event.chunk
-      const lines = chunk.split('\n').filter(Boolean)
-
-      for (const line of lines) {
-        try {
-          const parsed = JSON.parse(line)
-
-          // Handle content_block_delta - streaming text
-          if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
-            const newText = parsed.delta.text
-
-            // If previous message was completed, tool was used, or no current message, create a new one
-            if (!currentMessageIdRef.current || messageCompletedRef.current || toolUsedRef.current) {
-              createNewAssistantMessage()
-              toolUsedRef.current = false // Reset after creating new message
-            }
-
-            streamBufferRef.current += newText
-
-            // Update existing message
-            if (currentMessageIdRef.current) {
-              const currentContent = useStore.getState().chatThreads[agentId]?.messages.find(
-                m => m.id === currentMessageIdRef.current
-              )?.content || ''
-
-              updateChatMessage(agentId, currentMessageIdRef.current, {
-                content: currentContent + newText,
-                status: 'streaming'
-              })
-            }
-          }
-
-          // Handle content_block_start for text blocks
-          if (parsed.type === 'content_block_start' && parsed.content_block?.type === 'text') {
-            // If previous message was completed, tool was used, or no current message, create a new one
-            if (!currentMessageIdRef.current || messageCompletedRef.current || toolUsedRef.current) {
-              createNewAssistantMessage()
-              toolUsedRef.current = false // Reset after creating new message
-            } else if (currentMessageIdRef.current) {
-              updateChatMessage(agentId, currentMessageIdRef.current, {
-                status: 'streaming'
-              })
-            }
-          }
-
-          // Handle assistant message (complete message format)
-          // Process text blocks FIRST, then tool_use blocks to avoid order-dependent issues
-          if (parsed.type === 'assistant' && parsed.message?.content) {
-            // First pass: handle all text blocks
-            for (const block of parsed.message.content) {
-              if (block.type === 'text' && block.text) {
-                // Clear activity when we get text content
-                setChatActivity(agentId, undefined)
-
-                // If previous message was completed, tool was used, or no current message, create a new one
-                if (!currentMessageIdRef.current || messageCompletedRef.current || toolUsedRef.current) {
-                  createNewAssistantMessage()
-                  toolUsedRef.current = false // Reset after creating new message
-                }
-
-                if (currentMessageIdRef.current) {
-                  // Append to existing content instead of replacing
-                  const currentContent = useStore.getState().chatThreads[agentId]?.messages.find(
-                    m => m.id === currentMessageIdRef.current
-                  )?.content || ''
-                  const newContent = currentContent ? currentContent + block.text : block.text
-
-                  updateChatMessage(agentId, currentMessageIdRef.current, {
-                    content: newContent,
-                    status: 'streaming'
-                  })
-                  streamBufferRef.current = newContent
-                }
-              }
-            }
-            // Second pass: handle tool_use blocks (after all text is processed)
-            for (const block of parsed.message.content) {
-              if (block.type === 'tool_use' && block.name) {
-                const activity = getToolActivity(block.name, block.input as Record<string, unknown>)
-                setChatActivity(agentId, activity)
-                // Only mark message complete and set toolUsedRef if message has actual content
-                // This prevents empty placeholders from being "completed" when Claude starts with tools
-                if (currentMessageIdRef.current && streamBufferRef.current) {
-                  updateChatMessage(agentId, currentMessageIdRef.current, { status: 'complete' })
-                  toolUsedRef.current = true
-                }
-              }
-            }
-          }
-
-          // Handle result - finalize message with stats
-          if (parsed.type === 'result') {
-            setChatActivity(agentId, undefined) // Clear activity indicator
-            if (currentMessageIdRef.current) {
-              // Extract LLM stats from result
-              const stats: LLMStats | undefined = parsed.usage ? {
-                model: parsed.modelUsage ? Object.keys(parsed.modelUsage)[0] || 'unknown' : 'unknown',
-                inputTokens: parsed.usage.input_tokens || 0,
-                outputTokens: parsed.usage.output_tokens || 0,
-                cacheReadTokens: parsed.usage.cache_read_input_tokens,
-                cacheWriteTokens: parsed.usage.cache_creation_input_tokens,
-                totalCostUsd: parsed.total_cost_usd,
-                durationMs: parsed.duration_ms,
-                apiDurationMs: parsed.duration_api_ms
-              } : undefined
-
-              updateChatMessage(agentId, currentMessageIdRef.current, { status: 'complete', stats })
-              incrementUnread(agentId)
-              // Show system notification if not viewing this chat and app not focused
-              if (useStore.getState().selectedChatAgent !== agentId && agent) {
-                showChatNotification(agent, streamBufferRef.current)
-              }
-            }
-            // Mark message as completed so next content creates a new message
-            // Don't clear currentMessageIdRef yet - wait for next content or exit
-            messageCompletedRef.current = true
-            streamBufferRef.current = ''
-          }
-        } catch {
-          // Not JSON, ignore
-        }
-      }
-    })
-
-    // Handle agent loaded event - send pending message if any
-    const unsubAgentLoaded = window.chatAPI.onAgentLoaded(async (event) => {
-      if (event.agentId !== agentId) return
-
-      console.log('[ChatThread] Agent loaded:', event)
-      isLoadingAgentRef.current = false
-      setChatActivity(agentId, undefined) // Clear loading activity
-
-      // Store session ID
-      if (event.sessionId) {
-        setChatSessionId(agentId, event.sessionId)
-      }
-
-      // If there's a pending message, send it now
-      if (pendingMessageRef.current && event.sessionId && event.code === 0) {
-        const { content, assistantMsgId } = pendingMessageRef.current
-        pendingMessageRef.current = null
-
-        // Set up for streaming response
-        currentMessageIdRef.current = assistantMsgId
-        streamBufferRef.current = ''
-        messageCompletedRef.current = false
-        toolUsedRef.current = false
-
-        // Wait a moment for session file to be fully written to disk
-        await new Promise(resolve => setTimeout(resolve, 150))
-
-        // Send the actual user message with the session ID
-        const currentAiTool = useStore.getState().aiTool
-        const currentClaudeModel = useStore.getState().claudeModel
-        const result = await window.chatAPI.sendMessage({
-          agentId,
-          projectPath: projectPath!,
-          message: content,
-          sessionId: event.sessionId,
-          tool: currentAiTool,
-          model: currentAiTool === 'claude-code' ? currentClaudeModel : undefined
-        })
-
-        if (!result.success) {
-          updateChatMessage(agentId, assistantMsgId, {
-            content: result.error || 'Failed to send message',
-            status: 'error'
-          })
-          setChatTyping(agentId, false)
-          currentMessageIdRef.current = null
-        }
-      } else if (pendingMessageRef.current && event.code !== 0) {
-        // Agent load failed, show error
-        const { assistantMsgId } = pendingMessageRef.current
-        pendingMessageRef.current = null
-        updateChatMessage(agentId, assistantMsgId, {
-          content: event.error || 'Failed to load agent',
-          status: 'error'
-        })
-        setChatTyping(agentId, false)
-        setChatActivity(agentId, undefined) // Clear activity on error
-      }
-    })
-
-    // Handle process exit (for message responses)
-    const unsubExit = window.chatAPI.onChatExit((event) => {
-      if (event.agentId !== agentId) return
-
-      setChatTyping(agentId, false)
-
-      // Finalize any pending message
-      if (currentMessageIdRef.current) {
-        // Get existing content from store - don't overwrite with 'Response completed.'
-        // if content already exists (result event already finalized the content)
-        const existingMessage = useStore.getState().chatThreads[agentId]?.messages.find(
-          m => m.id === currentMessageIdRef.current
-        )
-        const existingContent = existingMessage?.content || ''
-        const finalContent = streamBufferRef.current || existingContent || 'Response completed.'
-
-        // Only update content if we have new content to add
-        const updatePayload: { content?: string; status: 'complete' | 'error' } = {
-          status: event.code === 0 ? 'complete' : 'error'
-        }
-        if (streamBufferRef.current || !existingContent) {
-          updatePayload.content = finalContent
-        }
-
-        updateChatMessage(agentId, currentMessageIdRef.current, updatePayload)
-        incrementUnread(agentId)
-        // Show system notification if not viewing this chat and app not focused
-        if (useStore.getState().selectedChatAgent !== agentId && agent) {
-          showChatNotification(agent, finalContent)
-        }
-
-        // Store session ID for conversation continuity, but NOT if the response was
-        // just "Response completed." (fallback when no actual content was received)
-        // This ensures the next message starts a fresh session instead of resuming
-        if (event.sessionId && finalContent !== 'Response completed.') {
-          setChatSessionId(agentId, event.sessionId)
-        }
-      } else {
-        // No pending message - still store session ID for future use
-        if (event.sessionId) {
-          setChatSessionId(agentId, event.sessionId)
-        }
-      }
-      // Reset all refs on process exit
-      currentMessageIdRef.current = null
-      streamBufferRef.current = ''
-      messageCompletedRef.current = false
-      toolUsedRef.current = false
-    })
-
-    return () => {
-      unsubOutput()
-      unsubAgentLoaded()
-      unsubExit()
-    }
-  }, [agentId, projectPath, updateChatMessage, setChatTyping, setChatActivity, incrementUnread, setChatSessionId, createNewAssistantMessage])
+  // Get global handler context for registering pending messages
+  const { setPendingMessage, setCurrentMessageId, clearAgentState } = useChatMessageHandlerContext()
 
   // Sync isTyping state with actual process status on mount/agent change
   // This detects crashed processes that didn't send proper exit events
@@ -512,19 +65,14 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
             })
           }
 
-          // Clear any refs
-          currentMessageIdRef.current = null
-          streamBufferRef.current = ''
-          pendingMessageRef.current = null
-          isLoadingAgentRef.current = false
-          messageCompletedRef.current = false
-          toolUsedRef.current = false
+          // Clear global handler state for this agent
+          clearAgentState(agentId)
         }
       }
     }
 
     syncAgentStatus()
-  }, [agentId, setChatTyping, setChatActivity, updateChatMessage])
+  }, [agentId, setChatTyping, setChatActivity, updateChatMessage, clearAgentState])
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -573,8 +121,8 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
     if (!hasSession) {
       // First message - need to load the agent first, then send the message
       console.log('[ChatThread] No session, loading agent first...')
-      isLoadingAgentRef.current = true
-      pendingMessageRef.current = { content: content.trim(), assistantMsgId }
+      // Register pending message with global handler
+      setPendingMessage(agentId, content.trim(), assistantMsgId)
 
       try {
         const currentProjectType = useStore.getState().projectType || 'bmm'
@@ -594,25 +142,21 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
             status: 'error'
           })
           setChatTyping(agentId, false)
-          pendingMessageRef.current = null
-          isLoadingAgentRef.current = false
+          clearAgentState(agentId)
         }
-        // If successful, the onAgentLoaded handler will send the pending message
+        // If successful, the global handler's onAgentLoaded will send the pending message
       } catch (error) {
         updateChatMessage(agentId, assistantMsgId, {
           content: error instanceof Error ? error.message : 'Failed to load agent',
           status: 'error'
         })
         setChatTyping(agentId, false)
-        pendingMessageRef.current = null
-        isLoadingAgentRef.current = false
+        clearAgentState(agentId)
       }
     } else {
       // Have session - send message directly with --resume
-      currentMessageIdRef.current = assistantMsgId
-      streamBufferRef.current = ''
-      messageCompletedRef.current = false
-      toolUsedRef.current = false
+      // Register the message ID with global handler
+      setCurrentMessageId(agentId, assistantMsgId)
 
       try {
         const currentAiTool = useStore.getState().aiTool
@@ -632,7 +176,7 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
             status: 'error'
           })
           setChatTyping(agentId, false)
-          currentMessageIdRef.current = null
+          clearAgentState(agentId)
         }
       } catch (error) {
         updateChatMessage(agentId, assistantMsgId, {
@@ -640,39 +184,33 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
           status: 'error'
         })
         setChatTyping(agentId, false)
-        currentMessageIdRef.current = null
+        clearAgentState(agentId)
       }
     }
-  }, [agentId, projectPath, addChatMessage, setChatTyping, updateChatMessage])
+  }, [agentId, projectPath, addChatMessage, setChatTyping, updateChatMessage, setPendingMessage, setCurrentMessageId, clearAgentState])
 
   const handleCancel = useCallback(async () => {
     try {
       const result = await window.chatAPI.cancelMessage(agentId)
       if (result) {
         console.log('[ChatThread] Cancelled message for agent:', agentId)
-        // Update the current streaming message to show it was cancelled
-        if (currentMessageIdRef.current) {
-          const currentContent = useStore.getState().chatThreads[agentId]?.messages.find(
-            m => m.id === currentMessageIdRef.current
-          )?.content || ''
-
-          updateChatMessage(agentId, currentMessageIdRef.current, {
-            content: currentContent + '\n\n*[Response cancelled]*',
+        // Find the current streaming/pending message and update it
+        const currentMessages = useStore.getState().chatThreads[agentId]?.messages || []
+        const pendingMsg = currentMessages.find(m => m.status === 'pending' || m.status === 'streaming')
+        if (pendingMsg) {
+          const currentContent = pendingMsg.content || ''
+          updateChatMessage(agentId, pendingMsg.id, {
+            content: currentContent + (currentContent ? '\n\n' : '') + '*[Response cancelled]*',
             status: 'complete'
           })
-          currentMessageIdRef.current = null
         }
         setChatTyping(agentId, false)
-        streamBufferRef.current = ''
-        pendingMessageRef.current = null
-        isLoadingAgentRef.current = false
-        messageCompletedRef.current = false
-        toolUsedRef.current = false
+        clearAgentState(agentId)
       }
     } catch (error) {
       console.error('[ChatThread] Failed to cancel:', error)
     }
-  }, [agentId, setChatTyping, updateChatMessage])
+  }, [agentId, setChatTyping, updateChatMessage, clearAgentState])
 
   // Track pending message ID to prevent duplicate sends
   const processedPendingRef = useRef<string | null>(null)

@@ -18,6 +18,7 @@ import StatusBar from './components/StatusBar'
 import { AgentChat } from './components/AgentChat'
 import StatusHistoryPanel from './components/StatusHistoryPanel/StatusHistoryPanel'
 import { FullCycleDialog, FullCycleOrchestrator } from './components/FullCycleDialog'
+import GlobalChatHandler from './components/GlobalChatHandler'
 
 const AGENT_PANEL_WIDTH = 500
 
@@ -107,7 +108,7 @@ export default function App() {
         {!projectPath ? (
           <WelcomeDialog />
         ) : (
-          <>
+          <GlobalChatHandler>
             <Box
               sx={{
                 display: 'flex',
@@ -227,7 +228,7 @@ export default function App() {
             <StatusHistoryPanel />
             <FullCycleDialog />
             <FullCycleOrchestrator />
-          </>
+          </GlobalChatHandler>
         )}
       </Box>
     </ThemeProvider>
