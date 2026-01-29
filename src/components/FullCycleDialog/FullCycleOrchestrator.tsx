@@ -173,19 +173,10 @@ export default function FullCycleOrchestrator() {
         return patterns.some(p => p.test(text))
       }
 
-      // Detect if output asks about handling issues/problems
-      const isIssueHandlingQuestion = (text: string): boolean => {
-        const patterns = [
-          /what should I do with (these|the) issues/i,
-          /what would you like me to do/i,
-          /how (should|would you like me to) (handle|address|fix|resolve)/i,
-          /should I (fix|address|resolve|handle) (these|the|this)/i,
-          /do you want me to (fix|address|resolve|handle)/i,
-          /want me to (fix|address|resolve|handle) (these|the|this)/i,
-          /shall I (fix|address|resolve|handle)/i,
-          /would you like me to (fix|correct|update|modify)/i,
-        ]
-        return patterns.some(p => p.test(text))
+      // Detect if output asks about issues with a [1] fix option
+      const hasFixOption = (text: string): boolean => {
+        // Simple: if there's "[1]" with "fix" nearby, respond with 1
+        return /\[1\].*fix/i.test(text) || /fix.*\[1\]/i.test(text)
       }
 
       // Subscribe to output ONLY for accumulating chunks for pattern detection
@@ -354,10 +345,17 @@ export default function FullCycleOrchestrator() {
         const lastChunk = accumulatedOutput.slice(-500) // Check last ~500 chars
         const endsWithCompletion = /(?:ready for commit|story is clean|completed|done|finished|no (?:issues|errors|problems)|all (?:good|set|done))[^?]*$/i.test(lastChunk)
 
-        // Check for issue handling questions - auto-respond to fix them
-        const hasRecentIssueQuestion = isIssueHandlingQuestion(lastChunk)
-        if (hasRecentIssueQuestion && currentSessionId) {
-          const sent = await sendAutoResponse('Yes, please fix all the issues', 'Detected issue handling question, auto-responding to fix issues')
+        // Check for [1] Fix option - just respond with "1"
+        if (hasFixOption(lastChunk) && currentSessionId) {
+          const sent = await sendAutoResponse('1', 'Detected [1] fix option, responding with "1"')
+          if (sent) return // Wait for next exit event
+          return // Error already handled
+        }
+
+        // Check for other multiple choice prompts
+        const hasRecentPrompt = isMultipleChoicePrompt(lastChunk)
+        if (hasRecentPrompt && currentSessionId) {
+          const sent = await sendAutoResponse('1', 'Detected multiple choice prompt, auto-responding with "1"')
           if (sent) return // Wait for next exit event
           return // Error already handled
         }
@@ -368,15 +366,6 @@ export default function FullCycleOrchestrator() {
           appendFullCycleLog(`${agentId} completed successfully`)
           resolve('success')
           return
-        }
-
-        // Check for multiple choice prompts that need auto-response (e.g., fix options)
-        // Only respond if the prompt appears near the END of output (not from earlier)
-        const hasRecentPrompt = isMultipleChoicePrompt(lastChunk)
-        if (hasRecentPrompt && currentSessionId) {
-          const sent = await sendAutoResponse('1', 'Detected multiple choice prompt, auto-responding with "1" (fix automatically)')
-          if (sent) return // Wait for next exit event
-          return // Error already handled
         }
 
         // No question detected, mark as complete
