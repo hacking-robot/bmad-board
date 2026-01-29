@@ -269,7 +269,7 @@ export interface GitAPI {
   createBranch: (projectPath: string, branchName: string, fromBranch?: string) => Promise<{ success: boolean; error?: string; alreadyExists?: boolean }>
   branchExists: (projectPath: string, branchName: string) => Promise<{ exists: boolean }>
   hasChanges: (projectPath: string) => Promise<{ hasChanges: boolean; error?: string }>
-  commit: (projectPath: string, message: string) => Promise<{ success: boolean; error?: string }>
+  commit: (projectPath: string, message: string, noVerify?: boolean) => Promise<{ success: boolean; error?: string }>
   getBranchActivity: (projectPath: string, branchName: string) => Promise<GitBranchActivity>
   getDefaultBranch: (projectPath: string) => Promise<{ branch?: string; error?: string }>
   getChangedFiles: (projectPath: string, baseBranch: string, featureBranch?: string) => Promise<{ files?: GitChangedFile[]; mergeBase?: string; error?: string }>
@@ -290,7 +290,7 @@ const gitAPI: GitAPI = {
   createBranch: (projectPath, branchName, fromBranch) => ipcRenderer.invoke('git-create-branch', projectPath, branchName, fromBranch),
   branchExists: (projectPath, branchName) => ipcRenderer.invoke('git-branch-exists', projectPath, branchName),
   hasChanges: (projectPath) => ipcRenderer.invoke('git-has-changes', projectPath),
-  commit: (projectPath, message) => ipcRenderer.invoke('git-commit', projectPath, message),
+  commit: (projectPath, message, noVerify) => ipcRenderer.invoke('git-commit', projectPath, message, noVerify),
   getBranchActivity: (projectPath, branchName) => ipcRenderer.invoke('git-branch-activity', projectPath, branchName),
   getDefaultBranch: (projectPath) => ipcRenderer.invoke('git-default-branch', projectPath),
   getChangedFiles: (projectPath, baseBranch, featureBranch) => ipcRenderer.invoke('git-changed-files', projectPath, baseBranch, featureBranch),

@@ -14,10 +14,12 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import GroupsIcon from '@mui/icons-material/Groups'
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline'
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined'
+import RocketLaunchIcon from '@mui/icons-material/RocketLaunch'
 import { Story, EPIC_COLORS, AI_TOOLS } from '../../types'
 import type { AgentDefinition } from '../../types/flow'
 import { useStore } from '../../store'
 import { useWorkflow } from '../../hooks/useWorkflow'
+import { useFullCycle } from '../../hooks/useFullCycle'
 import { transformCommand } from '../../utils/commandTransform'
 
 interface StoryCardProps {
@@ -48,6 +50,7 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
   const toolSupportsHeadless = selectedToolInfo?.cli.supportsHeadless ?? false
 
   const { getNextSteps, getAgent } = useWorkflow()
+  const { fullCycle, start: startFullCycle } = useFullCycle()
 
   // Get effective status (may be overridden to 'human-review' at app level)
   const effectiveStatus = getEffectiveStatus(story)
@@ -299,6 +302,17 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
       branchName: storyBranchName
     })
   }
+
+  // Handle starting full cycle automation
+  const handleStartFullCycle = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    handleMenuClose()
+    startFullCycle(story.id)
+  }
+
+  // Check if full cycle can be started (available from any status except done)
+  const canStartFullCycle = toolSupportsHeadless && effectiveStatus !== 'done'
+  const isFullCycleRunning = fullCycle.isRunning && fullCycle.storyId === story.id
 
   return (
     <>
@@ -556,6 +570,35 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
             Actions
           </Typography>
         </Box>
+
+        {/* Full Cycle Automation Button - Only for backlog/ready-for-dev with headless support */}
+        {canStartFullCycle && (
+          <Box sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: 'divider', bgcolor: 'primary.lighter' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <RocketLaunchIcon sx={{ fontSize: 18, color: 'primary.main' }} />
+              <Box sx={{ flex: 1 }}>
+                <Typography variant="body2" fontWeight={600} color="primary.main">
+                  Full Cycle Automation
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {effectiveStatus === 'backlog' || effectiveStatus === 'ready-for-dev'
+                    ? 'Create branch, implement, review, and complete'
+                    : 'Continue with review and complete remaining steps'}
+                </Typography>
+              </Box>
+              <Button
+                size="small"
+                variant="contained"
+                onClick={handleStartFullCycle}
+                disabled={fullCycle.isRunning}
+                startIcon={isFullCycleRunning ? <CircularProgress size={12} color="inherit" /> : <RocketLaunchIcon />}
+                sx={{ fontSize: '0.7rem', py: 0.5, px: 1.5 }}
+              >
+                {isFullCycleRunning ? 'Running...' : 'Run'}
+              </Button>
+            </Box>
+          </Box>
+        )}
 
         {/* Step 1: Git Branch Command - Only for ready-for-dev when branch doesn't exist yet */}
         {effectiveStatus === 'ready-for-dev' && !branchExists && !isOnStoryBranch && (

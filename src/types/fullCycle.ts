@@ -1,0 +1,247 @@
+// Full Cycle Automation Types
+
+export type FullCycleStepType = 'git' | 'agent' | 'status'
+
+export type FullCycleStepStatus = 'pending' | 'running' | 'completed' | 'skipped' | 'error'
+
+export interface FullCycleStep {
+  id: string
+  name: string
+  type: FullCycleStepType
+  description: string
+  // For agent steps
+  agentId?: string
+  command?: string
+  // For git steps
+  gitAction?: 'create-branch' | 'commit' | 'merge'
+  commitMessage?: string
+}
+
+export interface FullCycleState {
+  isRunning: boolean
+  storyId: string | null
+  currentStep: number
+  totalSteps: number
+  stepName: string
+  stepType: FullCycleStepType
+  stepStatus: FullCycleStepStatus
+  error: string | null
+  logs: string[]
+  sessionId: string | null // For Claude session continuity
+  minimized: boolean
+  // Track step statuses for the stepper
+  stepStatuses: FullCycleStepStatus[]
+  // Timestamps for duration tracking
+  startTime: number | null
+  stepStartTime: number | null
+}
+
+// Initial state for the full cycle
+export const initialFullCycleState: FullCycleState = {
+  isRunning: false,
+  storyId: null,
+  currentStep: 0,
+  totalSteps: 0,
+  stepName: '',
+  stepType: 'agent',
+  stepStatus: 'pending',
+  error: null,
+  logs: [],
+  sessionId: null,
+  minimized: false,
+  stepStatuses: [],
+  startTime: null,
+  stepStartTime: null
+}
+
+// Full cycle step definitions for BMM projects
+export const FULL_CYCLE_STEPS_BMM: FullCycleStep[] = [
+  {
+    id: 'create-story',
+    name: 'Create Story File',
+    type: 'agent',
+    description: 'SM agent creates story markdown with acceptance criteria',
+    agentId: 'sm',
+    command: '/bmad:bmm:workflows:create-story'
+  },
+  {
+    id: 'create-branch',
+    name: 'Create Git Branch',
+    type: 'git',
+    description: 'Create a feature branch for this story',
+    gitAction: 'create-branch'
+  },
+  {
+    id: 'commit-story',
+    name: 'Commit Story',
+    type: 'git',
+    description: 'Commit the new story file',
+    gitAction: 'commit',
+    commitMessage: 'docs: add story file'
+  },
+  {
+    id: 'implement',
+    name: 'Implement Story',
+    type: 'agent',
+    description: 'DEV agent implements the feature',
+    agentId: 'dev',
+    command: '/bmad:bmm:workflows:dev-story'
+  },
+  {
+    id: 'commit-implementation',
+    name: 'Commit Implementation',
+    type: 'git',
+    description: 'Commit all implementation changes',
+    gitAction: 'commit',
+    commitMessage: 'feat: implement story'
+  },
+  {
+    id: 'code-review-1',
+    name: 'Code Review #1',
+    type: 'agent',
+    description: 'DEV agent reviews the code',
+    agentId: 'dev',
+    command: '/bmad:bmm:workflows:code-review'
+  },
+  {
+    id: 'commit-review-1',
+    name: 'Commit Review Fixes',
+    type: 'git',
+    description: 'Commit any fixes from first review',
+    gitAction: 'commit',
+    commitMessage: 'fix: address code review feedback'
+  },
+  {
+    id: 'code-review-2',
+    name: 'Code Review #2',
+    type: 'agent',
+    description: 'Second DEV review for verification',
+    agentId: 'dev',
+    command: '/bmad:bmm:workflows:code-review'
+  },
+  {
+    id: 'commit-review-2',
+    name: 'Commit Final Fixes',
+    type: 'git',
+    description: 'Commit any remaining fixes',
+    gitAction: 'commit',
+    commitMessage: 'fix: final review fixes'
+  },
+  {
+    id: 'mark-done',
+    name: 'Mark Done',
+    type: 'status',
+    description: 'Update story status to done'
+  },
+  {
+    id: 'commit-done',
+    name: 'Commit Status',
+    type: 'git',
+    description: 'Commit the done status update',
+    gitAction: 'commit',
+    commitMessage: 'docs: mark story as done'
+  },
+  {
+    id: 'merge-to-base',
+    name: 'Merge to Base',
+    type: 'git',
+    description: 'Merge story branch back to base branch',
+    gitAction: 'merge'
+  }
+]
+
+// Full cycle step definitions for BMGD projects (uses game-* agent IDs)
+export const FULL_CYCLE_STEPS_BMGD: FullCycleStep[] = [
+  {
+    id: 'create-story',
+    name: 'Create Story File',
+    type: 'agent',
+    description: 'Game Scrum Master agent creates story markdown with acceptance criteria',
+    agentId: 'game-scrum-master',
+    command: '/bmad:bmgd:workflows:create-story'
+  },
+  {
+    id: 'create-branch',
+    name: 'Create Git Branch',
+    type: 'git',
+    description: 'Create a feature branch for this story',
+    gitAction: 'create-branch'
+  },
+  {
+    id: 'commit-story',
+    name: 'Commit Story',
+    type: 'git',
+    description: 'Commit the new story file',
+    gitAction: 'commit',
+    commitMessage: 'docs: add story file'
+  },
+  {
+    id: 'implement',
+    name: 'Implement Story',
+    type: 'agent',
+    description: 'Game DEV agent implements the feature',
+    agentId: 'game-dev',
+    command: '/bmad:bmgd:workflows:dev-story'
+  },
+  {
+    id: 'commit-implementation',
+    name: 'Commit Implementation',
+    type: 'git',
+    description: 'Commit all implementation changes',
+    gitAction: 'commit',
+    commitMessage: 'feat: implement story'
+  },
+  {
+    id: 'code-review-1',
+    name: 'Code Review #1',
+    type: 'agent',
+    description: 'Game DEV agent reviews the code',
+    agentId: 'game-dev',
+    command: '/bmad:bmgd:workflows:code-review'
+  },
+  {
+    id: 'commit-review-1',
+    name: 'Commit Review Fixes',
+    type: 'git',
+    description: 'Commit any fixes from first review',
+    gitAction: 'commit',
+    commitMessage: 'fix: address code review feedback'
+  },
+  {
+    id: 'code-review-2',
+    name: 'Code Review #2',
+    type: 'agent',
+    description: 'Second Game DEV review for verification',
+    agentId: 'game-dev',
+    command: '/bmad:bmgd:workflows:code-review'
+  },
+  {
+    id: 'commit-review-2',
+    name: 'Commit Final Fixes',
+    type: 'git',
+    description: 'Commit any remaining fixes',
+    gitAction: 'commit',
+    commitMessage: 'fix: final review fixes'
+  },
+  {
+    id: 'mark-done',
+    name: 'Mark Done',
+    type: 'status',
+    description: 'Update story status to done'
+  },
+  {
+    id: 'commit-done',
+    name: 'Commit Status',
+    type: 'git',
+    description: 'Commit the done status update',
+    gitAction: 'commit',
+    commitMessage: 'docs: mark story as done'
+  },
+  {
+    id: 'merge-to-base',
+    name: 'Merge to Base',
+    type: 'git',
+    description: 'Merge story branch back to base branch',
+    gitAction: 'merge'
+  }
+]

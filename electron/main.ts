@@ -917,7 +917,7 @@ ipcMain.handle('git-has-changes', async (_, projectPath: string) => {
 })
 
 // Stage all changes and commit with a message
-ipcMain.handle('git-commit', async (_, projectPath: string, message: string) => {
+ipcMain.handle('git-commit', async (_, projectPath: string, message: string, noVerify?: boolean) => {
   // Security: Basic validation of commit message
   if (!message || message.length > 1000) {
     return { success: false, error: 'Invalid commit message' }
@@ -929,8 +929,12 @@ ipcMain.handle('git-commit', async (_, projectPath: string, message: string) => 
     return { success: false, error: `Failed to stage changes: ${addResult.error}` }
   }
 
-  // Then commit
-  const commitResult = runGitCommand(['commit', '-m', message], projectPath)
+  // Then commit (optionally bypassing hooks for automated workflows)
+  const commitArgs = ['commit', '-m', message]
+  if (noVerify) {
+    commitArgs.push('--no-verify')
+  }
+  const commitResult = runGitCommand(commitArgs, projectPath)
 
   if (commitResult.error) {
     // Check for common errors
