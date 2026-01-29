@@ -172,6 +172,21 @@ export default function FullCycleOrchestrator() {
         return patterns.some(p => p.test(text))
       }
 
+      // Detect if output asks about handling issues/problems
+      const isIssueHandlingQuestion = (text: string): boolean => {
+        const patterns = [
+          /what should I do with (these|the) issues/i,
+          /what would you like me to do/i,
+          /how (should|would you like me to) (handle|address|fix|resolve)/i,
+          /should I (fix|address|resolve|handle) (these|the|this)/i,
+          /do you want me to (fix|address|resolve|handle)/i,
+          /want me to (fix|address|resolve|handle) (these|the|this)/i,
+          /shall I (fix|address|resolve|handle)/i,
+          /would you like me to (fix|correct|update|modify)/i,
+        ]
+        return patterns.some(p => p.test(text))
+      }
+
       // Subscribe to output ONLY for accumulating chunks for pattern detection
       // Message updates are handled by the global handler
       const unsubOutput = window.chatAPI.onChatOutput((event) => {
@@ -336,6 +351,14 @@ export default function FullCycleOrchestrator() {
         // This prevents false positives from earlier prompts in the accumulated output
         const lastChunk = accumulatedOutput.slice(-500) // Check last ~500 chars
         const endsWithCompletion = /(?:ready for commit|story is clean|completed|done|finished|no (?:issues|errors|problems)|all (?:good|set|done))[^?]*$/i.test(lastChunk)
+
+        // Check for issue handling questions - auto-respond to fix them
+        const hasRecentIssueQuestion = isIssueHandlingQuestion(lastChunk)
+        if (hasRecentIssueQuestion && currentSessionId) {
+          const sent = await sendAutoResponse('Yes, please fix all the issues', 'Detected issue handling question, auto-responding to fix issues')
+          if (sent) return // Wait for next exit event
+          return // Error already handled
+        }
 
         if (endsWithCompletion) {
           resolved = true
