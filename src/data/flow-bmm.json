@@ -143,6 +143,18 @@
           "agentId": "barry",
           "command": "/bmad:bmm:workflows:quick-spec",
           "description": "Use Quick Flow for quick specification"
+        },
+        {
+          "label": "Code Assistant",
+          "agentId": "code-assistant",
+          "command": "/bmad:bmm:agents:code-assistant",
+          "description": "Get AI feedback on your code against story requirements"
+        },
+        {
+          "label": "Pair Programmer",
+          "agentId": "pair-programmer",
+          "command": "toggle-pair-programmer",
+          "description": "Open real-time pair programmer panel"
         }
       ]
     },

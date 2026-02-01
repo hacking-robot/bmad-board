@@ -1,0 +1,21 @@
+{
+  "id": "ws_3ca716f5",
+  "name": "bmadboard",
+  "slug": "bmadboard",
+  "defaults": {
+    "model": "claude-sonnet-4-5-20250929",
+    "permissionMode": "safe",
+    "cyclablePermissionModes": [
+      "safe",
+      "ask",
+      "allow-all"
+    ],
+    "thinkingLevel": "think",
+    "enabledSourceSlugs": []
+  },
+  "localMcpServers": {
+    "enabled": true
+  },
+  "createdAt": 1769787577055,
+  "updatedAt": 1769787577055
+}

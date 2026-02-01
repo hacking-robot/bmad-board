@@ -293,3 +293,13 @@ export interface StatusChangeEntry {
 // NOTE: BMAD agent definitions are now in src/data/flow-bmm.json and src/data/flow-bmgd.json
 // Use the useWorkflow hook to access agent data
 
+// VSCode Bridge types
+export interface VSCodeTab {
+  fileName: string
+  filePath: string
+  language: string
+  content: string
+  lineCount: number
+  isDirty: boolean
+}
+

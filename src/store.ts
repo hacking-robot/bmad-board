@@ -330,6 +330,13 @@ interface AppState {
   fullCycleDialogOpen: boolean
   setFullCycleDialogOpen: (open: boolean) => void
 
+  // Pair Programmer
+  pairProgrammingEnabledStoryId: string | null
+  setPairProgrammingEnabledStoryId: (storyId: string | null) => void
+  togglePairProgrammingForStory: (storyId: string) => void
+  pairProgrammingPanelOpen: boolean
+  setPairProgrammingPanelOpen: (open: boolean) => void
+
   // Computed - filtered stories
   getFilteredStories: () => Story[]
 }
@@ -891,6 +898,17 @@ export const useStore = create<AppState>()(
       fullCycle: initialFullCycleState,
       fullCycleDialogOpen: false,
       setFullCycleDialogOpen: (open) => set({ fullCycleDialogOpen: open }),
+
+      // Pair Programmer
+      pairProgrammingEnabledStoryId: null,
+      setPairProgrammingEnabledStoryId: (storyId) => set({ pairProgrammingEnabledStoryId: storyId }),
+      togglePairProgrammingForStory: (storyId) => set((state) => ({
+        pairProgrammingEnabledStoryId: state.pairProgrammingEnabledStoryId === storyId ? null : storyId,
+        // Also open the panel when enabling
+        pairProgrammingPanelOpen: state.pairProgrammingEnabledStoryId !== storyId
+      })),
+      pairProgrammingPanelOpen: false,
+      setPairProgrammingPanelOpen: (open) => set({ pairProgrammingPanelOpen: open }),
       startFullCycle: (storyId, totalSteps) => set({
         fullCycle: {
           ...initialFullCycleState,

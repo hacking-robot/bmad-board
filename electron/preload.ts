@@ -99,6 +99,13 @@ export interface AppSettings {
   lastViewedStatusHistoryAt: number
 }
 
+export interface FileChange {
+  filename: string
+  fullPath: string
+  isSourceFile: boolean
+  timestamp: number
+}
+
 export interface FileAPI {
   selectDirectory: () => Promise<{ path?: string; projectType?: ProjectType; isNewProject?: boolean; error?: string } | null>
   readFile: (filePath: string) => Promise<{ content?: string; error?: string }>
@@ -111,6 +118,7 @@ export interface FileAPI {
   showNotification: (title: string, body: string) => Promise<void>
   checkBmadInGitignore: (projectPath: string) => Promise<{ inGitignore: boolean; error?: string }>
   onFilesChanged: (callback: () => void) => () => void
+  onFileChanged: (callback: (change: FileChange) => void) => () => void
   onShowKeyboardShortcuts: (callback: () => void) => () => void
 }
 
@@ -130,6 +138,15 @@ const fileAPI: FileAPI = {
     ipcRenderer.on('files-changed', listener)
     // Return cleanup function
     return () => ipcRenderer.removeListener('files-changed', listener)
+  },
+  onFileChanged: (callback: (change: FileChange) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, change: FileChange) => {
+      console.log('[Preload] file-changed IPC event received:', change)
+      callback(change)
+    }
+    ipcRenderer.on('file-changed', listener)
+    // Return cleanup function
+    return () => ipcRenderer.removeListener('file-changed', listener)
   },
   onShowKeyboardShortcuts: (callback: () => void) => {
     const listener = () => callback()
@@ -484,6 +501,32 @@ const cliAPI: CLIAPI = {
 
 contextBridge.exposeInMainWorld('cliAPI', cliAPI)
 
+// VSCode Bridge API types
+export interface VSCodeTab {
+  fileName: string
+  filePath: string
+  language: string
+  content: string
+  lineCount: number
+  isDirty: boolean
+}
+
+export interface VSCodeBridgeAPI {
+  testBridge: (bridgeUrl?: string) => Promise<{ success: boolean; error?: string }>
+  fetchTabs: (bridgeUrl?: string) => Promise<{
+    success: boolean
+    data?: { tabs: VSCodeTab[]; activeTab: VSCodeTab }
+    error?: string
+  }>
+}
+
+const vscodeAPI: VSCodeBridgeAPI = {
+  testBridge: (bridgeUrl) => ipcRenderer.invoke('vscode-test-bridge', bridgeUrl),
+  fetchTabs: (bridgeUrl) => ipcRenderer.invoke('vscode-fetch-tabs', bridgeUrl)
+}
+
+contextBridge.exposeInMainWorld('vscodeAPI', vscodeAPI)
+
 declare global {
   interface Window {
     fileAPI: FileAPI
@@ -491,5 +534,6 @@ declare global {
     gitAPI: GitAPI
     chatAPI: ChatAPI
     cliAPI: CLIAPI
+    vscodeAPI: VSCodeBridgeAPI
   }
 }

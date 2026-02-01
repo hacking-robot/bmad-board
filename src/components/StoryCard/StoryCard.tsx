@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Card, CardContent, Typography, Box, Chip, Button, CircularProgress, Tooltip, IconButton, Menu, Snackbar } from '@mui/material'
+import { Card, CardContent, Typography, Box, Chip, Button, CircularProgress, Tooltip, IconButton, Menu, Snackbar, Switch } from '@mui/material'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import DescriptionIcon from '@mui/icons-material/Description'
@@ -12,6 +12,7 @@ import ChecklistIcon from '@mui/icons-material/Checklist'
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline'
 import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import GroupsIcon from '@mui/icons-material/Groups'
+import GroupIcon from '@mui/icons-material/Group'
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline'
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined'
 import RocketLaunchIcon from '@mui/icons-material/RocketLaunch'
@@ -44,6 +45,8 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
   const setPendingChatMessage = useStore((state) => state.setPendingChatMessage)
   const clearChatThread = useStore((state) => state.clearChatThread)
   const chatThreads = useStore((state) => state.chatThreads)
+  const pairProgrammingEnabledStoryId = useStore((state) => state.pairProgrammingEnabledStoryId)
+  const togglePairProgrammingForStory = useStore((state) => state.togglePairProgrammingForStory)
 
   // Check if selected AI tool supports headless CLI operation
   const selectedToolInfo = AI_TOOLS.find(t => t.id === aiTool)
@@ -310,6 +313,14 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
     startFullCycle(story.id)
   }
 
+  // Handle pair programmer toggle
+  const handlePairProgrammerToggle = (e: React.MouseEvent) => {
+    console.log('[StoryCard] Pair Programmer toggle clicked for story:', story.id)
+    e.stopPropagation()
+    handleMenuClose()
+    togglePairProgrammingForStory(story.id)
+  }
+
   // Check if full cycle can be started (available from any status except done)
   const canStartFullCycle = toolSupportsHeadless && effectiveStatus !== 'done'
   const isFullCycleRunning = fullCycle.isRunning && fullCycle.storyId === story.id
@@ -406,6 +417,32 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
                 )}
               </Box>
             </Tooltip>
+
+            {/* Pair Programming Toggle - Only for active development statuses */}
+            {toolSupportsHeadless && ['ready-for-dev', 'in-progress', 'review', 'human-review'].includes(effectiveStatus) && (
+              <Tooltip
+                title={pairProgrammingEnabledStoryId === story.id ? 'Pair Programming On' : 'Pair Programming Off'}
+                arrow
+                placement="top"
+              >
+                <Box
+                  onClick={(e) => e.stopPropagation()}
+                  onPointerDown={preventDragOnInteractive}
+                  sx={{ ml: 0.5, display: 'flex' }}
+                >
+                  <Switch
+                    size="small"
+                    checked={pairProgrammingEnabledStoryId === story.id}
+                    onChange={() => togglePairProgrammingForStory(story.id)}
+                    sx={{
+                      '& .MuiSwitch-switchBase': {
+                        color: pairProgrammingEnabledStoryId === story.id ? 'primary.main' : 'text.disabled'
+                      }
+                    }}
+                  />
+                </Box>
+              </Tooltip>
+            )}
 
             {/* Quick Actions Menu Button - Three-dot menu */}
             {nextSteps.length > 0 && (
@@ -745,7 +782,25 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
                 <Typography variant="body2" fontWeight={500}>
                   {step.label}
                 </Typography>
-                {step.command && toolSupportsHeadless && (() => {
+                {step.command && (() => {
+                  // Special handling for pair programmer toggle
+                  if (step.command === 'toggle-pair-programmer') {
+                    return (
+                      <Tooltip title="Open Pair Programmer panel">
+                        <IconButton
+                          size="small"
+                          onClick={(e) => handlePairProgrammerToggle(e)}
+                          sx={{ p: 0.25, color: 'text.disabled', '&:hover': { color: 'primary.main' } }}
+                        >
+                          <GroupIcon sx={{ fontSize: 16 }} />
+                        </IconButton>
+                      </Tooltip>
+                    )
+                  }
+
+                  // Standard chat command handling
+                  if (!toolSupportsHeadless) return null
+
                   const agentThread = chatThreads[step.agentId]
                   const isAgentWorking = agentThread?.isTyping || false
                   // Backlog/ready-for-dev stories can be worked on from epic branch (or base branch when epic branches disabled)
@@ -827,7 +882,7 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
               )}
 
               {/* Workflow command */}
-              {step.command && (
+              {step.command && step.command !== 'toggle-pair-programmer' && (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: 3.25 }}>
                   <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.65rem', minWidth: 16 }}>
                     2.

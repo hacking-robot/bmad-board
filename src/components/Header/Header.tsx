@@ -11,7 +11,6 @@ import {
 import logoDark from '../../assets/logo-dark.svg'
 import logoLight from '../../assets/logo-light.svg'
 import RefreshIcon from '@mui/icons-material/Refresh'
-import TerminalIcon from '@mui/icons-material/Terminal'
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
 import SportsEsportsIcon from '@mui/icons-material/SportsEsports'
 import HistoryIcon from '@mui/icons-material/History'
@@ -24,10 +23,6 @@ import { useStore } from '../../store'
 import { useProjectData } from '../../hooks/useProjectData'
 
 export default function Header() {
-  const agents = useStore((state) => state.agents)
-  const agentPanelOpen = useStore((state) => state.agentPanelOpen)
-  const toggleAgentPanel = useStore((state) => state.toggleAgentPanel)
-  const enableAgents = useStore((state) => state.enableAgents)
   const toggleEnableAgents = useStore((state) => state.toggleEnableAgents)
   const setHelpPanelOpen = useStore((state) => state.setHelpPanelOpen)
   const statusHistoryPanelOpen = useStore((state) => state.statusHistoryPanelOpen)
@@ -47,10 +42,6 @@ export default function Header() {
 
   const isGameProject = projectType === 'bmgd'
   const logoSrc = themeMode === 'dark' ? logoDark : logoLight
-
-  const runningAgentsCount = enableAgents
-    ? Object.values(agents).filter((a) => a.status === 'running').length
-    : 0
 
   const handleLogoClick = (e: React.MouseEvent) => {
     // Triple-click to toggle hidden agents feature
@@ -158,25 +149,6 @@ export default function Header() {
           {viewMode === 'board' && <SearchBar />}
           {viewMode === 'board' && <EpicFilter />}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            {enableAgents && viewMode === 'board' && (
-              <Tooltip title={agentPanelOpen ? 'Hide Teammates' : 'Show Teammates'}>
-                <IconButton
-                  onClick={toggleAgentPanel}
-                  size="small"
-                  sx={{
-                    color: agentPanelOpen ? 'primary.main' : 'text.secondary'
-                  }}
-                >
-                  <Badge
-                    badgeContent={runningAgentsCount}
-                    color="success"
-                    invisible={runningAgentsCount === 0}
-                  >
-                    <TerminalIcon />
-                  </Badge>
-                </IconButton>
-              </Tooltip>
-            )}
             <Tooltip title="Status History">
               <IconButton
                 onClick={() => setStatusHistoryPanelOpen(!statusHistoryPanelOpen)}

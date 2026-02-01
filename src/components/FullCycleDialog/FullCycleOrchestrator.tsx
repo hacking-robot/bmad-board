@@ -327,10 +327,21 @@ export default function FullCycleOrchestrator() {
           return
         }
 
-        // Check for "what's next?" type prompts - agent has completed, just mark done
+        // Check if output ends with a completion message (not a question)
+        // This prevents false positives from earlier prompts in the accumulated output
+        // Strip trailing JSON stats that Claude Code outputs (e.g., {"models":...,"uuid":"..."})
+        let strippedOutput = accumulatedOutput
+        const jsonStatsMatch = strippedOutput.match(/\{"models":\{[\s\S]*?"uuid":"[^"]+"\}\s*$/)
+        if (jsonStatsMatch) {
+          strippedOutput = strippedOutput.slice(0, -jsonStatsMatch[0].length)
+        }
+        const lastChunk = strippedOutput.slice(-2000) // Check last ~2000 chars (questions can be long)
+
+        // Check for "what's next?" type prompts at the END - agent has completed, just mark done
         // These prompts offer to continue with MORE work, but the step is already done
-        const isWhatNextPrompt = /What's next\?/i.test(accumulatedOutput) ||
-          /Would you like me to:[\s\S]*\[(c|r|m)\]/i.test(accumulatedOutput)
+        // Must use lastChunk to avoid false positives from earlier "What's next?" mentions
+        const isWhatNextPrompt = /What's next\?\s*$/i.test(lastChunk) ||
+          /Would you like me to:[\s\S]*\[(c|r|m)\]\s*$/i.test(lastChunk)
 
         if (isWhatNextPrompt) {
           resolved = true
@@ -340,20 +351,18 @@ export default function FullCycleOrchestrator() {
           return
         }
 
-        // Check if output ends with a completion message (not a question)
-        // This prevents false positives from earlier prompts in the accumulated output
-        const lastChunk = accumulatedOutput.slice(-500) // Check last ~500 chars
         const endsWithCompletion = /(?:ready for commit|story is clean|completed|done|finished|no (?:issues|errors|problems)|all (?:good|set|done))[^?]*$/i.test(lastChunk)
+        const hasFixOptionResult = hasFixOption(lastChunk)
+        const hasRecentPrompt = isMultipleChoicePrompt(lastChunk)
 
         // Check for [1] Fix option - just respond with "1"
-        if (hasFixOption(lastChunk) && currentSessionId) {
+        if (hasFixOptionResult && currentSessionId) {
           const sent = await sendAutoResponse('1', 'Detected [1] fix option, responding with "1"')
           if (sent) return // Wait for next exit event
           return // Error already handled
         }
 
         // Check for other multiple choice prompts
-        const hasRecentPrompt = isMultipleChoicePrompt(lastChunk)
         if (hasRecentPrompt && currentSessionId) {
           const sent = await sendAutoResponse('1', 'Detected multiple choice prompt, auto-responding with "1"')
           if (sent) return // Wait for next exit event

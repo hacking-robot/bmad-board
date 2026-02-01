@@ -529,13 +529,27 @@ function startWatching(projectPath: string, projectType: ProjectType) {
   stopWatching()
 
   const watchPaths: string[] = [
-    join(projectPath, '_bmad-output', 'implementation-artifacts')
+    join(projectPath, '_bmad-output', 'implementation-artifacts'),
   ]
 
   // For BMM projects, also watch planning-artifacts (where epics.md lives)
   if (projectType === 'bmm') {
     watchPaths.push(join(projectPath, '_bmad-output', 'planning-artifacts'))
   }
+
+  // Watch source code directories (NOT _bmad or _bmad-output)
+  const srcPath = join(projectPath, 'src')
+  const libPath = join(projectPath, 'lib')
+
+  if (existsSync(srcPath)) {
+    watchPaths.push(srcPath)
+  }
+  if (existsSync(libPath)) {
+    watchPaths.push(libPath)
+  }
+
+  const sourceExtensions = ['.ts', '.tsx', '.js', '.jsx', '.py', '.rs', '.go', '.java', '.cs', '.cpp', '.c', '.h', '.css', '.scss', '.json', '.yaml', '.yml']
+  const bmadExtensions = ['.yaml', '.md']
 
   for (const watchPath of watchPaths) {
     if (!existsSync(watchPath)) {
@@ -545,8 +559,19 @@ function startWatching(projectPath: string, projectType: ProjectType) {
 
     try {
       const watcher = watch(watchPath, { recursive: true }, (_eventType, filename) => {
-        // Only care about .yaml and .md files
-        if (!filename || (!filename.endsWith('.yaml') && !filename.endsWith('.md'))) {
+        if (!filename) return
+
+        // Skip _bmad and _bmad-output folders (in case they're nested in watched paths)
+        const relativePath = filename.replace(/\\/g, '/')
+        if (relativePath.startsWith('_bmad/') || relativePath.startsWith('_bmad-output/')) {
+          console.log('Skipping BMAD internal file:', filename)
+          return
+        }
+
+        const isSourceFile = sourceExtensions.some(ext => filename.endsWith(ext))
+        const isBmadFile = bmadExtensions.some(ext => filename.endsWith(ext))
+
+        if (!isSourceFile && !isBmadFile) {
           return
         }
 
@@ -556,9 +581,21 @@ function startWatching(projectPath: string, projectType: ProjectType) {
         }
 
         watchDebounceTimer = setTimeout(() => {
-          console.log('File changed:', filename)
+          console.log('[FileWatcher] File changed:', filename, 'isSource:', isSourceFile, 'fullPath:', join(watchPath, filename))
           if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('files-changed')
+            // Send file-changed event with file info
+            const fileChangeData = {
+              filename,
+              fullPath: join(watchPath, filename),
+              isSourceFile,
+              timestamp: Date.now()
+            }
+            console.log('[FileWatcher] Sending file-changed event to renderer:', fileChangeData)
+            mainWindow.webContents.send('file-changed', fileChangeData)
+            // Also send the original files-changed for BMAD data refresh
+            if (isBmadFile) {
+              mainWindow.webContents.send('files-changed')
+            }
           }
         }, 500)
       })
@@ -1630,4 +1667,30 @@ ipcMain.handle('cli-detect-all-tools', async () => {
 
 ipcMain.handle('cli-clear-cache', async () => {
   clearDetectionCache()
+})
+
+// VSCode Bridge handlers
+ipcMain.handle('vscode-test-bridge', async (_, bridgeUrl?: string) => {
+  const url = bridgeUrl || 'http://localhost:34152/health'
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(3000) })
+    return { success: response.ok }
+  } catch {
+    return { success: false, error: 'Bridge not reachable' }
+  }
+})
+
+ipcMain.handle('vscode-fetch-tabs', async (_, bridgeUrl?: string) => {
+  const url = bridgeUrl || 'http://localhost:34152/tabs'
+  try {
+    const response = await fetch(url, {
+      headers: { 'Accept': 'application/json' },
+      signal: AbortSignal.timeout(5000)
+    })
+    if (!response.ok) return { success: false, error: `Bridge returned ${response.status}` }
+    const data = await response.json()
+    return { success: true, data }
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+  }
 })

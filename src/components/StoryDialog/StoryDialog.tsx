@@ -30,6 +30,7 @@ import VerifiedIcon from '@mui/icons-material/Verified'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn'
 import CompareArrowsIcon from '@mui/icons-material/CompareArrows'
+import SmartToyIcon from '@mui/icons-material/SmartToy'
 import ReactMarkdown, { Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
@@ -39,6 +40,7 @@ import { gruvbox } from '../../theme'
 import { EPIC_COLORS, STATUS_COLUMNS } from '../../types'
 import { useWorkflow } from '../../hooks/useWorkflow'
 import GitDiffDialog from '../GitDiffDialog'
+import CodeAssistantDialog from '../CodeAssistantDialog'
 import ChatHistorySection from './ChatHistorySection'
 import StatusHistorySection from './StatusHistorySection'
 
@@ -107,6 +109,8 @@ export default function StoryDialog() {
   // Git diff state
   const [branchExists, setBranchExists] = useState(false)
   const [diffDialogOpen, setDiffDialogOpen] = useState(false)
+  // Code Assistant state
+  const [codeAssistantOpen, setCodeAssistantOpen] = useState(false)
 
   // Check if the story's branch exists
   useEffect(() => {
@@ -237,6 +241,21 @@ export default function StoryDialog() {
             </IconButton>
           </Tooltip>
         )}
+
+        {/* Code Assistant button */}
+        <Tooltip title="Code Assistant">
+          <IconButton
+            onClick={() => setCodeAssistantOpen(true)}
+            sx={{
+              position: 'absolute',
+              right: branchExists ? 96 : 56,
+              top: 16,
+              color: 'primary.main'
+            }}
+          >
+            <SmartToyIcon />
+          </IconButton>
+        </Tooltip>
 
         <IconButton
           onClick={handleClose}
@@ -819,6 +838,13 @@ export default function StoryDialog() {
       open={diffDialogOpen}
       onClose={() => setDiffDialogOpen(false)}
       branchName={branchName}
+    />
+
+    {/* Code Assistant Dialog */}
+    <CodeAssistantDialog
+      open={codeAssistantOpen}
+      onClose={() => setCodeAssistantOpen(false)}
+      storyId={selectedStory?.id || ''} // eslint-disable-line @typescript-eslint/no-unused-vars
     />
   </>
   )

@@ -143,6 +143,18 @@
           "agentId": "game-dev",
           "command": "/bmad:bmgd:workflows:code-review",
           "description": "Request code review when ready"
+        },
+        {
+          "label": "Code Assistant",
+          "agentId": "code-assistant",
+          "command": "/bmad:bmgd:agents:code-assistant",
+          "description": "Get AI feedback on your code against story requirements"
+        },
+        {
+          "label": "Pair Programmer",
+          "agentId": "pair-programmer",
+          "command": "toggle-pair-programmer",
+          "description": "Open real-time pair programmer panel"
         }
       ]
     },
