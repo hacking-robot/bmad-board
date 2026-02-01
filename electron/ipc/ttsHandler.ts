@@ -109,7 +109,7 @@ async function loadSpeakerModule(): Promise<boolean> {
 
 
 /**
- * Play audio samples using speaker module or Web Audio API fallback.
+ * Play audio samples using speaker module or send to renderer for Web Audio API playback.
  * Resolves immediately if streaming is aborted.
  */
 async function playAudio(samples: Float32Array, sampleRate: number): Promise<void> {
@@ -122,7 +122,8 @@ async function playAudio(samples: Float32Array, sampleRate: number): Promise<voi
   if (!Speaker) {
     const loaded = await loadSpeakerModule();
     if (!loaded) {
-      throw new Error('Speaker module not available');
+      // Fall back to Web Audio API in renderer
+      return playAudioInRenderer(samples, sampleRate);
     }
   }
 
@@ -192,14 +193,69 @@ async function playAudio(samples: Float32Array, sampleRate: number): Promise<voi
 }
 
 /**
+ * Play audio in renderer process using Web Audio API.
+ * Used when speaker module is not available.
+ */
+function playAudioInRenderer(samples: Float32Array, sampleRate: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    // Check if already aborted
+    if (streamingAborted) {
+      resolve();
+      return;
+    }
+
+    try {
+      // Send audio data to renderer for playback
+      currentStreamWindow?.webContents.send('tts:play-audio', {
+        samples: Array.from(samples),
+        sampleRate,
+      });
+
+      // Store resolve function for when playback completes
+      pendingPlaybackResolve = resolve;
+
+      // Set a timeout to resolve automatically (audio duration + buffer)
+      const durationMs = (samples.length / sampleRate) * 1000;
+      const timeout = setTimeout(() => {
+        pendingPlaybackResolve = null;
+        resolve();
+      }, durationMs + 500);
+
+      // Store timeout for cleanup
+      (pendingPlaybackResolve as unknown as { timeout: NodeJS.Timeout }) = {
+        timeout,
+        resolve: () => {
+          clearTimeout(timeout);
+          resolve();
+        },
+      } as any;
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+/**
  * Stop current audio playback immediately.
  */
 function stopAudioPlayback(): void {
   // Resolve any pending playback promise first
   if (pendingPlaybackResolve) {
-    const resolve = pendingPlaybackResolve;
+    const pending = pendingPlaybackResolve as any;
     pendingPlaybackResolve = null;
-    resolve();
+
+    // Handle different pending playback types
+    if (typeof pending === 'function') {
+      // Regular resolve function
+      pending();
+    } else if (pending?.timeout && typeof pending.resolve === 'function') {
+      // Renderer playback with timeout
+      clearTimeout(pending.timeout);
+      pending.resolve();
+    }
+
+    // Notify renderer to stop playback
+    currentStreamWindow?.webContents.send('tts:stop-audio');
   }
 
   if (currentSpeaker) {

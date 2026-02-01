@@ -10,6 +10,89 @@
 import { cleanForSpeech } from '../utils/textFormatter';
 
 // ============================================================================
+// Web Audio API Fallback for Main Process Audio
+// ============================================================================
+
+let audioContext: AudioContext | null = null;
+let currentSourceNode: AudioBufferSourceNode | null = null;
+
+/**
+ * Initialize Web Audio API for playback of audio samples from main process.
+ */
+function ensureAudioContext(): AudioContext {
+  if (!audioContext) {
+    audioContext = new AudioContext({ sampleRate: 24000 });
+  }
+  return audioContext;
+}
+
+/**
+ * Play audio samples using Web Audio API (fallback when speaker module unavailable).
+ */
+function playAudioSamples(samples: number[], sampleRate: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    try {
+      const ctx = ensureAudioContext();
+
+      // Stop any currently playing audio
+      if (currentSourceNode) {
+        try {
+          currentSourceNode.stop();
+        } catch {}
+        currentSourceNode = null;
+      }
+
+      // Convert samples to Float32Array
+      const float32Samples = new Float32Array(samples);
+
+      // Create audio buffer
+      const audioBuffer = ctx.createBuffer(1, float32Samples.length, sampleRate);
+      audioBuffer.copyToChannel(float32Samples, 0);
+
+      // Create source node
+      const source = ctx.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(ctx.destination);
+
+      // Start playback
+      source.start();
+
+      // Store reference for potential stopping
+      currentSourceNode = source;
+
+      // Resolve when playback completes
+      source.onended = () => {
+        currentSourceNode = null;
+        resolve();
+      };
+
+      // Fallback timeout in case onended doesn't fire
+      const durationMs = (samples.length / sampleRate) * 1000;
+      setTimeout(() => {
+        if (currentSourceNode === source) {
+          currentSourceNode = null;
+          resolve();
+        }
+      }, durationMs + 500);
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+/**
+ * Stop current Web Audio API playback.
+ */
+function stopAudioPlayback(): void {
+  if (currentSourceNode) {
+    try {
+      currentSourceNode.stop();
+    } catch {}
+    currentSourceNode = null;
+  }
+}
+
+// ============================================================================
 // Types
 // ============================================================================
 
@@ -148,6 +231,21 @@ export async function initTTS(): Promise<void> {
     }
   });
 
+  // Set up Web Audio API fallback playback listeners
+  ttsAPI.onPlayAudio(async (data: { samples: number[]; sampleRate: number }) => {
+    try {
+      await playAudioSamples(data.samples, data.sampleRate);
+    } catch (error) {
+      console.error('[TTS] Web Audio API playback error:', error);
+    }
+  });
+
+  ttsAPI.onStopAudio(() => {
+    stopAudioPlayback();
+  });
+
+  console.log('[TTS] Web Audio API fallback listeners registered');
+
   // Initialize TTS system
   try {
     const backend = await ttsAPI.initialize();
@@ -249,6 +347,7 @@ export function interruptSpeech(): void {
   }
 
   ttsAPI.stop();
+  stopAudioPlayback(); // Stop Web Audio API playback
   updateState({
     isSpeaking: false,
     currentSentence: 0,
@@ -288,6 +387,11 @@ export async function loadVoice(voiceId: string): Promise<boolean> {
 
 export function unloadTTS(): void {
   interruptSpeech();
+  // Close audio context to free resources
+  if (audioContext && audioContext.state !== 'closed') {
+    audioContext.close();
+    audioContext = null;
+  }
 }
 
 // ============================================================================

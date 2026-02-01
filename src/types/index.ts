@@ -314,3 +314,59 @@ export interface TTSVoice {
   backend: TTSBackend
 }
 
+// Whisper STT types
+export type WhisperModel = 'base.en' | 'small.en' | 'large-v3-turbo'
+
+export interface WhisperTranscriptionOptions {
+  language?: string
+  outputInJson?: boolean
+  outputInSrt?: boolean
+  outputInVtt?: boolean
+  outputInText?: boolean
+  wordTimestamps?: boolean
+  translateToEnglish?: boolean
+}
+
+export interface WhisperTranscriptionSegment {
+  start: string
+  end: string
+  speech: string
+}
+
+export interface WhisperTranscriptionResult {
+  success: boolean
+  result?: WhisperTranscriptionSegment[]
+  text?: string
+  error?: string
+}
+
+export interface WhisperModelInfo {
+  id: WhisperModel
+  name: string
+  size: string
+  description: string
+}
+
+export interface WhisperModelStatus {
+  currentModel: WhisperModel
+  availableModels: WhisperModel[]
+  allModels: WhisperModelInfo[]
+}
+
+export interface WhisperAPI {
+  // Get available models and current model
+  getModels: () => Promise<WhisperModelStatus>
+  // Set the model to use for transcription
+  setModel: (model: WhisperModel) => Promise<{ success: boolean; error?: string }>
+  // Check if the current model is available
+  checkModel: () => Promise<{ hasModel: boolean; modelPath: string; modelName: WhisperModel }>
+  // Transcribe audio file - returns full result with timestamps
+  transcribe: (audioFilePath: string, options?: WhisperTranscriptionOptions) => Promise<WhisperTranscriptionResult>
+  // Transcribe audio file - returns plain text only
+  transcribeToText: (audioFilePath: string, options?: WhisperTranscriptionOptions) => Promise<WhisperTranscriptionResult>
+  // Transcribe audio blob (for voice recording) - returns plain text
+  transcribeBlob: (audioData: { buffer: number[]; mimeType: string }) => Promise<WhisperTranscriptionResult>
+  // Convert audio to WAV format (requires ffmpeg)
+  convertToWav: (inputPath: string, outputPath: string) => Promise<{ success: boolean; error?: string }>
+}
+

@@ -99,6 +99,8 @@ export interface AppSettings {
   lastViewedStatusHistoryAt: number
   // TTS settings
   ttsVoice: string | null
+  // Whisper STT settings
+  whisperModel: WhisperModel
 }
 
 export interface FileChange {
@@ -576,6 +578,9 @@ export interface TTSAPI {
   // Event listeners
   onLoading: (callback: (event: TTSLoadingEvent) => void) => () => void
   onStreamingProgress: (callback: (event: TTSStreamingEvent) => void) => () => void
+  // Audio playback events (for Web Audio API fallback)
+  onPlayAudio: (callback: (data: { samples: number[]; sampleRate: number }) => void) => () => void
+  onStopAudio: (callback: () => void) => () => void
 }
 
 const vscodeAPI: VSCodeBridgeAPI = {
@@ -604,10 +609,89 @@ const ttsAPI: TTSAPI = {
     const listener = (_event: Electron.IpcRendererEvent, data: TTSStreamingEvent) => callback(data)
     ipcRenderer.on('tts:streaming-progress', listener)
     return () => ipcRenderer.removeListener('tts:streaming-progress', listener)
+  },
+  onPlayAudio: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: { samples: number[]; sampleRate: number }) => callback(data)
+    ipcRenderer.on('tts:play-audio', listener)
+    return () => ipcRenderer.removeListener('tts:play-audio', listener)
+  },
+  onStopAudio: (callback) => {
+    const listener = () => callback()
+    ipcRenderer.on('tts:stop-audio', listener)
+    return () => ipcRenderer.removeListener('tts:stop-audio', listener)
   }
 }
 
 contextBridge.exposeInMainWorld('ttsAPI', ttsAPI)
+
+// Whisper STT API types
+export type WhisperModel = 'base.en' | 'small.en' | 'large-v3-turbo'
+
+export interface WhisperTranscriptionOptions {
+  language?: string
+  outputInJson?: boolean
+  outputInSrt?: boolean
+  outputInVtt?: boolean
+  outputInText?: boolean
+  wordTimestamps?: boolean
+  translateToEnglish?: boolean
+}
+
+export interface WhisperTranscriptionSegment {
+  start: string
+  end: string
+  speech: string
+}
+
+export interface WhisperTranscriptionResult {
+  success: boolean
+  result?: WhisperTranscriptionSegment[]
+  text?: string
+  error?: string
+}
+
+export interface WhisperModelInfo {
+  id: WhisperModel
+  name: string
+  size: string
+  description: string
+}
+
+export interface WhisperModelStatus {
+  currentModel: WhisperModel
+  availableModels: WhisperModel[]
+  allModels: WhisperModelInfo[]
+}
+
+export interface WhisperAPI {
+  // Get available models and current model
+  getModels: () => Promise<WhisperModelStatus>
+  // Set the model to use for transcription
+  setModel: (model: WhisperModel) => Promise<{ success: boolean; error?: string }>
+  // Check if the current model is available
+  checkModel: () => Promise<{ hasModel: boolean; modelPath: string; modelName: WhisperModel }>
+  // Transcribe audio file - returns full result with timestamps
+  transcribe: (audioFilePath: string, options?: WhisperTranscriptionOptions) => Promise<WhisperTranscriptionResult>
+  // Transcribe audio file - returns plain text only
+  transcribeToText: (audioFilePath: string, options?: WhisperTranscriptionOptions) => Promise<WhisperTranscriptionResult>
+  // Transcribe audio blob (for voice recording) - returns plain text
+  transcribeBlob: (audioData: { buffer: number[]; mimeType: string }) => Promise<WhisperTranscriptionResult>
+  // Convert audio to WAV format (requires ffmpeg)
+  convertToWav: (inputPath: string, outputPath: string) => Promise<{ success: boolean; error?: string }>
+}
+
+// Whisper API implementation
+const whisperAPI: WhisperAPI = {
+  getModels: () => ipcRenderer.invoke('whisper:get-models'),
+  setModel: (model) => ipcRenderer.invoke('whisper:set-model', model),
+  checkModel: () => ipcRenderer.invoke('whisper:check-model'),
+  transcribe: (audioFilePath, options) => ipcRenderer.invoke('whisper:transcribe', { audioFilePath, options }),
+  transcribeToText: (audioFilePath, options) => ipcRenderer.invoke('whisper:transcribe-to-text', { audioFilePath, options }),
+  transcribeBlob: (audioData) => ipcRenderer.invoke('whisper:transcribe-blob', audioData),
+  convertToWav: (inputPath, outputPath) => ipcRenderer.invoke('whisper:convert-to-wav', inputPath, outputPath)
+}
+
+contextBridge.exposeInMainWorld('whisperAPI', whisperAPI)
 
 declare global {
   interface Window {
@@ -618,5 +702,6 @@ declare global {
     cliAPI: CLIAPI
     vscodeAPI: VSCodeBridgeAPI
     ttsAPI: TTSAPI
+    whisperAPI: WhisperAPI
   }
 }

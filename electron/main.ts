@@ -6,6 +6,7 @@ import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 import { agentManager } from './agentManager'
 import { detectTool, detectAllTools, clearDetectionCache } from './cliToolManager'
 import { registerTTSHandlers, initializeTTS } from './ipc/ttsHandler'
+import { registerWhisperHandlers } from './ipc/whisperHandler'
 
 // Set app name (shows in menu bar on macOS)
 app.setName('BMad Board')
@@ -74,6 +75,9 @@ interface StatusChangeEntry {
   source: StatusChangeSource
 }
 
+// Whisper STT model type
+type WhisperModel = 'base.en' | 'small.en' | 'large-v3-turbo'
+
 interface AppSettings {
   themeMode: 'light' | 'dark'
   aiTool: AITool
@@ -103,6 +107,8 @@ interface AppSettings {
   statusHistoryByStory: Record<string, StatusChangeEntry[]>
   globalStatusHistory: StatusChangeEntry[]
   lastViewedStatusHistoryAt: number
+  // Whisper STT settings
+  whisperModel: WhisperModel
 }
 
 const defaultSettings: AppSettings = {
@@ -134,7 +140,9 @@ const defaultSettings: AppSettings = {
   // Status history defaults
   statusHistoryByStory: {},
   globalStatusHistory: [],
-  lastViewedStatusHistoryAt: 0
+  lastViewedStatusHistoryAt: 0,
+  // Whisper STT defaults
+  whisperModel: 'base.en'
 }
 
 async function loadSettings(): Promise<AppSettings> {
@@ -1703,3 +1711,6 @@ ipcMain.handle('vscode-fetch-tabs', async (_, bridgeUrl?: string) => {
 
 // Register TTS IPC handlers
 registerTTSHandlers()
+
+// Register Whisper STT IPC handlers
+registerWhisperHandlers()

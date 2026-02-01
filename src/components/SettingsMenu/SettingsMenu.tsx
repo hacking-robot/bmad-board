@@ -37,8 +37,9 @@ import ErrorIcon from '@mui/icons-material/Error'
 import DesktopWindowsIcon from '@mui/icons-material/DesktopWindows'
 import VolumeUpIcon from '@mui/icons-material/VolumeUp'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
+import MicIcon from '@mui/icons-material/Mic'
 import { useStore } from '../../store'
-import { AI_TOOLS, AITool, CLIDetectionResult, CLAUDE_MODELS, CustomEndpointConfig, TTSVoice } from '../../types'
+import { AI_TOOLS, AITool, CLIDetectionResult, CLAUDE_MODELS, CustomEndpointConfig, TTSVoice, WhisperModel, WhisperModelInfo } from '../../types'
 
 export default function SettingsMenu() {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
@@ -46,6 +47,7 @@ export default function SettingsMenu() {
   const [chatSettingsDialogOpen, setChatSettingsDialogOpen] = useState(false)
   const [branchDialogOpen, setBranchDialogOpen] = useState(false)
   const [ttsDialogOpen, setTtsDialogOpen] = useState(false)
+  const [whisperDialogOpen, setWhisperDialogOpen] = useState(false)
   const [cliStatus, setCliStatus] = useState<Record<string, CLIDetectionResult>>({})
   const [detectingCli, setDetectingCli] = useState(false)
   const [availableBranches, setAvailableBranches] = useState<string[]>([])
@@ -53,6 +55,8 @@ export default function SettingsMenu() {
   const [availableVoices, setAvailableVoices] = useState<TTSVoice[]>([])
   const [loadingVoices, setLoadingVoices] = useState(false)
   const [testingVoice, setTestingVoice] = useState(false)
+  const [whisperModels, setWhisperModels] = useState<WhisperModelInfo[]>([])
+  const [loadingModels, setLoadingModels] = useState(false)
   const open = Boolean(anchorEl)
 
   const aiTool = useStore((state) => state.aiTool)
@@ -84,6 +88,8 @@ export default function SettingsMenu() {
   const projectPath = useStore((state) => state.projectPath)
   const ttsVoice = useStore((state) => state.ttsVoice)
   const setTtsVoice = useStore((state) => state.setTtsVoice)
+  const whisperModel = useStore((state) => state.whisperModel)
+  const setWhisperModel = useStore((state) => state.setWhisperModel)
 
   const selectedTool = AI_TOOLS.find((t) => t.id === aiTool) || AI_TOOLS[0]
 
@@ -114,6 +120,13 @@ export default function SettingsMenu() {
       loadVoices()
     }
   }, [ttsDialogOpen])
+
+  // Load Whisper models when dialog opens
+  useEffect(() => {
+    if (whisperDialogOpen) {
+      loadWhisperModels()
+    }
+  }, [whisperDialogOpen])
 
   const loadBranches = async () => {
     if (!projectPath) return
@@ -158,6 +171,30 @@ export default function SettingsMenu() {
     }
   }
 
+  const loadWhisperModels = async () => {
+    setLoadingModels(true)
+    try {
+      const modelsInfo = await window.whisperAPI.getModels()
+      setWhisperModels(modelsInfo.allModels)
+      // Also set the current model in the Whisper service
+      await window.whisperAPI.setModel(modelsInfo.currentModel)
+    } catch (error) {
+      console.error('Failed to load Whisper models:', error)
+      setWhisperModels([])
+    } finally {
+      setLoadingModels(false)
+    }
+  }
+
+  const handleWhisperModelChange = async (modelId: WhisperModel) => {
+    setWhisperModel(modelId)
+    try {
+      await window.whisperAPI.setModel(modelId)
+    } catch (error) {
+      console.error('Failed to set Whisper model:', error)
+    }
+  }
+
   const detectCliTools = async () => {
     setDetectingCli(true)
     try {
@@ -196,6 +233,11 @@ export default function SettingsMenu() {
   const handleTtsSettingsClick = () => {
     handleClose()
     setTtsDialogOpen(true)
+  }
+
+  const handleWhisperSettingsClick = () => {
+    handleClose()
+    setWhisperDialogOpen(true)
   }
 
   const handleClick = (event: React.MouseEvent<HTMLElement>) => {
@@ -315,6 +357,16 @@ export default function SettingsMenu() {
           <ListItemText
             primary="TTS Voice"
             secondary={availableVoices.find(v => v.id === ttsVoice)?.name || 'Default'}
+            secondaryTypographyProps={{ variant: 'caption' }}
+          />
+        </MenuItem>
+        <MenuItem onClick={handleWhisperSettingsClick}>
+          <ListItemIcon>
+            <MicIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText
+            primary="Whisper Model"
+            secondary={whisperModels.find(m => m.id === whisperModel)?.name || 'Base'}
             secondaryTypographyProps={{ variant: 'caption' }}
           />
         </MenuItem>
@@ -773,6 +825,73 @@ export default function SettingsMenu() {
             <Box sx={{ mt: 2 }}>
               <Typography variant="caption" color="text.secondary">
                 Selected: {availableVoices.find(v => v.id === ttsVoice)?.name || 'Unknown'}
+              </Typography>
+            </Box>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Whisper Model Selection Dialog */}
+      <Dialog
+        open={whisperDialogOpen}
+        onClose={() => setWhisperDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          Speech-to-Text Model
+          <IconButton size="small" onClick={() => setWhisperDialogOpen(false)}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Select the Whisper model for speech-to-text transcription. Larger models are more accurate but slower.
+          </Typography>
+
+          {loadingModels ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+              <CircularProgress />
+            </Box>
+          ) : (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {whisperModels.map((model) => (
+                <Box
+                  key={model.id}
+                  onClick={() => handleWhisperModelChange(model.id)}
+                  sx={{
+                    p: 2,
+                    border: 1,
+                    borderColor: whisperModel === model.id ? 'primary.main' : 'divider',
+                    borderRadius: 1,
+                    cursor: 'pointer',
+                    '&:hover': {
+                      borderColor: 'primary.main',
+                      bgcolor: 'action.hover'
+                    }
+                  }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography fontWeight={500}>{model.name}</Typography>
+                    <Chip
+                      label={model.size}
+                      size="small"
+                      variant="outlined"
+                      sx={{ fontSize: '0.7rem' }}
+                    />
+                  </Box>
+                  <Typography variant="caption" color="text.secondary">
+                    {model.description}
+                  </Typography>
+                </Box>
+              ))}
+            </Box>
+          )}
+
+          {whisperModel && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="caption" color="text.secondary">
+                Current model: {whisperModels.find(m => m.id === whisperModel)?.name || whisperModel}
               </Typography>
             </Box>
           )}

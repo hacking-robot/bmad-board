@@ -9,6 +9,9 @@ import SendIcon from '@mui/icons-material/Send'
 import PersonIcon from '@mui/icons-material/Person'
 import VolumeUpIcon from '@mui/icons-material/VolumeUp'
 import VolumeOffIcon from '@mui/icons-material/VolumeOff'
+import MicIcon from '@mui/icons-material/Mic'
+import StopIcon from '@mui/icons-material/Stop'
+import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord'
 import { useStore } from '../../store'
 import { usePairProgrammer } from '../../hooks/usePairProgrammer'
 import { useWorkflow } from '../../hooks/useWorkflow'
@@ -25,6 +28,14 @@ export default function PairProgrammerPanel({ storyId }: PairProgrammerPanelProp
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const lastSpokenMessageRef = useRef<string | null>(null)
+
+  // Voice recording state
+  const [isRecording, setIsRecording] = useState(false)
+  const [isTranscribing, setIsTranscribing] = useState(false)
+  const [recordingTime, setRecordingTime] = useState(0)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
+  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   // TTS state with localStorage persistence
   const [ttsEnabled, setTtsEnabled] = useState(() => {
@@ -115,6 +126,117 @@ export default function PairProgrammerPanel({ storyId }: PairProgrammerPanelProp
       interruptSpeech()
     }
   }
+
+  // Start voice recording
+  const handleStartRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+
+      // Try to use a format that doesn't require ffmpeg conversion
+      // audio/webm is most common but needs ffmpeg -> wav conversion for Whisper
+      // audio/mp4 works on Safari and some Chromium without conversion
+      // audio/wav would be ideal but browser support is limited
+      let mimeType = 'audio/webm'
+
+      // Check supported formats (Safari supports mp4/aac)
+      if (MediaRecorder.isTypeSupported('audio/mp4')) {
+        mimeType = 'audio/mp4'
+      } else if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+        mimeType = 'audio/webm;codecs=opus'
+      }
+
+      const mediaRecorder = new MediaRecorder(stream, { mimeType })
+
+      mediaRecorderRef.current = mediaRecorder
+      audioChunksRef.current = []
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data)
+        }
+      }
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType })
+        await transcribeAudio(audioBlob, mimeType)
+
+        // Stop all audio tracks
+        stream.getTracks().forEach(track => track.stop())
+      }
+
+      mediaRecorder.start()
+      setIsRecording(true)
+
+      // Start recording timer
+      setRecordingTime(0)
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1)
+      }, 1000)
+    } catch (error) {
+      console.error('Failed to start recording:', error)
+      alert('Could not access microphone. Please grant permission.')
+    }
+  }
+
+  // Stop voice recording
+  const handleStopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop()
+      setIsRecording(false)
+
+      // Clear recording timer
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current)
+        recordingTimerRef.current = null
+      }
+    }
+  }
+
+  // Transcribe audio using Whisper
+  const transcribeAudio = async (audioBlob: Blob, recordedMimeType: string) => {
+    setIsTranscribing(true)
+    try {
+      // Convert blob to ArrayBuffer and send to main process
+      const arrayBuffer = await audioBlob.arrayBuffer()
+      const buffer = Array.from(new Uint8Array(arrayBuffer))
+
+      const result = await window.whisperAPI.transcribeBlob({
+        buffer,
+        mimeType: recordedMimeType
+      })
+
+      if (result.success && result.text) {
+        setMessage(result.text.trim())
+        inputRef.current?.focus()
+      } else {
+        console.error('Transcription failed:', result.error)
+
+        // Check if it's an ffmpeg error
+        if (result.error?.includes('ffmpeg') || result.error?.includes('ENOENT')) {
+          alert('Speech-to-text requires ffmpeg to be installed on your system.\n\nInstall with: brew install ffmpeg\n\nThen restart the app.')
+        } else {
+          alert('Transcription failed: ' + (result.error || 'Unknown error'))
+        }
+      }
+    } catch (error) {
+      console.error('Failed to transcribe audio:', error)
+      alert('Failed to transcribe audio. Please try again.')
+    } finally {
+      setIsTranscribing(false)
+    }
+  }
+
+  // Clean up recording on unmount
+  useEffect(() => {
+    return () => {
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current)
+      }
+      if (mediaRecorderRef.current && isRecording) {
+        mediaRecorderRef.current.stop()
+      }
+    }
+  }, [])
 
   // Speak new assistant messages when TTS is enabled
   useEffect(() => {
@@ -405,11 +527,11 @@ export default function PairProgrammerPanel({ storyId }: PairProgrammerPanelProp
             multiline
             maxRows={4}
             fullWidth
-            placeholder="Ask a question..."
+            placeholder="Ask a question... (or click mic to speak)"
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={handleKeyDown}
-            disabled={!connectionStatus.online || isAnalyzing}
+            disabled={!connectionStatus.online || isAnalyzing || isTranscribing}
             variant="outlined"
             size="small"
             sx={{
@@ -418,6 +540,35 @@ export default function PairProgrammerPanel({ storyId }: PairProgrammerPanelProp
               }
             }}
           />
+          <Tooltip title={isRecording ? 'Stop recording' : 'Record voice'}>
+            <span>
+              <IconButton
+                onClick={isRecording ? handleStopRecording : handleStartRecording}
+                disabled={!connectionStatus.online || isAnalyzing || isTranscribing}
+                sx={{
+                  color: isRecording ? 'error.main' : 'text.secondary',
+                  bgcolor: isRecording ? 'error.main15' : 'transparent',
+                  '&:hover': {
+                    bgcolor: isRecording ? 'error.main25' : 'action.hover'
+                  },
+                  animation: isRecording ? 'pulse 1s infinite' : 'none',
+                  '@keyframes pulse': {
+                    '0%': { transform: 'scale(1)' },
+                    '50%': { transform: 'scale(1.1)' },
+                    '100%': { transform: 'scale(1)' }
+                  }
+                }}
+              >
+                {isTranscribing ? (
+                  <CircularProgress size={20} />
+                ) : isRecording ? (
+                  <StopIcon />
+                ) : (
+                  <MicIcon />
+                )}
+              </IconButton>
+            </span>
+          </Tooltip>
           <Tooltip title="Send (Enter)">
             <span>
               <IconButton
@@ -441,6 +592,16 @@ export default function PairProgrammerPanel({ storyId }: PairProgrammerPanelProp
             </span>
           </Tooltip>
         </Box>
+
+        {/* Recording indicator */}
+        {isRecording && (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
+            <FiberManualRecordIcon sx={{ fontSize: 12, color: 'error.main' }} />
+            <Typography variant="caption" color="error.main">
+              Recording... {Math.floor(recordingTime / 60)}:{(recordingTime % 60).toString().padStart(2, '0')}
+            </Typography>
+          </Box>
+        )}
         <Typography
           variant="caption"
           color="text.secondary"

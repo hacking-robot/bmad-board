@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import { Epic, Story, StoryContent, StoryStatus, Agent, ProjectType, AgentHistoryEntry, AITool, ClaudeModel, CustomEndpointConfig, HumanReviewChecklistItem, StoryReviewState, ChatMessage, AgentThread, StatusChangeEntry, StatusChangeSource } from './types'
+import { Epic, Story, StoryContent, StoryStatus, Agent, ProjectType, AgentHistoryEntry, AITool, ClaudeModel, CustomEndpointConfig, HumanReviewChecklistItem, StoryReviewState, ChatMessage, AgentThread, StatusChangeEntry, StatusChangeSource, WhisperModel } from './types'
 import { FullCycleState, FullCycleStepType, FullCycleStepStatus, initialFullCycleState } from './types/fullCycle'
 
 export type ViewMode = 'board' | 'chat'
@@ -55,7 +55,7 @@ const electronStorage = {
       const parsed = JSON.parse(value)
       if (parsed.state) {
         // Only save the settings we care about
-        const { themeMode, aiTool, claudeModel, customEndpoint, projectPath, projectType, selectedEpicId, collapsedColumnsByEpic, agentHistory, recentProjects, notificationsEnabled, baseBranch, allowDirectEpicMerge, bmadInGitignore, bmadInGitignoreUserSet, storyOrder, enableHumanReviewColumn, humanReviewChecklist, humanReviewStates, humanReviewStories, maxThreadMessages, statusHistoryByStory, globalStatusHistory, lastViewedStatusHistoryAt, enableEpicBranches, ttsVoice } = parsed.state
+        const { themeMode, aiTool, claudeModel, customEndpoint, projectPath, projectType, selectedEpicId, collapsedColumnsByEpic, agentHistory, recentProjects, notificationsEnabled, baseBranch, allowDirectEpicMerge, bmadInGitignore, bmadInGitignoreUserSet, storyOrder, enableHumanReviewColumn, humanReviewChecklist, humanReviewStates, humanReviewStories, maxThreadMessages, statusHistoryByStory, globalStatusHistory, lastViewedStatusHistoryAt, enableEpicBranches, ttsVoice, whisperModel } = parsed.state
 
         // Don't persist full output - it can contain characters that break JSON
         // Just save metadata and a small summary
@@ -92,7 +92,8 @@ const electronStorage = {
           globalStatusHistory: globalStatusHistory || [],
           lastViewedStatusHistoryAt: lastViewedStatusHistoryAt || 0,
           enableEpicBranches: enableEpicBranches ?? false,
-          ttsVoice: ttsVoice || null
+          ttsVoice: ttsVoice || null,
+          whisperModel: whisperModel || 'base.en'
         })
       }
     } catch (error) {
@@ -126,7 +127,8 @@ const electronStorage = {
       globalStatusHistory: [],
       lastViewedStatusHistoryAt: 0,
       enableEpicBranches: false,
-      ttsVoice: null
+      ttsVoice: null,
+      whisperModel: 'base.en' as WhisperModel
     })
   }
 }
@@ -342,6 +344,10 @@ interface AppState {
   // TTS Settings
   ttsVoice: string | null
   setTtsVoice: (voiceId: string | null) => void
+
+  // Whisper STT Settings
+  whisperModel: WhisperModel
+  setWhisperModel: (model: WhisperModel) => void
 
   // Computed - filtered stories
   getFilteredStories: () => Story[]
@@ -919,6 +925,10 @@ export const useStore = create<AppState>()(
       // TTS Settings
       ttsVoice: null,
       setTtsVoice: (voiceId) => set({ ttsVoice: voiceId }),
+
+      // Whisper STT Settings
+      whisperModel: 'base.en',
+      setWhisperModel: (model) => set({ whisperModel: model }),
 
       startFullCycle: (storyId, totalSteps) => set({
         fullCycle: {
