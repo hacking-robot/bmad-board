@@ -19,7 +19,8 @@ import {
   Slider,
   CircularProgress,
   TextField,
-  Autocomplete
+  Autocomplete,
+  Button
 } from '@mui/material'
 import SettingsIcon from '@mui/icons-material/Settings'
 import KeyboardIcon from '@mui/icons-material/Keyboard'
@@ -34,18 +35,24 @@ import RefreshIcon from '@mui/icons-material/Refresh'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import ErrorIcon from '@mui/icons-material/Error'
 import DesktopWindowsIcon from '@mui/icons-material/DesktopWindows'
+import VolumeUpIcon from '@mui/icons-material/VolumeUp'
+import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import { useStore } from '../../store'
-import { AI_TOOLS, AITool, CLIDetectionResult, CLAUDE_MODELS, CustomEndpointConfig } from '../../types'
+import { AI_TOOLS, AITool, CLIDetectionResult, CLAUDE_MODELS, CustomEndpointConfig, TTSVoice } from '../../types'
 
 export default function SettingsMenu() {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
   const [toolDialogOpen, setToolDialogOpen] = useState(false)
   const [chatSettingsDialogOpen, setChatSettingsDialogOpen] = useState(false)
   const [branchDialogOpen, setBranchDialogOpen] = useState(false)
+  const [ttsDialogOpen, setTtsDialogOpen] = useState(false)
   const [cliStatus, setCliStatus] = useState<Record<string, CLIDetectionResult>>({})
   const [detectingCli, setDetectingCli] = useState(false)
   const [availableBranches, setAvailableBranches] = useState<string[]>([])
   const [loadingBranches, setLoadingBranches] = useState(false)
+  const [availableVoices, setAvailableVoices] = useState<TTSVoice[]>([])
+  const [loadingVoices, setLoadingVoices] = useState(false)
+  const [testingVoice, setTestingVoice] = useState(false)
   const open = Boolean(anchorEl)
 
   const aiTool = useStore((state) => state.aiTool)
@@ -75,6 +82,8 @@ export default function SettingsMenu() {
   const enableEpicBranches = useStore((state) => state.enableEpicBranches)
   const setEnableEpicBranches = useStore((state) => state.setEnableEpicBranches)
   const projectPath = useStore((state) => state.projectPath)
+  const ttsVoice = useStore((state) => state.ttsVoice)
+  const setTtsVoice = useStore((state) => state.setTtsVoice)
 
   const selectedTool = AI_TOOLS.find((t) => t.id === aiTool) || AI_TOOLS[0]
 
@@ -99,6 +108,13 @@ export default function SettingsMenu() {
     }
   }, [branchDialogOpen, projectPath])
 
+  // Load voices when TTS dialog opens
+  useEffect(() => {
+    if (ttsDialogOpen) {
+      loadVoices()
+    }
+  }, [ttsDialogOpen])
+
   const loadBranches = async () => {
     if (!projectPath) return
     setLoadingBranches(true)
@@ -111,6 +127,34 @@ export default function SettingsMenu() {
       console.error('Failed to load branches:', error)
     } finally {
       setLoadingBranches(false)
+    }
+  }
+
+  const loadVoices = async () => {
+    setLoadingVoices(true)
+    try {
+      const voices = await window.ttsAPI.getVoices()
+      setAvailableVoices(voices)
+    } catch (error) {
+      console.error('Failed to load TTS voices:', error)
+      setAvailableVoices([])
+    } finally {
+      setLoadingVoices(false)
+    }
+  }
+
+  const handleTestVoice = async () => {
+    if (!ttsVoice) return
+    setTestingVoice(true)
+    try {
+      // Load the voice first
+      await window.ttsAPI.loadVoice(ttsVoice)
+      // Then speak a test phrase
+      await window.ttsAPI.speakStreaming('Hello, this is a test of the text to speech voice.', { voiceId: ttsVoice })
+    } catch (error) {
+      console.error('Failed to test voice:', error)
+    } finally {
+      setTestingVoice(false)
     }
   }
 
@@ -147,6 +191,11 @@ export default function SettingsMenu() {
   const handleBranchSettingsClick = () => {
     handleClose()
     setBranchDialogOpen(true)
+  }
+
+  const handleTtsSettingsClick = () => {
+    handleClose()
+    setTtsDialogOpen(true)
   }
 
   const handleClick = (event: React.MouseEvent<HTMLElement>) => {
@@ -256,6 +305,16 @@ export default function SettingsMenu() {
           <ListItemText
             primary="Chat Settings"
             secondary={`Max ${maxThreadMessages} messages`}
+            secondaryTypographyProps={{ variant: 'caption' }}
+          />
+        </MenuItem>
+        <MenuItem onClick={handleTtsSettingsClick}>
+          <ListItemIcon>
+            <VolumeUpIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText
+            primary="TTS Voice"
+            secondary={availableVoices.find(v => v.id === ttsVoice)?.name || 'Default'}
             secondaryTypographyProps={{ variant: 'caption' }}
           />
         </MenuItem>
@@ -641,6 +700,82 @@ export default function SettingsMenu() {
               />
             )}
           />
+        </DialogContent>
+      </Dialog>
+
+      {/* TTS Voice Selection Dialog */}
+      <Dialog
+        open={ttsDialogOpen}
+        onClose={() => setTtsDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          Text-to-Speech Voice
+          <IconButton size="small" onClick={() => setTtsDialogOpen(false)}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Select the voice to use for text-to-speech playback.
+          </Typography>
+
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start', mb: 2 }}>
+            <Box sx={{ flex: 1 }}>
+              <Autocomplete
+                options={availableVoices}
+                getOptionLabel={(option) => option.name}
+                value={availableVoices.find(v => v.id === ttsVoice) || null}
+                onChange={(_, newValue) => {
+                  setTtsVoice(newValue?.id || null)
+                }}
+                loading={loadingVoices}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Voice"
+                    placeholder="Select a voice"
+                    size="small"
+                    slotProps={{
+                      input: {
+                        ...params.InputProps,
+                        endAdornment: (
+                          <>
+                            {loadingVoices ? <CircularProgress size={20} /> : null}
+                            {params.InputProps.endAdornment}
+                          </>
+                        )
+                      }
+                    }}
+                  />
+                )}
+              />
+            </Box>
+            <Button
+              variant="outlined"
+              startIcon={testingVoice ? <CircularProgress size={16} /> : <PlayArrowIcon />}
+              onClick={handleTestVoice}
+              disabled={!ttsVoice || testingVoice}
+              sx={{ mt: 0.5 }}
+            >
+              Test
+            </Button>
+          </Box>
+
+          {availableVoices.length === 0 && !loadingVoices && (
+            <Typography variant="caption" color="text.secondary">
+              No voices available. Make sure the TTS model files are installed.
+            </Typography>
+          )}
+
+          {ttsVoice && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="caption" color="text.secondary">
+                Selected: {availableVoices.find(v => v.id === ttsVoice)?.name || 'Unknown'}
+              </Typography>
+            </Box>
+          )}
         </DialogContent>
       </Dialog>
     </>

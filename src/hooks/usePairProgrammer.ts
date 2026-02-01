@@ -2,11 +2,12 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useStore } from '../store'
 import type { StoryContent, StoryStatus } from '../types'
 
-export interface PairProgrammerFeedback {
+export interface PairProgrammerMessage {
+  id: string
+  role: 'user' | 'assistant'
   content: string
   timestamp: number
-  codeHash: string
-  fileName: string
+  fileName?: string
 }
 
 interface FileChangeEvent {
@@ -18,10 +19,11 @@ interface FileChangeEvent {
 
 interface UsePairProgrammerReturn {
   enabled: boolean
-  latestFeedback: PairProgrammerFeedback | null
+  messages: PairProgrammerMessage[]
   isAnalyzing: boolean
   analyzeNow: () => Promise<void>
   clearFeedback: () => void
+  sendMessage: (message: string) => Promise<void>
 }
 
 // Simple hash function to detect code changes
@@ -117,7 +119,7 @@ export function usePairProgrammer(storyId: string): UsePairProgrammerReturn {
   // Enabled when this story is the one with pair programming enabled
   const enabled = pairProgrammingEnabledStoryId === storyId
 
-  const [latestFeedback, setLatestFeedback] = useState<PairProgrammerFeedback | null>(null)
+  const [messages, setMessages] = useState<PairProgrammerMessage[]>([])
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [lastChangedFile, setLastChangedFile] = useState<{ path: string; hash: string } | null>(null)
 
@@ -153,9 +155,10 @@ export function usePairProgrammer(storyId: string): UsePairProgrammerReturn {
   }, [enabled])
 
   // Build context for the AI
-  const buildContext = useCallback((filePath: string, fileContent: string, previousFeedback: PairProgrammerFeedback | null): string => {
-    const previousFeedbackText = previousFeedback
-      ? `PREVIOUS FEEDBACK (do not repeat): "${previousFeedback.content}"`
+  const buildContext = useCallback((filePath: string, fileContent: string): string => {
+    const lastAssistantMessage = messages.filter(m => m.role === 'assistant').pop()
+    const previousFeedbackText = lastAssistantMessage
+      ? `PREVIOUS FEEDBACK (do not repeat): "${lastAssistantMessage.content}"`
       : 'PREVIOUS FEEDBACK (do not repeat): None - this is your first message'
 
     const pendingTasks = storyContent?.tasks
@@ -191,7 +194,7 @@ Respond in 1-2 sentences:
 - What to fix/improve next
 - Any blocking issues
 OR "Looking good - move to next task"`
-  }, [storyContent])
+  }, [storyContent, messages])
 
   // Perform analysis on a specific file
   const analyzeFile = useCallback(async (filePath: string): Promise<void> => {
@@ -251,7 +254,7 @@ OR "Looking good - move to next task"`
       analysisInProgressRef.current = true
       setIsAnalyzing(true)
 
-      const prompt = buildContext(filePath, fileContent, latestFeedback)
+      const prompt = buildContext(filePath, fileContent)
       console.log('[PairProgrammer] Prompt built, length:', prompt.length)
 
       if (!sessionIdRef.current) {
@@ -326,15 +329,16 @@ OR "Looking good - move to next task"`
         const lastAssistantMsg = [...thread.messages].reverse().find(m => m.role === 'assistant')
         if (lastAssistantMsg && lastAssistantMsg.content) {
           const fileName = filePath.split('/').pop() || filePath
-          const feedback: PairProgrammerFeedback = {
+          const message: PairProgrammerMessage = {
+            id: `msg-${Date.now()}`,
+            role: 'assistant',
             content: lastAssistantMsg.content,
             timestamp: Date.now(),
-            codeHash: currentHash,
             fileName
           }
-          setLatestFeedback(feedback)
+          setMessages(prev => [...prev, message])
           setLastChangedFile({ path: filePath, hash: currentHash })
-          console.log('[PairProgrammer] Feedback received:', feedback.content)
+          console.log('[PairProgrammer] Feedback received:', message.content)
           console.log('[PairProgrammer] Feedback updated in state')
         } else {
           console.log('[PairProgrammer] No assistant message found in thread')
@@ -347,7 +351,7 @@ OR "Looking good - move to next task"`
       setIsAnalyzing(false)
       console.log('[PairProgrammer] Analysis complete')
     }
-  }, [projectPath, projectType, latestFeedback, buildContext, aiTool, claudeModel, customEndpoint, isOtherAgentRunning, hasActiveDevelopmentStories])
+  }, [projectPath, projectType, buildContext, aiTool, claudeModel, customEndpoint, isOtherAgentRunning, hasActiveDevelopmentStories])
 
   // Manual trigger - analyze the most recently changed file
   const analyzeNow = useCallback(async () => {
@@ -363,9 +367,129 @@ OR "Looking good - move to next task"`
   // Clear feedback
   const clearFeedback = useCallback(() => {
     console.log('[PairProgrammer] Clearing feedback')
-    setLatestFeedback(null)
+    setMessages([])
     setLastChangedFile(null)
   }, [])
+
+  // Send a message to the pair programmer
+  const sendMessage = useCallback(async (userMessage: string): Promise<void> => {
+    console.log('[PairProgrammer] Sending message:', userMessage)
+
+    if (!projectPath || !projectType) {
+      console.log('[PairProgrammer] No project path or type')
+      return
+    }
+
+    try {
+      setIsAnalyzing(true)
+
+      // Add user message to history
+      const userMsg: PairProgrammerMessage = {
+        id: `msg-${Date.now()}`,
+        role: 'user',
+        content: userMessage,
+        timestamp: Date.now()
+      }
+      setMessages(prev => [...prev, userMsg])
+
+      if (!sessionIdRef.current) {
+        // Need to load agent first
+        console.log('[PairProgrammer] Loading agent...')
+        const loadResult = await window.chatAPI.loadAgent({
+          agentId: 'pair-programmer',
+          projectPath,
+          projectType,
+          tool: aiTool,
+          model: aiTool === 'claude-code' ? claudeModel : undefined,
+          customEndpoint: aiTool === 'custom-endpoint' ? customEndpoint : undefined
+        })
+
+        if (!loadResult.success) {
+          console.error('[PairProgrammer] Failed to load agent:', loadResult.error)
+          setIsAnalyzing(false)
+          return
+        }
+
+        // Wait for session ID from agent-loaded event
+        await new Promise<void>((resolve) => {
+          const cleanup = window.chatAPI.onAgentLoaded((event) => {
+            if (event.agentId === 'pair-programmer') {
+              sessionIdRef.current = event.sessionId
+              cleanup()
+              resolve()
+            }
+          })
+        })
+        console.log('[PairProgrammer] Agent loaded, session:', sessionIdRef.current)
+      }
+
+      // Build context for the message
+      const pendingTasks = storyContent?.tasks
+        .filter(t => !t.completed)
+        .map(t => `- ${t.title}`)
+        .join('\n') || 'None'
+
+      const contextMessage = `You are a pair programmer. Respond in 1-2 sentences MAX. Be concise and direct.
+
+STORY: ${storyContent?.description || 'No description'}
+PENDING TASKS:
+${pendingTasks}
+
+USER QUESTION: ${userMessage}
+
+Respond in 1-2 sentences MAX. Do not provide explanations, lists, or detailed breakdowns. Just answer the question directly.`
+
+      // Send message
+      const sendResult = await window.chatAPI.sendMessage({
+        agentId: 'pair-programmer',
+        projectPath,
+        message: contextMessage,
+        sessionId: sessionIdRef.current,
+        tool: aiTool,
+        model: aiTool === 'claude-code' ? claudeModel : undefined,
+        customEndpoint: aiTool === 'custom-endpoint' ? customEndpoint : undefined
+      })
+
+      if (!sendResult.success) {
+        console.error('[PairProgrammer] Failed to send message:', sendResult.error)
+        setIsAnalyzing(false)
+        return
+      }
+
+      // Wait for response via exit event
+      await new Promise<void>((resolve) => {
+        const cleanup = window.chatAPI.onChatExit((event) => {
+          if (event.agentId === 'pair-programmer' && event.sessionId === sessionIdRef.current) {
+            console.log('[PairProgrammer] Received exit event')
+            cleanup()
+            resolve()
+          }
+        })
+      })
+
+      // Get the response from the thread
+      const thread = await window.chatAPI.loadThread('pair-programmer')
+
+      if (thread && thread.messages.length > 0) {
+        const lastAssistantMsg = [...thread.messages].reverse().find(m => m.role === 'assistant')
+        if (lastAssistantMsg && lastAssistantMsg.content) {
+          const assistantMsg: PairProgrammerMessage = {
+            id: `msg-${Date.now()}`,
+            role: 'assistant',
+            content: lastAssistantMsg.content,
+            timestamp: Date.now(),
+            fileName: 'Chat'
+          }
+          setMessages(prev => [...prev, assistantMsg])
+          console.log('[PairProgrammer] Response received')
+        }
+      }
+    } catch (error) {
+      console.error('[PairProgrammer] Send message failed:', error)
+    } finally {
+      setIsAnalyzing(false)
+    }
+  }, [projectPath, projectType, storyContent, aiTool, claudeModel, customEndpoint])
 
   // Listen for file change events when enabled
   useEffect(() => {
@@ -415,9 +539,10 @@ OR "Looking good - move to next task"`
 
   return {
     enabled,
-    latestFeedback,
+    messages,
     isAnalyzing,
     analyzeNow,
-    clearFeedback
+    clearFeedback,
+    sendMessage
   }
 }

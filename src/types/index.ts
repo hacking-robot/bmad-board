@@ -303,3 +303,14 @@ export interface VSCodeTab {
   isDirty: boolean
 }
 
+// TTS types
+export type TTSBackend = 'sherpa-onnx' | 'say.js'
+
+export interface TTSVoice {
+  id: string
+  name: string
+  language: string
+  sizeBytes: number
+  backend: TTSBackend
+}
+

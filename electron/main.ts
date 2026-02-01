@@ -5,6 +5,7 @@ import { existsSync, watch, FSWatcher } from 'fs'
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 import { agentManager } from './agentManager'
 import { detectTool, detectAllTools, clearDetectionCache } from './cliToolManager'
+import { registerTTSHandlers, initializeTTS } from './ipc/ttsHandler'
 
 // Set app name (shows in menu bar on macOS)
 app.setName('BMad Board')
@@ -306,7 +307,7 @@ async function createWindow() {
     minWidth: MIN_WINDOW_WIDTH,
     minHeight: MIN_WINDOW_HEIGHT,
     webPreferences: {
-      preload: join(__dirname, 'preload.js'),
+      preload: join(__dirname, '../preload/index.js'),
       nodeIntegration: false,
       contextIsolation: true
     },
@@ -332,12 +333,17 @@ async function createWindow() {
     mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL)
     mainWindow.webContents.openDevTools()
   } else {
-    mainWindow.loadFile(join(__dirname, '../dist/index.html'))
+    mainWindow.loadFile(join(__dirname, '../../dist/index.html'))
   }
 
   mainWindow.on('closed', () => {
     agentManager.setMainWindow(null)
     mainWindow = null
+  })
+
+  // Initialize TTS system
+  initializeTTS(mainWindow).catch(err => {
+    console.error('[Main] Failed to initialize TTS:', err)
   })
 }
 
@@ -1694,3 +1700,6 @@ ipcMain.handle('vscode-fetch-tabs', async (_, bridgeUrl?: string) => {
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
   }
 })
+
+// Register TTS IPC handlers
+registerTTSHandlers()

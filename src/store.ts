@@ -55,7 +55,7 @@ const electronStorage = {
       const parsed = JSON.parse(value)
       if (parsed.state) {
         // Only save the settings we care about
-        const { themeMode, aiTool, claudeModel, customEndpoint, projectPath, projectType, selectedEpicId, collapsedColumnsByEpic, agentHistory, recentProjects, notificationsEnabled, baseBranch, allowDirectEpicMerge, bmadInGitignore, bmadInGitignoreUserSet, storyOrder, enableHumanReviewColumn, humanReviewChecklist, humanReviewStates, humanReviewStories, maxThreadMessages, statusHistoryByStory, globalStatusHistory, lastViewedStatusHistoryAt, enableEpicBranches } = parsed.state
+        const { themeMode, aiTool, claudeModel, customEndpoint, projectPath, projectType, selectedEpicId, collapsedColumnsByEpic, agentHistory, recentProjects, notificationsEnabled, baseBranch, allowDirectEpicMerge, bmadInGitignore, bmadInGitignoreUserSet, storyOrder, enableHumanReviewColumn, humanReviewChecklist, humanReviewStates, humanReviewStories, maxThreadMessages, statusHistoryByStory, globalStatusHistory, lastViewedStatusHistoryAt, enableEpicBranches, ttsVoice } = parsed.state
 
         // Don't persist full output - it can contain characters that break JSON
         // Just save metadata and a small summary
@@ -91,7 +91,8 @@ const electronStorage = {
           statusHistoryByStory: statusHistoryByStory || {},
           globalStatusHistory: globalStatusHistory || [],
           lastViewedStatusHistoryAt: lastViewedStatusHistoryAt || 0,
-          enableEpicBranches: enableEpicBranches ?? false
+          enableEpicBranches: enableEpicBranches ?? false,
+          ttsVoice: ttsVoice || null
         })
       }
     } catch (error) {
@@ -124,7 +125,8 @@ const electronStorage = {
       statusHistoryByStory: {},
       globalStatusHistory: [],
       lastViewedStatusHistoryAt: 0,
-      enableEpicBranches: false
+      enableEpicBranches: false,
+      ttsVoice: null
     })
   }
 }
@@ -336,6 +338,10 @@ interface AppState {
   togglePairProgrammingForStory: (storyId: string) => void
   pairProgrammingPanelOpen: boolean
   setPairProgrammingPanelOpen: (open: boolean) => void
+
+  // TTS Settings
+  ttsVoice: string | null
+  setTtsVoice: (voiceId: string | null) => void
 
   // Computed - filtered stories
   getFilteredStories: () => Story[]
@@ -909,6 +915,11 @@ export const useStore = create<AppState>()(
       })),
       pairProgrammingPanelOpen: false,
       setPairProgrammingPanelOpen: (open) => set({ pairProgrammingPanelOpen: open }),
+
+      // TTS Settings
+      ttsVoice: null,
+      setTtsVoice: (voiceId) => set({ ttsVoice: voiceId }),
+
       startFullCycle: (storyId, totalSteps) => set({
         fullCycle: {
           ...initialFullCycleState,

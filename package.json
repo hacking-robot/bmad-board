@@ -2,15 +2,17 @@
   "name": "bmadboard",
   "version": "1.0.40",
   "description": "A beautiful sprint board for BMAD projects",
-  "main": "dist-electron/main.js",
+  "main": "dist-electron/main/index.js",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build && electron-builder",
-    "build:dev": "tsc && vite build && electron-builder --mac --arm64",
-    "preview": "vite preview",
-    "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
+    "dev": "DYLD_LIBRARY_PATH=\"$PWD/node_modules/sherpa-onnx-darwin-arm64:$PWD/node_modules/sherpa-onnx-darwin-x64:$DYLD_LIBRARY_PATH\" electron-vite dev",
+    "preview": "electron-vite preview",
+    "build": "electron-vite build",
+    "build:mac": "electron-vite build && electron-builder --mac",
+    "build:win": "electron-vite build && electron-builder --win",
+    "build:linux": "electron-vite build && electron-builder --linux",
     "typecheck": "tsc --noEmit",
-    "prepare": "husky"
+    "prepare": "husky",
+    "postinstall": "bash scripts/fix-sherpa-rpath.sh"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -30,6 +32,13 @@
     "react-syntax-highlighter": "^16.1.0",
     "react-virtuoso": "^4.18.1",
     "remark-gfm": "^4.0.0",
+    "say": "^0.16.0",
+    "sherpa-onnx-node": "^1.12.23",
+    "speaker": "^0.5.5",
+    "bindings": "^1.3.0",
+    "buffer-alloc": "^1.1.0",
+    "debug": "^4.0.0",
+    "file-uri-to-path": "0.0.1",
     "uuid": "^13.0.0",
     "yaml": "^2.6.1",
     "zustand": "^5.0.2"
@@ -44,11 +53,10 @@
     "concurrently": "^9.1.2",
     "electron": "^33.3.1",
     "electron-builder": "^25.1.8",
+    "electron-vite": "^5.0.0",
     "husky": "^9.1.7",
     "typescript": "^5.7.2",
     "vite": "^6.0.7",
-    "vite-plugin-electron": "^0.28.8",
-    "vite-plugin-electron-renderer": "^0.14.6",
     "wait-on": "^8.0.1"
   },
   "build": {
@@ -58,9 +66,19 @@
       "output": "release",
       "buildResources": "build"
     },
+    "extraResources": [
+      {
+        "from": "resources/models/kokoro-tts",
+        "to": "models/kokoro-tts",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
     "files": [
       "dist/**/*",
-      "dist-electron/**/*"
+      "dist-electron/**/*",
+      "resources/**/*"
     ],
     "mac": {
       "target": [

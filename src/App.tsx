@@ -257,12 +257,14 @@ export default function App() {
               {/* Pair Programmer Panel - shown when a story has pair programming enabled AND panel is open */}
               {pairProgrammingStory && pairProgrammingPanelOpen && (
                 <Box
+                  onClick={(e) => e.stopPropagation()}
                   sx={{
                     width: PAIR_PROGRAMMER_WIDTH,
                     flexShrink: 0,
                     borderLeft: 1,
                     borderColor: 'divider',
-                    bgcolor: 'background.paper'
+                    bgcolor: 'background.paper',
+                    zIndex: 10
                   }}
                 >
                   <PairProgrammerPanel storyId={pairProgrammingStory.id} />

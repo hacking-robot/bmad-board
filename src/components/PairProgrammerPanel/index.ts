@@ -1,2 +1,2 @@
 export { default as PairProgrammerPanel } from './PairProgrammerPanel'
-export type { PairProgrammerFeedback } from '../../hooks/usePairProgrammer'
+export type { PairProgrammerMessage } from '../../hooks/usePairProgrammer'

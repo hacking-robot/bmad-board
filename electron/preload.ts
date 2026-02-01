@@ -97,6 +97,8 @@ export interface AppSettings {
   statusHistoryByStory: Record<string, StatusChangeEntry[]>
   globalStatusHistory: StatusChangeEntry[]
   lastViewedStatusHistoryAt: number
+  // TTS settings
+  ttsVoice: string | null
 }
 
 export interface FileChange {
@@ -520,12 +522,92 @@ export interface VSCodeBridgeAPI {
   }>
 }
 
+// TTS API types
+export type TTSBackend = 'sherpa-onnx' | 'say.js'
+
+export interface TTSVoice {
+  id: string
+  name: string
+  language: string
+  sizeBytes: number
+  backend: TTSBackend
+}
+
+export interface TTSLoadingEvent {
+  state: 'loading' | 'ready' | 'error' | 'fallback'
+  progress: number
+  message: string
+  backend?: TTSBackend
+  error?: string
+}
+
+export interface TTSStreamingEvent {
+  event: 'start' | 'sentence-start' | 'sentence-end' | 'complete' | 'error'
+  index?: number
+  total?: number
+  text?: string
+  durationMs?: number
+  error?: string
+}
+
+export interface TTSOptions {
+  voiceId?: string
+  volume?: number
+  speed?: number
+}
+
+export interface TTSAPI {
+  // Initialize TTS system
+  initialize: () => Promise<TTSBackend>
+  // Get current backend
+  getBackend: () => Promise<TTSBackend>
+  // Get available voices
+  getVoices: () => Promise<TTSVoice[]>
+  // Load/select a voice
+  loadVoice: (voiceId: string) => Promise<boolean>
+  // Check if TTS is loaded
+  isLoaded: () => Promise<boolean>
+  // Speak text (blocking, waits for completion)
+  speak: (text: string, options?: TTSOptions) => Promise<void>
+  // Speak text with streaming (sentence by sentence)
+  speakStreaming: (text: string, options?: TTSOptions) => Promise<void>
+  // Stop current speech
+  stop: () => void
+  // Event listeners
+  onLoading: (callback: (event: TTSLoadingEvent) => void) => () => void
+  onStreamingProgress: (callback: (event: TTSStreamingEvent) => void) => () => void
+}
+
 const vscodeAPI: VSCodeBridgeAPI = {
   testBridge: (bridgeUrl) => ipcRenderer.invoke('vscode-test-bridge', bridgeUrl),
   fetchTabs: (bridgeUrl) => ipcRenderer.invoke('vscode-fetch-tabs', bridgeUrl)
 }
 
 contextBridge.exposeInMainWorld('vscodeAPI', vscodeAPI)
+
+// TTS API implementation
+const ttsAPI: TTSAPI = {
+  initialize: () => ipcRenderer.invoke('tts:initialize'),
+  getBackend: () => ipcRenderer.invoke('tts:get-backend'),
+  getVoices: () => ipcRenderer.invoke('tts:get-voices'),
+  loadVoice: (voiceId) => ipcRenderer.invoke('tts:load-voice', voiceId),
+  isLoaded: () => ipcRenderer.invoke('tts:is-loaded'),
+  speak: (text, options) => ipcRenderer.invoke('tts:speak', text, options),
+  speakStreaming: (text, options) => ipcRenderer.invoke('tts:speak-streaming', text, options),
+  stop: () => ipcRenderer.send('tts:stop'),
+  onLoading: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: TTSLoadingEvent) => callback(data)
+    ipcRenderer.on('tts:loading', listener)
+    return () => ipcRenderer.removeListener('tts:loading', listener)
+  },
+  onStreamingProgress: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: TTSStreamingEvent) => callback(data)
+    ipcRenderer.on('tts:streaming-progress', listener)
+    return () => ipcRenderer.removeListener('tts:streaming-progress', listener)
+  }
+}
+
+contextBridge.exposeInMainWorld('ttsAPI', ttsAPI)
 
 declare global {
   interface Window {
@@ -535,5 +617,6 @@ declare global {
     chatAPI: ChatAPI
     cliAPI: CLIAPI
     vscodeAPI: VSCodeBridgeAPI
+    ttsAPI: TTSAPI
   }
 }
