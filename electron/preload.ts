@@ -87,6 +87,7 @@ export interface AppSettings {
   bmadInGitignoreUserSet: boolean // When true, user has manually set bmadInGitignore (don't auto-detect)
   enableEpicBranches: boolean // When true, show epic branch features
   disableGitBranching: boolean // When true, bypass all branch restrictions and hide branch UI
+  fullCycleReviewCount: number // 0-5, how many code review rounds in full cycle
   // Human Review feature
   enableHumanReviewColumn: boolean
   humanReviewChecklist: HumanReviewChecklistItem[]

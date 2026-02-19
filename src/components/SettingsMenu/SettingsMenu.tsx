@@ -29,6 +29,7 @@ import RateReviewIcon from '@mui/icons-material/RateReview'
 import ChatIcon from '@mui/icons-material/Chat'
 import GitIcon from '@mui/icons-material/AccountTree'
 import MergeIcon from '@mui/icons-material/Merge'
+import RepeatIcon from '@mui/icons-material/Repeat'
 import CloseIcon from '@mui/icons-material/Close'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
@@ -76,6 +77,8 @@ export default function SettingsMenu() {
   const setEnableEpicBranches = useStore((state) => state.setEnableEpicBranches)
   const disableGitBranching = useStore((state) => state.disableGitBranching)
   const setDisableGitBranching = useStore((state) => state.setDisableGitBranching)
+  const fullCycleReviewCount = useStore((state) => state.fullCycleReviewCount)
+  const setFullCycleReviewCount = useStore((state) => state.setFullCycleReviewCount)
   const projectPath = useStore((state) => state.projectPath)
 
   const selectedTool = AI_TOOLS.find((t) => t.id === aiTool) || AI_TOOLS[0]
@@ -249,6 +252,22 @@ export default function SettingsMenu() {
             edge="end"
             checked={enableHumanReviewColumn}
             size="small"
+          />
+        </MenuItem>
+        <MenuItem onClick={() => setFullCycleReviewCount(fullCycleReviewCount >= 5 ? 0 : fullCycleReviewCount + 1)}>
+          <ListItemIcon>
+            <RepeatIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText
+            primary="Full Cycle Reviews"
+            secondary={fullCycleReviewCount === 0 ? 'No reviews' : `${fullCycleReviewCount} review round${fullCycleReviewCount > 1 ? 's' : ''}`}
+            secondaryTypographyProps={{ variant: 'caption' }}
+          />
+          <Chip
+            label={fullCycleReviewCount}
+            size="small"
+            color={fullCycleReviewCount === 0 ? 'default' : 'primary'}
+            sx={{ minWidth: 32, ml: 1 }}
           />
         </MenuItem>
         <MenuItem onClick={handleChatSettingsClick}>
