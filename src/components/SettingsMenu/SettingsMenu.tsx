@@ -280,53 +280,59 @@ export default function SettingsMenu() {
             secondaryTypographyProps={{ variant: 'caption' }}
           />
         </MenuItem>
-        <MenuItem onClick={handleBranchSettingsClick}>
-          <ListItemIcon>
-            <GitIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText
-            primary="Base Branch"
-            secondary={baseBranch}
-            secondaryTypographyProps={{ variant: 'caption' }}
-          />
-        </MenuItem>
-        <MenuItem onClick={() => setAllowDirectEpicMerge(!allowDirectEpicMerge)}>
-          <ListItemIcon>
-            <MergeIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText
-            primary="Direct Epic Merge"
-            secondary="Merge without PR"
-            secondaryTypographyProps={{ variant: 'caption' }}
-          />
-          <Switch
-            edge="end"
-            checked={allowDirectEpicMerge}
-            size="small"
-          />
-        </MenuItem>
-        <MenuItem onClick={() => setEnableEpicBranches(!enableEpicBranches)}>
-          <ListItemIcon>
-            <GitIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText
-            primary="Enable Epic Branches"
-            secondary="Show epic branch controls"
-            secondaryTypographyProps={{ variant: 'caption' }}
-          />
-          <Switch
-            edge="end"
-            checked={enableEpicBranches}
-            size="small"
-          />
-        </MenuItem>
+        {!disableGitBranching && (
+          <MenuItem onClick={handleBranchSettingsClick}>
+            <ListItemIcon>
+              <GitIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText
+              primary="Base Branch"
+              secondary={baseBranch}
+              secondaryTypographyProps={{ variant: 'caption' }}
+            />
+          </MenuItem>
+        )}
+        {!disableGitBranching && (
+          <MenuItem onClick={() => setAllowDirectEpicMerge(!allowDirectEpicMerge)}>
+            <ListItemIcon>
+              <MergeIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText
+              primary="Direct Epic Merge"
+              secondary="Merge without PR"
+              secondaryTypographyProps={{ variant: 'caption' }}
+            />
+            <Switch
+              edge="end"
+              checked={allowDirectEpicMerge}
+              size="small"
+            />
+          </MenuItem>
+        )}
+        {!disableGitBranching && (
+          <MenuItem onClick={() => setEnableEpicBranches(!enableEpicBranches)}>
+            <ListItemIcon>
+              <GitIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText
+              primary="Enable Epic Branches"
+              secondary="Show epic branch controls"
+              secondaryTypographyProps={{ variant: 'caption' }}
+            />
+            <Switch
+              edge="end"
+              checked={enableEpicBranches}
+              size="small"
+            />
+          </MenuItem>
+        )}
         <MenuItem onClick={() => setDisableGitBranching(!disableGitBranching)}>
           <ListItemIcon>
             <GitIcon fontSize="small" />
           </ListItemIcon>
           <ListItemText
             primary="Disable Git Branching"
-            secondary="Work on base branch only"
+            secondary="Skip branch creation & merging"
             secondaryTypographyProps={{ variant: 'caption' }}
           />
           <Switch
@@ -372,7 +378,7 @@ export default function SettingsMenu() {
             Select your AI coding assistant. This determines the command syntax shown in the BMAD Guide.
           </Typography>
           <RadioGroup value={aiTool} onChange={handleToolChange}>
-            {AI_TOOLS.map((tool) => {
+            {AI_TOOLS.filter((t) => t.id === 'claude-code').map((tool) => {
               const status = cliStatus[tool.id]
               const isIdeOnly = !tool.cli.supportsHeadless
               const isAvailable = status?.available

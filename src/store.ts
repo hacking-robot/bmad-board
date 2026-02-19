@@ -69,7 +69,7 @@ const electronStorage = {
         debouncedSave({
           themeMode,
           aiTool: aiTool || 'claude-code',
-          claudeModel: claudeModel || 'sonnet',
+          claudeModel: claudeModel || 'opus',
           customEndpoint: customEndpoint || null,
           projectPath,
           projectType,
@@ -92,8 +92,8 @@ const electronStorage = {
           globalStatusHistory: globalStatusHistory || [],
           lastViewedStatusHistoryAt: lastViewedStatusHistoryAt || 0,
           enableEpicBranches: enableEpicBranches ?? false,
-          disableGitBranching: disableGitBranching ?? false,
-          fullCycleReviewCount: fullCycleReviewCount ?? 2
+          disableGitBranching: disableGitBranching ?? true,
+          fullCycleReviewCount: fullCycleReviewCount ?? 1
         })
       }
     } catch (error) {
@@ -104,7 +104,7 @@ const electronStorage = {
     await window.fileAPI.saveSettings({
       themeMode: 'light',
       aiTool: 'claude-code',
-      claudeModel: 'sonnet',
+      claudeModel: 'opus',
       customEndpoint: null,
       projectPath: null,
       projectType: null,
@@ -127,8 +127,8 @@ const electronStorage = {
       globalStatusHistory: [],
       lastViewedStatusHistoryAt: 0,
       enableEpicBranches: false,
-      disableGitBranching: false,
-      fullCycleReviewCount: 2
+      disableGitBranching: true,
+      fullCycleReviewCount: 1
     })
   }
 }
@@ -365,7 +365,7 @@ export const useStore = create<AppState>()(
       setAITool: (tool) => set({ aiTool: tool }),
 
       // Claude Model
-      claudeModel: 'sonnet',
+      claudeModel: 'opus',
       setClaudeModel: (model) => set({ claudeModel: model }),
 
       // Custom Endpoint
@@ -391,9 +391,9 @@ export const useStore = create<AppState>()(
       bmadInGitignoreUserSet: false,
       enableEpicBranches: false,
       setEnableEpicBranches: (enabled) => set({ enableEpicBranches: enabled }),
-      disableGitBranching: false,
+      disableGitBranching: true,
       setDisableGitBranching: (disabled) => set({ disableGitBranching: disabled }),
-      fullCycleReviewCount: 2,
+      fullCycleReviewCount: 1,
       setFullCycleReviewCount: (count) => set({ fullCycleReviewCount: Math.max(0, Math.min(5, count)) }),
 
       // Project

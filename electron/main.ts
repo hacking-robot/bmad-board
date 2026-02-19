@@ -109,7 +109,7 @@ interface AppSettings {
 const defaultSettings: AppSettings = {
   themeMode: 'light',
   aiTool: 'claude-code',
-  claudeModel: 'sonnet',
+  claudeModel: 'opus',
   projectPath: null,
   projectType: null,
   selectedEpicId: null,
@@ -123,8 +123,8 @@ const defaultSettings: AppSettings = {
   bmadInGitignore: false,
   bmadInGitignoreUserSet: false,
   enableEpicBranches: false,
-  disableGitBranching: false,
-  fullCycleReviewCount: 2,
+  disableGitBranching: true,
+  fullCycleReviewCount: 1,
   // Human Review defaults
   enableHumanReviewColumn: false,
   humanReviewChecklist: [
@@ -828,7 +828,7 @@ function runGitCommand(args: string[], cwd: string, maxBuffer?: number): { stdou
     return { stdout: '', error: result.error.message }
   }
   if (result.status !== 0) {
-    return { stdout: '', error: result.stderr || 'Git command failed' }
+    return { stdout: result.stdout, error: result.stderr || result.stdout?.trim() || 'Git command failed' }
   }
   return { stdout: result.stdout }
 }
