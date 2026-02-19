@@ -528,23 +528,21 @@ export default function FullCycleOrchestrator() {
             // Small delay to ensure filesystem has synced
             await new Promise(r => setTimeout(r, 500))
 
-            const changesResult = await window.gitAPI.hasChanges(projectPath)
-            if (currentRunIdRef.current !== runId) return 'error'
-
-            if (!changesResult.hasChanges) {
-              appendFullCycleLog('No changes to commit, skipping')
-              return 'skipped'
-            }
-
             const commitType = step.commitMessage?.startsWith('fix') ? 'fix' : step.commitMessage?.startsWith('docs') ? 'docs' : 'feat'
             const message = `${commitType}(${branchName}): ${step.commitMessage?.replace(/^(fix|docs|feat): /, '') || 'update'}`
 
             appendFullCycleLog(`Committing: ${message}`)
+            // Attempt commit directly - git add . forces content check, avoiding
+            // racy git issues where stat cache misses recent writes
             const result = await window.gitAPI.commit(projectPath, message, true)
 
             if (currentRunIdRef.current !== runId) return 'error'
 
             if (!result.success) {
+              if (result.error?.includes('Nothing to commit') || result.error?.includes('nothing to commit')) {
+                appendFullCycleLog('No changes to commit, skipping')
+                return 'skipped'
+              }
               appendFullCycleLog(`Failed to commit: ${result.error}`)
               return 'error'
             }
