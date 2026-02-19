@@ -15,6 +15,7 @@ import TerminalIcon from '@mui/icons-material/Terminal'
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
 import SportsEsportsIcon from '@mui/icons-material/SportsEsports'
 import HistoryIcon from '@mui/icons-material/History'
+import RocketLaunchIcon from '@mui/icons-material/RocketLaunch'
 import SearchBar from '../SearchBar/SearchBar'
 import EpicFilter from '../EpicFilter/EpicFilter'
 import ThemeToggle from '../ThemeToggle/ThemeToggle'
@@ -22,6 +23,7 @@ import SettingsMenu from '../SettingsMenu'
 import ProjectSwitcher from '../ProjectSwitcher'
 import { useStore } from '../../store'
 import { useProjectData } from '../../hooks/useProjectData'
+import { AI_TOOLS } from '../../types'
 
 export default function Header() {
   const agents = useStore((state) => state.agents)
@@ -37,6 +39,11 @@ export default function Header() {
   const themeMode = useStore((state) => state.themeMode)
   const viewMode = useStore((state) => state.viewMode)
   const chatThreads = useStore((state) => state.chatThreads)
+  const aiTool = useStore((state) => state.aiTool)
+  const selectedEpicId = useStore((state) => state.selectedEpicId)
+  const stories = useStore((state) => state.stories)
+  const epicCycle = useStore((state) => state.epicCycle)
+  const setEpicCycleDialogOpen = useStore((state) => state.setEpicCycleDialogOpen)
   const { loadProjectData } = useProjectData()
 
   // Count chat agents currently running (isTyping)
@@ -44,6 +51,14 @@ export default function Header() {
     (thread) => thread?.isTyping
   ).length
 
+
+  // Run Epic button visibility
+  const selectedToolInfo = AI_TOOLS.find(t => t.id === aiTool)
+  const toolSupportsHeadless = selectedToolInfo?.cli.supportsHeadless ?? false
+  const backlogCount = selectedEpicId !== null
+    ? stories.filter((s) => s.epicId === selectedEpicId && s.status === 'backlog').length
+    : 0
+  const showRunEpic = selectedEpicId !== null && toolSupportsHeadless && backlogCount > 0 && viewMode === 'board'
 
   const isGameProject = projectType === 'bmgd'
   const logoSrc = themeMode === 'dark' ? logoDark : logoLight
@@ -174,6 +189,26 @@ export default function Header() {
                   >
                     <TerminalIcon />
                   </Badge>
+                </IconButton>
+              </Tooltip>
+            )}
+            {showRunEpic && (
+              <Tooltip title={epicCycle.isRunning ? 'Epic cycle running...' : `Run Epic (${backlogCount} backlog)`}>
+                <IconButton
+                  onClick={() => setEpicCycleDialogOpen(true)}
+                  size="small"
+                  sx={{
+                    color: epicCycle.isRunning ? 'primary.main' : 'text.secondary',
+                    ...(epicCycle.isRunning && {
+                      animation: 'pulse 1.5s ease-in-out infinite',
+                      '@keyframes pulse': {
+                        '0%, 100%': { opacity: 1 },
+                        '50%': { opacity: 0.5 }
+                      }
+                    })
+                  }}
+                >
+                  <RocketLaunchIcon />
                 </IconButton>
               </Tooltip>
             )}

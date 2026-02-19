@@ -17,7 +17,7 @@ import HelpPanel from './components/HelpPanel'
 import StatusBar from './components/StatusBar'
 import { AgentChat } from './components/AgentChat'
 import StatusHistoryPanel from './components/StatusHistoryPanel/StatusHistoryPanel'
-import { FullCycleDialog, FullCycleOrchestrator } from './components/FullCycleDialog'
+import { FullCycleDialog, FullCycleOrchestrator, EpicCycleDialog, EpicCycleOrchestrator } from './components/FullCycleDialog'
 import GlobalChatHandler from './components/GlobalChatHandler'
 
 const AGENT_PANEL_WIDTH = 500
@@ -228,6 +228,8 @@ export default function App() {
             <StatusHistoryPanel />
             <FullCycleDialog />
             <FullCycleOrchestrator />
+            <EpicCycleDialog />
+            <EpicCycleOrchestrator />
           </GlobalChatHandler>
         )}
       </Box>

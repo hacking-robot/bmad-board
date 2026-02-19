@@ -54,6 +54,29 @@ export const initialFullCycleState: FullCycleState = {
   stepStartTime: null
 }
 
+// Epic Cycle types
+export type EpicStoryStatus = 'pending' | 'running' | 'completed' | 'error'
+
+export interface EpicCycleState {
+  isRunning: boolean
+  epicId: number | null
+  storyQueue: string[]          // ordered story IDs to process
+  currentStoryIndex: number     // index into storyQueue
+  storyStatuses: EpicStoryStatus[]  // per-story status
+  startTime: number | null
+  error: string | null
+}
+
+export const initialEpicCycleState: EpicCycleState = {
+  isRunning: false,
+  epicId: null,
+  storyQueue: [],
+  currentStoryIndex: 0,
+  storyStatuses: [],
+  startTime: null,
+  error: null
+}
+
 // Full cycle step definitions for BMM projects
 export const FULL_CYCLE_STEPS_BMM: FullCycleStep[] = [
   {

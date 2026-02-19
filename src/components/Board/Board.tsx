@@ -569,6 +569,7 @@ export default function Board() {
             </Typography>
           </Alert>
         )}
+
         <Box
           ref={scrollContainerRef}
           sx={{
