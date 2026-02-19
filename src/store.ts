@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { Epic, Story, StoryContent, StoryStatus, Agent, ProjectType, AgentHistoryEntry, AITool, ClaudeModel, CustomEndpointConfig, HumanReviewChecklistItem, StoryReviewState, ChatMessage, AgentThread, StatusChangeEntry, StatusChangeSource } from './types'
-import { FullCycleState, FullCycleStepType, FullCycleStepStatus, initialFullCycleState } from './types/fullCycle'
+import { FullCycleState, FullCycleStepType, FullCycleStepStatus, initialFullCycleState, EpicCycleState, EpicStoryStatus, initialEpicCycleState } from './types/fullCycle'
 
 export type ViewMode = 'board' | 'chat'
 
@@ -337,6 +337,18 @@ interface AppState {
   advanceFullCycleStep: () => void
   fullCycleDialogOpen: boolean
   setFullCycleDialogOpen: (open: boolean) => void
+
+  // Epic Cycle Automation
+  epicCycle: EpicCycleState
+  epicCycleDialogOpen: boolean
+  setEpicCycleDialogOpen: (open: boolean) => void
+  startEpicCycle: (epicId: number, storyIds: string[]) => void
+  advanceEpicCycleStory: () => void
+  setEpicCycleError: (error: string) => void
+  cancelEpicCycle: () => void
+  completeEpicCycle: () => void
+  resetEpicCycle: () => void
+  retryEpicCycle: () => void
 
   // Computed - filtered stories
   getFilteredStories: () => Story[]
@@ -1031,6 +1043,80 @@ export const useStore = create<AppState>()(
             currentStep: state.fullCycle.currentStep + 1,
             stepStatus: 'completed',
             stepStatuses: newStatuses
+          }
+        }
+      }),
+
+      // Epic Cycle Automation
+      epicCycle: initialEpicCycleState,
+      epicCycleDialogOpen: false,
+      setEpicCycleDialogOpen: (open) => set({ epicCycleDialogOpen: open }),
+      startEpicCycle: (epicId, storyIds) => set({
+        epicCycle: {
+          ...initialEpicCycleState,
+          isRunning: true,
+          epicId,
+          storyQueue: storyIds,
+          currentStoryIndex: 0,
+          storyStatuses: storyIds.map(() => 'pending' as EpicStoryStatus),
+          startTime: Date.now()
+        },
+        epicCycleDialogOpen: true
+      }),
+      advanceEpicCycleStory: () => set((state) => {
+        const newStatuses = [...state.epicCycle.storyStatuses]
+        if (state.epicCycle.currentStoryIndex < newStatuses.length) {
+          newStatuses[state.epicCycle.currentStoryIndex] = 'completed'
+        }
+        return {
+          epicCycle: {
+            ...state.epicCycle,
+            currentStoryIndex: state.epicCycle.currentStoryIndex + 1,
+            storyStatuses: newStatuses
+          }
+        }
+      }),
+      setEpicCycleError: (error) => set((state) => {
+        const newStatuses = [...state.epicCycle.storyStatuses]
+        if (state.epicCycle.currentStoryIndex < newStatuses.length) {
+          newStatuses[state.epicCycle.currentStoryIndex] = 'error'
+        }
+        return {
+          epicCycle: {
+            ...state.epicCycle,
+            error,
+            storyStatuses: newStatuses
+          }
+        }
+      }),
+      cancelEpicCycle: () => set((state) => ({
+        epicCycle: {
+          ...state.epicCycle,
+          isRunning: false,
+          error: 'Cancelled by user'
+        }
+      })),
+      completeEpicCycle: () => set((state) => ({
+        epicCycle: {
+          ...state.epicCycle,
+          isRunning: false
+        }
+      })),
+      resetEpicCycle: () => set({
+        epicCycle: initialEpicCycleState
+      }),
+      retryEpicCycle: () => set((state) => {
+        // Resume from the failed story, resetting its status to pending
+        const newStatuses = [...state.epicCycle.storyStatuses]
+        if (state.epicCycle.currentStoryIndex < newStatuses.length) {
+          newStatuses[state.epicCycle.currentStoryIndex] = 'pending'
+        }
+        return {
+          epicCycle: {
+            ...state.epicCycle,
+            isRunning: true,
+            error: null,
+            storyStatuses: newStatuses
           }
         }
       }),

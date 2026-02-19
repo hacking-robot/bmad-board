@@ -139,6 +139,7 @@ export default function FullCycleOrchestrator() {
       let resolved = false
       let accumulatedOutput = ''
       let currentSessionId = currentThread?.sessionId || null
+      let autoResponseSentAt = 0
 
       const cleanup = () => {
         unsubExit()
@@ -153,19 +154,30 @@ export default function FullCycleOrchestrator() {
       const stripAnsi = (text: string): string =>
         text.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').replace(/\x1b\][\s\S]*?\x07/g, '')
 
-      // Detect if output ends with a prompt expecting user input
-      // General approach: look for numbered/lettered options + trailing prompt (colon or question)
+      // Detect if output contains a prompt expecting user input
+      // Strategy: if numbered/lettered options exist AND any question/prompt
+      // signal appears anywhere in the tail, it's a prompt. Intentionally
+      // permissive — a false positive (sending "1" to a summary) is far
+      // less costly than a false negative (cycle dies).
       const isPromptForInput = (text: string): boolean => {
         const clean = stripAnsi(text.slice(-2000))
         // Has numbered options: "1." "2." or "[1]" "[2]" style
         const hasNumberedOptions = /(?:^|\n)\s*(?:\d+\.|[\[(]\d+[\])])\s*\S/m.test(clean)
         // Has lettered options: "[a]" "[c]" style
         const hasLetteredOptions = /[\[(][a-z][\])]\s*\S/i.test(clean)
-        // Ends with a prompt (colon, question mark, or "Choose/Select" line)
-        const trimmed = clean.trim()
-        const endsWithPrompt = /[?:]\s*$/.test(trimmed) || /(?:choose|select|pick|which)\s*$/i.test(trimmed)
-        // Has options and ends with a prompt
-        return (hasNumberedOptions || hasLetteredOptions) && endsWithPrompt
+        if (!hasNumberedOptions && !hasLetteredOptions) return false
+
+        // With numbered options, look for ANY prompt signal anywhere in the tail
+        // (not just at the very end — prompt wording varies)
+        if (/\?/.test(clean)) return true
+        if (/(?:choose|select|pick|specify|enter|which)\b/i.test(clean)) return true
+        if (/\[\d+\]/.test(clean)) return true
+        if (/your (?:choice|selection|input|response|preference)/i.test(clean)) return true
+        if (/:\s*\n\s*(?:\d+\.|[\[(])/m.test(clean)) return true
+
+        // Numbered options alone (without explicit prompt signal) — still
+        // likely a prompt since the process exited after showing options
+        return true
       }
 
       // Detect if output asks about committing
@@ -188,14 +200,35 @@ export default function FullCycleOrchestrator() {
         return /(?:^|\n)\s*(?:1\.|[\[(]1[\])])\s*[*]*\s*(?:fix|update|resolve|apply|auto|correct|repair)/im.test(clean)
       }
 
-      // Subscribe to output ONLY for accumulating chunks for pattern detection
-      // Message updates are handled by the global handler
+      // Subscribe to output for accumulating TEXT content for pattern detection.
+      // Raw chunks are stream-json (newlines escaped as \n), so we must parse
+      // the JSON and extract actual text — otherwise regexes can't match.
       const unsubOutput = window.chatAPI.onChatOutput((event) => {
         if (event.agentId !== agentId) return
         if (event.isAgentLoad) return
         if (!event.chunk) return
 
-        accumulatedOutput += event.chunk
+        const lines = event.chunk.split('\n').filter(Boolean)
+        for (const line of lines) {
+          try {
+            const parsed = JSON.parse(line)
+            if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
+              accumulatedOutput += parsed.delta.text
+            } else if (parsed.type === 'assistant' && parsed.message?.content) {
+              for (const block of parsed.message.content) {
+                if (block.type === 'text' && block.text) {
+                  accumulatedOutput += block.text
+                }
+              }
+            } else if (parsed.type === 'result' && parsed.result) {
+              // Result is the definitive complete response — overwrite
+              accumulatedOutput = parsed.result
+            }
+          } catch {
+            // Not valid JSON line — accumulate raw as fallback
+            accumulatedOutput += line
+          }
+        }
       })
 
       // Handle agent loaded (for first message)
@@ -289,6 +322,9 @@ export default function FullCycleOrchestrator() {
           // Register new message ID with global handler
           setCurrentMessageId(agentId, newAssistantMsgId)
 
+          // Track that we sent an auto-response (for race condition detection)
+          autoResponseSentAt = Date.now()
+
           // Clear accumulated output for next round
           accumulatedOutput = ''
 
@@ -368,6 +404,46 @@ export default function FullCycleOrchestrator() {
           appendFullCycleLog(`${agentId} completed successfully`)
           resolve('success')
           return
+        }
+
+        // After auto-response, require substantial output before resolving.
+        // This prevents a race where the follow-up process exits quickly
+        // with minimal output and the step resolves before work is done.
+        if (autoResponseSentAt > 0) {
+          const outputLen = cleanOutput.trim().length
+          if (outputLen < 200) {
+            appendFullCycleLog('Waiting for agent to process auto-response...')
+            // Wait for any pending output events to settle
+            await new Promise(r => setTimeout(r, 3000))
+
+            // Re-evaluate with fresh accumulated output
+            const freshClean = stripAnsi(accumulatedOutput)
+
+            // Check if a new prompt appeared during the wait
+            if (isPromptForInput(freshClean) && currentSessionId) {
+              const label = hasFixAsFirstOption(freshClean) ? 'fix option' : 'option 1'
+              const sent = await sendAutoResponse('1', `Detected prompt after wait, auto-selecting ${label}`)
+              if (sent) return
+              return
+            }
+
+            // Check for completion indicators in fresh output
+            const freshTail = freshClean.slice(-500)
+            const freshComplete = /(?:ready for commit|story is clean|completed|done|finished|no (?:issues|errors|problems)|all (?:good|set|done))[^?:]*$/i.test(freshTail)
+            if (freshComplete) {
+              autoResponseSentAt = 0
+              resolved = true
+              cleanup()
+              appendFullCycleLog(`${agentId} completed successfully after auto-response`)
+              resolve('success')
+              return
+            }
+
+            // Still minimal output - resolve but log the situation
+            autoResponseSentAt = 0
+            appendFullCycleLog(`Agent produced minimal output after auto-response (${stripAnsi(accumulatedOutput).trim().length} chars)`)
+          }
+          autoResponseSentAt = 0
         }
 
         // No question detected, mark as complete
