@@ -150,6 +150,108 @@ export const FULL_CYCLE_STEPS_BMM: FullCycleStep[] = [
   }
 ]
 
+// Build full cycle steps dynamically based on project type and review count
+export function buildFullCycleSteps(projectType: 'bmm' | 'bmgd', reviewCount: number): FullCycleStep[] {
+  const isBmgd = projectType === 'bmgd'
+  const devAgentId = isBmgd ? 'game-dev' : 'dev'
+  const smAgentId = isBmgd ? 'game-scrum-master' : 'sm'
+  const createStoryCommand = isBmgd ? '/bmad:bmgd:workflows:create-story' : '/bmad:bmm:workflows:create-story'
+  const devStoryCommand = isBmgd ? '/bmad:bmgd:workflows:dev-story' : '/bmad:bmm:workflows:dev-story'
+  const codeReviewCommand = isBmgd ? '/bmad:bmgd:workflows:code-review' : '/bmad:bmm:workflows:code-review'
+  const smDesc = isBmgd ? 'Game Scrum Master' : 'SM'
+  const devDesc = isBmgd ? 'Game DEV' : 'DEV'
+
+  const steps: FullCycleStep[] = [
+    {
+      id: 'create-story',
+      name: 'Create Story File',
+      type: 'agent',
+      description: `${smDesc} agent creates story markdown with acceptance criteria`,
+      agentId: smAgentId,
+      command: createStoryCommand
+    },
+    {
+      id: 'create-branch',
+      name: 'Create Git Branch',
+      type: 'git',
+      description: 'Create a feature branch for this story',
+      gitAction: 'create-branch'
+    },
+    {
+      id: 'commit-story',
+      name: 'Commit Story',
+      type: 'git',
+      description: 'Commit the new story file',
+      gitAction: 'commit',
+      commitMessage: 'docs: add story file'
+    },
+    {
+      id: 'implement',
+      name: 'Implement Story',
+      type: 'agent',
+      description: `${devDesc} agent implements the feature`,
+      agentId: devAgentId,
+      command: devStoryCommand
+    },
+    {
+      id: 'commit-implementation',
+      name: 'Commit Implementation',
+      type: 'git',
+      description: 'Commit all implementation changes',
+      gitAction: 'commit',
+      commitMessage: 'feat: implement story'
+    }
+  ]
+
+  // Add review rounds
+  for (let i = 1; i <= reviewCount; i++) {
+    const isLast = i === reviewCount
+    steps.push({
+      id: `code-review-${i}`,
+      name: `Code Review #${i}`,
+      type: 'agent',
+      description: i === 1 ? `${devDesc} agent reviews the code` : `${devDesc} review #${i} for verification`,
+      agentId: devAgentId,
+      command: codeReviewCommand
+    })
+    steps.push({
+      id: `commit-review-${i}`,
+      name: isLast && i > 1 ? 'Commit Final Fixes' : 'Commit Review Fixes',
+      type: 'git',
+      description: isLast && i > 1 ? 'Commit any remaining fixes' : `Commit any fixes from review #${i}`,
+      gitAction: 'commit',
+      commitMessage: isLast && i > 1 ? 'fix: final review fixes' : 'fix: address code review feedback'
+    })
+  }
+
+  // Suffix steps
+  steps.push(
+    {
+      id: 'mark-done',
+      name: 'Mark Done',
+      type: 'status',
+      description: 'Update story status to done'
+    },
+    {
+      id: 'commit-done',
+      name: 'Commit Status',
+      type: 'git',
+      description: 'Commit the done status update',
+      gitAction: 'commit',
+      commitMessage: 'docs: mark story as done'
+    },
+    {
+      id: 'merge-to-base',
+      name: 'Merge to Base',
+      type: 'git',
+      description: 'Merge story branch back to base branch',
+      gitAction: 'merge'
+    }
+  )
+
+  return steps
+}
+
 // Full cycle step definitions for BMGD projects (uses game-* agent IDs)
 export const FULL_CYCLE_STEPS_BMGD: FullCycleStep[] = [
   {

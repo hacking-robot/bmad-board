@@ -3,7 +3,7 @@ import { useStore } from '../../store'
 import { useWorkflow } from '../../hooks/useWorkflow'
 import { useChatMessageHandlerContext } from '../../hooks/useChatMessageHandler'
 import { saveStoryChatHistoryImmediate } from '../../utils/chatUtils'
-import { FULL_CYCLE_STEPS_BMM, FULL_CYCLE_STEPS_BMGD, FullCycleStep } from '../../types/fullCycle'
+import { buildFullCycleSteps, FullCycleStep } from '../../types/fullCycle'
 import { transformCommand } from '../../utils/commandTransform'
 
 /**
@@ -28,6 +28,8 @@ export default function FullCycleOrchestrator() {
   const claudeModel = useStore((state) => state.claudeModel)
   const baseBranch = useStore((state) => state.baseBranch)
   const enableEpicBranches = useStore((state) => state.enableEpicBranches)
+  const disableGitBranching = useStore((state) => state.disableGitBranching)
+  const fullCycleReviewCount = useStore((state) => state.fullCycleReviewCount)
   const setCurrentBranch = useStore((state) => state.setCurrentBranch)
   const setHasUncommittedChanges = useStore((state) => state.setHasUncommittedChanges)
 
@@ -56,10 +58,10 @@ export default function FullCycleOrchestrator() {
   const isProcessingRef = useRef(false)
   const cleanupRef = useRef<(() => void) | null>(null)
 
-  // Get steps based on project type
+  // Get steps based on project type and review count
   const getSteps = useCallback((): FullCycleStep[] => {
-    return projectType === 'bmgd' ? FULL_CYCLE_STEPS_BMGD : FULL_CYCLE_STEPS_BMM
-  }, [projectType])
+    return buildFullCycleSteps(projectType || 'bmm', fullCycleReviewCount)
+  }, [projectType, fullCycleReviewCount])
 
   // Save chat history before clearing - preserves conversation for story card
   const saveChatHistoryAndClear = useCallback(async (agentId: string, storyId: string) => {
@@ -492,6 +494,12 @@ export default function FullCycleOrchestrator() {
 
         case 'git': {
           if (step.gitAction === 'create-branch') {
+            // Skip branch creation when git branching is disabled
+            if (disableGitBranching) {
+              appendFullCycleLog('Git branching disabled, skipping branch creation')
+              return 'skipped'
+            }
+
             appendFullCycleLog(`Creating branch: ${branchName}`)
 
             const fromBranch = enableEpicBranches ? undefined : baseBranch
@@ -547,6 +555,12 @@ export default function FullCycleOrchestrator() {
           }
 
           if (step.gitAction === 'merge') {
+            // Skip merge when git branching is disabled (already on base branch)
+            if (disableGitBranching) {
+              appendFullCycleLog('Git branching disabled, skipping merge')
+              return 'skipped'
+            }
+
             await new Promise(r => setTimeout(r, 500))
             const preCheckChanges = await window.gitAPI.hasChanges(projectPath)
             if (currentRunIdRef.current !== runId) return 'error'
@@ -627,6 +641,7 @@ export default function FullCycleOrchestrator() {
     aiTool,
     baseBranch,
     enableEpicBranches,
+    disableGitBranching,
     getSteps,
     executeAgentStep,
     appendFullCycleLog,
