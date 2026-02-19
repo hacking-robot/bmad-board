@@ -149,22 +149,28 @@ export default function FullCycleOrchestrator() {
         }
       }
 
-      // Detect if output contains a multiple-choice prompt
-      const isMultipleChoicePrompt = (text: string): boolean => {
-        const patterns = [
-          /Choose \[\d+\]/i,
-          /Select \[\d+\]/i,
-          /\[\d+\].*\[\d+\].*\[\d+\]/,  // At least 3 numbered options like [1]...[2]...[3]
-          /Option \d+.*Option \d+/i,
-          /\[[a-z]\].*\[[a-z]\].*\[[a-z]\]/i,  // At least 3 letter options like [c]...[r]...[m]
-          /Would you like me to:[\s\S]*\[[a-z]\]/i,  // "Would you like me to:" followed by [letter] option
-          /What's next\?[\s\S]*\[[a-z]\]/i,  // "What's next?" followed by [letter] option
-        ]
-        return patterns.some(p => p.test(text))
+      // Strip ANSI escape codes from text for reliable pattern matching
+      const stripAnsi = (text: string): string =>
+        text.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').replace(/\x1b\][\s\S]*?\x07/g, '')
+
+      // Detect if output ends with a prompt expecting user input
+      // General approach: look for numbered/lettered options + trailing prompt (colon or question)
+      const isPromptForInput = (text: string): boolean => {
+        const clean = stripAnsi(text.slice(-2000))
+        // Has numbered options: "1." "2." or "[1]" "[2]" style
+        const hasNumberedOptions = /(?:^|\n)\s*(?:\d+\.|[\[(]\d+[\])])\s*\S/m.test(clean)
+        // Has lettered options: "[a]" "[c]" style
+        const hasLetteredOptions = /[\[(][a-z][\])]\s*\S/i.test(clean)
+        // Ends with a prompt (colon, question mark, or "Choose/Select" line)
+        const trimmed = clean.trim()
+        const endsWithPrompt = /[?:]\s*$/.test(trimmed) || /(?:choose|select|pick|which)\s*$/i.test(trimmed)
+        // Has options and ends with a prompt
+        return (hasNumberedOptions || hasLetteredOptions) && endsWithPrompt
       }
 
       // Detect if output asks about committing
       const isCommitQuestion = (text: string): boolean => {
+        const clean = stripAnsi(text.slice(-1500))
         const patterns = [
           /do you want me to commit/i,
           /should I commit/i,
@@ -172,13 +178,14 @@ export default function FullCycleOrchestrator() {
           /shall I commit/i,
           /commit these changes\?/i
         ]
-        return patterns.some(p => p.test(text))
+        return patterns.some(p => p.test(clean))
       }
 
-      // Detect if output asks about issues with a [1] fix option
-      const hasFixOption = (text: string): boolean => {
-        // Simple: if there's "[1]" with "fix" nearby, respond with 1
-        return /\[1\].*fix/i.test(text) || /fix.*\[1\]/i.test(text)
+      // Detect if first option is a fix/action option (so we auto-respond "1")
+      const hasFixAsFirstOption = (text: string): boolean => {
+        const clean = stripAnsi(text.slice(-2000))
+        // Option 1 contains fix/update/resolve/apply/auto keywords
+        return /(?:^|\n)\s*(?:1\.|[\[(]1[\])])\s*[*]*\s*(?:fix|update|resolve|apply|auto|correct|repair)/im.test(clean)
       }
 
       // Subscribe to output ONLY for accumulating chunks for pattern detection
@@ -320,8 +327,10 @@ export default function FullCycleOrchestrator() {
           }
         }
 
+        const cleanOutput = stripAnsi(accumulatedOutput)
+
         // Check for commit questions - we handle commits directly, so just complete
-        if (isCommitQuestion(accumulatedOutput)) {
+        if (isCommitQuestion(cleanOutput)) {
           resolved = true
           cleanup()
           appendFullCycleLog(`${agentId} completed (commit handled by app)`)
@@ -330,11 +339,11 @@ export default function FullCycleOrchestrator() {
         }
 
         // Check for "what's next?" type prompts - agent has completed, just mark done
-        // These prompts offer to continue with MORE work, but the step is already done
-        const isWhatNextPrompt = /What's next\?/i.test(accumulatedOutput) ||
-          /Would you like me to:[\s\S]*\[(c|r|m)\]/i.test(accumulatedOutput)
+        const cleanTail = cleanOutput.slice(-1500)
+        const isWhatNextPrompt = /What.?s next\?/i.test(cleanTail) ||
+          /Would you like me to:/i.test(cleanTail)
 
-        if (isWhatNextPrompt) {
+        if (isWhatNextPrompt && !isPromptForInput(cleanOutput)) {
           resolved = true
           cleanup()
           appendFullCycleLog(`${agentId} completed (step work done, skipping follow-up prompt)`)
@@ -342,25 +351,16 @@ export default function FullCycleOrchestrator() {
           return
         }
 
-        // Check if output ends with a completion message (not a question)
-        // This prevents false positives from earlier prompts in the accumulated output
-        const lastChunk = accumulatedOutput.slice(-500) // Check last ~500 chars
-        const endsWithCompletion = /(?:ready for commit|story is clean|completed|done|finished|no (?:issues|errors|problems)|all (?:good|set|done))[^?]*$/i.test(lastChunk)
-
-        // Check for [1] Fix option - just respond with "1"
-        if (hasFixOption(lastChunk) && currentSessionId) {
-          const sent = await sendAutoResponse('1', 'Detected [1] fix option, responding with "1"')
+        // Check if agent is asking for input (numbered/lettered options + prompt)
+        if (isPromptForInput(cleanOutput) && currentSessionId) {
+          const label = hasFixAsFirstOption(cleanOutput) ? 'fix option' : 'option 1'
+          const sent = await sendAutoResponse('1', `Detected prompt, auto-selecting ${label}`)
           if (sent) return // Wait for next exit event
           return // Error already handled
         }
 
-        // Check for other multiple choice prompts
-        const hasRecentPrompt = isMultipleChoicePrompt(lastChunk)
-        if (hasRecentPrompt && currentSessionId) {
-          const sent = await sendAutoResponse('1', 'Detected multiple choice prompt, auto-responding with "1"')
-          if (sent) return // Wait for next exit event
-          return // Error already handled
-        }
+        // Check if output ends with a completion message (not a question/prompt)
+        const endsWithCompletion = /(?:ready for commit|story is clean|completed|done|finished|no (?:issues|errors|problems)|all (?:good|set|done))[^?:]*$/i.test(cleanOutput.slice(-500))
 
         if (endsWithCompletion) {
           resolved = true
