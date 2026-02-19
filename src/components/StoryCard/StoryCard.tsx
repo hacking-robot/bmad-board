@@ -77,6 +77,7 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
   const bmadInGitignore = useStore((state) => state.bmadInGitignore)
   const enableEpicBranches = useStore((state) => state.enableEpicBranches)
   const baseBranch = useStore((state) => state.baseBranch)
+  const disableGitBranching = useStore((state) => state.disableGitBranching)
 
   // Compute if we're on this story's branch (derived from store state)
   const storyBranchName = story.id
@@ -91,7 +92,7 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
 
   // When bmad is gitignored, branch restrictions are relaxed since data persists across branches
   // These determine if actions are allowed (separate from actual branch state for UI)
-  const canExecuteOnAnyBranch = bmadInGitignore
+  const canExecuteOnAnyBranch = bmadInGitignore || disableGitBranching
   const canExecuteStoryActions = isOnStoryBranch || canExecuteOnAnyBranch
   // When epic branches are disabled, we can create story branches from anywhere (they'll be created from base branch)
   // When epic branches are enabled, must be on the epic branch to create story branches
@@ -751,7 +752,7 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
                   // Backlog/ready-for-dev stories can be worked on from epic branch (or base branch when epic branches disabled)
                   // When bmad is gitignored, allow from any branch
                   const canExecuteFromParentBranch = (effectiveStatus === 'backlog' || effectiveStatus === 'ready-for-dev') && (enableEpicBranches ? isOnEpicBranch : isOnBaseBranch)
-                  const canExecute = canExecuteStoryActions || canExecuteFromParentBranch
+                  const canExecute = canExecuteStoryActions || canExecuteFromParentBranch || disableGitBranching
                   const isDisabled = !canExecute || isAgentWorking
                   const requiredBranch = enableEpicBranches ? `epic-${story.epicId}` : baseBranch
                   const tooltipTitle = isAgentWorking

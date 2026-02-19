@@ -91,6 +91,7 @@ interface AppSettings {
   bmadInGitignore: boolean // When true, bmad folders are gitignored so branch restrictions are relaxed
   bmadInGitignoreUserSet: boolean // When true, user has manually set bmadInGitignore (don't auto-detect)
   enableEpicBranches: boolean // When true, show epic branch features
+  disableGitBranching: boolean // When true, bypass all branch restrictions and hide branch UI
   // Human Review feature
   enableHumanReviewColumn: boolean
   humanReviewChecklist: HumanReviewChecklistItem[]
@@ -121,6 +122,7 @@ const defaultSettings: AppSettings = {
   bmadInGitignore: false,
   bmadInGitignoreUserSet: false,
   enableEpicBranches: false,
+  disableGitBranching: false,
   // Human Review defaults
   enableHumanReviewColumn: false,
   humanReviewChecklist: [

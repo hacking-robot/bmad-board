@@ -74,6 +74,8 @@ export default function SettingsMenu() {
   const setAllowDirectEpicMerge = useStore((state) => state.setAllowDirectEpicMerge)
   const enableEpicBranches = useStore((state) => state.enableEpicBranches)
   const setEnableEpicBranches = useStore((state) => state.setEnableEpicBranches)
+  const disableGitBranching = useStore((state) => state.disableGitBranching)
+  const setDisableGitBranching = useStore((state) => state.setDisableGitBranching)
   const projectPath = useStore((state) => state.projectPath)
 
   const selectedTool = AI_TOOLS.find((t) => t.id === aiTool) || AI_TOOLS[0]
@@ -296,6 +298,21 @@ export default function SettingsMenu() {
           <Switch
             edge="end"
             checked={enableEpicBranches}
+            size="small"
+          />
+        </MenuItem>
+        <MenuItem onClick={() => setDisableGitBranching(!disableGitBranching)}>
+          <ListItemIcon>
+            <GitIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText
+            primary="Disable Git Branching"
+            secondary="Work on base branch only"
+            secondaryTypographyProps={{ variant: 'caption' }}
+          />
+          <Switch
+            edge="end"
+            checked={disableGitBranching}
             size="small"
           />
         </MenuItem>
