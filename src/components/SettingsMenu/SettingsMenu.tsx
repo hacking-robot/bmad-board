@@ -38,6 +38,9 @@ import RefreshIcon from '@mui/icons-material/Refresh'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import ErrorIcon from '@mui/icons-material/Error'
 import DesktopWindowsIcon from '@mui/icons-material/DesktopWindows'
+import SystemUpdateIcon from '@mui/icons-material/SystemUpdate'
+import DownloadIcon from '@mui/icons-material/Download'
+import InstallDesktopIcon from '@mui/icons-material/InstallDesktop'
 import { useStore } from '../../store'
 import { useProjectData } from '../../hooks/useProjectData'
 import { AI_TOOLS, AITool, CLIDetectionResult, CLAUDE_MODELS, CustomEndpointConfig } from '../../types'
@@ -52,6 +55,12 @@ export default function SettingsMenu() {
   const [availableBranches, setAvailableBranches] = useState<string[]>([])
   const [loadingBranches, setLoadingBranches] = useState(false)
   const open = Boolean(anchorEl)
+
+  // Auto-update state
+  const [appVersion, setAppVersion] = useState<string>('')
+  const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'error' | 'up-to-date'>('idle')
+  const [updateVersion, setUpdateVersion] = useState<string>('')
+  const [downloadPercent, setDownloadPercent] = useState<number>(0)
 
   const aiTool = useStore((state) => state.aiTool)
   const setAITool = useStore((state) => state.setAITool)
@@ -91,6 +100,17 @@ export default function SettingsMenu() {
   const { loadProjectData } = useProjectData()
 
   const selectedTool = AI_TOOLS.find((t) => t.id === aiTool) || AI_TOOLS[0]
+
+  // Fetch app version and listen for update status
+  useEffect(() => {
+    window.updaterAPI.getAppVersion().then(setAppVersion)
+    const cleanup = window.updaterAPI.onUpdateStatus((event) => {
+      setUpdateStatus(event.status === 'dev-mode' ? 'idle' : event.status as typeof updateStatus)
+      if (event.version) setUpdateVersion(event.version)
+      if (event.percent !== undefined) setDownloadPercent(event.percent)
+    })
+    return cleanup
+  }, [])
 
   // Detect CLI tools when dialog opens
   useEffect(() => {
@@ -169,6 +189,17 @@ export default function SettingsMenu() {
 
   const handleClose = () => {
     setAnchorEl(null)
+  }
+
+  const handleUpdateAction = () => {
+    if (updateStatus === 'available') {
+      window.updaterAPI.downloadUpdate()
+    } else if (updateStatus === 'ready') {
+      window.updaterAPI.installUpdate()
+    } else if (updateStatus === 'idle' || updateStatus === 'error' || updateStatus === 'up-to-date') {
+      setUpdateStatus('checking')
+      window.updaterAPI.checkForUpdates()
+    }
   }
 
   const handleKeyboardShortcuts = () => {
@@ -362,6 +393,51 @@ export default function SettingsMenu() {
             edge="end"
             checked={disableGitBranching}
             size="small"
+          />
+        </MenuItem>
+        {appVersion && (
+          <MenuItem disabled sx={{ opacity: '0.7 !important' }}>
+            <ListItemIcon>
+              <SystemUpdateIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText
+              primary="Version"
+              secondary={`v${appVersion}`}
+              secondaryTypographyProps={{ variant: 'caption' }}
+            />
+          </MenuItem>
+        )}
+        <MenuItem
+          onClick={handleUpdateAction}
+          disabled={updateStatus === 'checking' || updateStatus === 'downloading'}
+        >
+          <ListItemIcon>
+            {updateStatus === 'checking' ? (
+              <CircularProgress size={20} />
+            ) : updateStatus === 'available' ? (
+              <DownloadIcon fontSize="small" />
+            ) : updateStatus === 'downloading' ? (
+              <CircularProgress size={20} variant="determinate" value={downloadPercent} />
+            ) : updateStatus === 'ready' ? (
+              <InstallDesktopIcon fontSize="small" color="success" />
+            ) : (
+              <SyncIcon fontSize="small" />
+            )}
+          </ListItemIcon>
+          <ListItemText
+            primary={
+              updateStatus === 'checking' ? 'Checking...'
+                : updateStatus === 'available' ? `Download v${updateVersion}`
+                : updateStatus === 'downloading' ? `Downloading... ${downloadPercent}%`
+                : updateStatus === 'ready' ? `Install v${updateVersion}`
+                : 'Check for Updates'
+            }
+            secondary={
+              updateStatus === 'error' ? 'Update check failed'
+                : updateStatus === 'up-to-date' ? "You're up to date"
+                : undefined
+            }
+            secondaryTypographyProps={{ variant: 'caption' }}
           />
         </MenuItem>
         <MenuItem onClick={handleKeyboardShortcuts}>

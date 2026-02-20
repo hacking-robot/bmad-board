@@ -6,6 +6,7 @@ import SkipNextIcon from '@mui/icons-material/SkipNext'
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked'
 import SmartToyIcon from '@mui/icons-material/SmartToy'
 import TerminalIcon from '@mui/icons-material/Terminal'
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import { WizardStep, WizardStepStatus, WizardPhase } from '../../types/projectWizard'
 import { PHASE_LABELS } from '../../data/wizardSteps'
 
@@ -118,20 +119,44 @@ export default function WizardStepper({ steps, currentStep, stepStatuses, onSkip
 
               {/* Step name + agent */}
               <Box sx={{ flex: 1, overflow: 'hidden' }}>
-                <Typography
-                  variant="body2"
-                  sx={{
-                    fontWeight: isActive ? 600 : 400,
-                    color: status === 'error' ? 'error.main' : status === 'skipped' ? 'text.disabled' : isActive ? 'text.primary' : isPast ? 'text.secondary' : 'text.secondary',
-                    textDecoration: status === 'skipped' ? 'line-through' : 'none',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    lineHeight: step.agentName ? 1.3 : 1.5
-                  }}
-                >
-                  {step.name}
-                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      fontWeight: isActive ? 600 : 400,
+                      color: status === 'error' ? 'error.main' : status === 'skipped' ? 'text.disabled' : isActive ? 'text.primary' : isPast ? 'text.secondary' : 'text.secondary',
+                      textDecoration: status === 'skipped' ? 'line-through' : 'none',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      lineHeight: step.agentName ? 1.3 : 1.5
+                    }}
+                  >
+                    {step.name}
+                  </Typography>
+                  {step.tooltip && (
+                    <Tooltip
+                      title={step.tooltip}
+                      placement="right"
+                      arrow
+                      slotProps={{
+                        tooltip: {
+                          sx: { maxWidth: 300, fontSize: '0.75rem', lineHeight: 1.4 }
+                        }
+                      }}
+                    >
+                      <InfoOutlinedIcon
+                        sx={{
+                          fontSize: 14,
+                          color: 'text.disabled',
+                          cursor: 'help',
+                          flexShrink: 0,
+                          '&:hover': { color: 'primary.main' }
+                        }}
+                      />
+                    </Tooltip>
+                  )}
+                </Box>
                 {step.agentName && (
                   <Typography
                     variant="caption"

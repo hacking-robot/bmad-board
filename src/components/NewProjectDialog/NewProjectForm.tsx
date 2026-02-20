@@ -19,6 +19,8 @@ import {
 } from '@mui/material'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import AddIcon from '@mui/icons-material/Add'
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
+import Tooltip from '@mui/material/Tooltip'
 import { useStore } from '../../store'
 
 const BMAD_MODULES = [
@@ -92,11 +94,11 @@ export default function NewProjectForm({ open, onClose }: NewProjectFormProps) {
       return
     }
 
-    startProjectWizard(result.path, outputFolder)
+    startProjectWizard(result.path, outputFolder, developerType)
     setCreating(false)
     reset()
     onClose()
-  }, [parentPath, projectName, outputFolder, startProjectWizard, reset, onClose])
+  }, [parentPath, projectName, outputFolder, developerType, startProjectWizard, reset, onClose])
 
   return (
     <Dialog
@@ -203,20 +205,45 @@ export default function NewProjectForm({ open, onClose }: NewProjectFormProps) {
             )}
           />
 
-          <FormControl size="small" fullWidth disabled>
-            <InputLabel>Development Mode</InputLabel>
-            <Select
-              value={developerType}
-              label="Development Mode"
-              onChange={(e) => setDeveloperType(e.target.value as 'ai' | 'human')}
+          <Stack direction="row" alignItems="center" spacing={0.5}>
+            <FormControl size="small" fullWidth>
+              <InputLabel>Development Mode</InputLabel>
+              <Select
+                value={developerType}
+                label="Development Mode"
+                onChange={(e) => setDeveloperType(e.target.value as 'ai' | 'human')}
+              >
+                <MenuItem value="ai">AI Driven Development</MenuItem>
+                <MenuItem value="human">Manual Development</MenuItem>
+              </Select>
+            </FormControl>
+            <Tooltip
+              title={
+                <Box sx={{ p: 0.5 }}>
+                  <Typography variant="subtitle2" fontWeight={600} gutterBottom>AI Driven Development</Typography>
+                  <Typography variant="caption" display="block" sx={{ mb: 1 }}>
+                    AI agents implement stories, run tests, and maintain the story file automatically. Best when using AI coding assistants as your primary development workflow.
+                  </Typography>
+                  <Typography variant="subtitle2" fontWeight={600} gutterBottom>Manual Development</Typography>
+                  <Typography variant="caption" display="block">
+                    You write the code yourself using the story file as a spec. The code review workflow verifies your work against the spec and updates the story file for you.
+                  </Typography>
+                </Box>
+              }
+              arrow
+              placement="right"
             >
-              <MenuItem value="ai">AI Driven Development</MenuItem>
-              <MenuItem value="human">Manual Development</MenuItem>
-            </Select>
-            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, ml: 1.75 }}>
-              Not implemented yet
-            </Typography>
-          </FormControl>
+              <InfoOutlinedIcon
+                sx={{
+                  fontSize: 18,
+                  color: 'text.secondary',
+                  cursor: 'help',
+                  flexShrink: 0,
+                  '&:hover': { color: 'primary.main' }
+                }}
+              />
+            </Tooltip>
+          </Stack>
 
           <TextField
             label="Output Folder"

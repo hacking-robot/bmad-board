@@ -21,6 +21,7 @@ import { FullCycleDialog, FullCycleOrchestrator, EpicCycleDialog, EpicCycleOrche
 import GlobalChatHandler from './components/GlobalChatHandler'
 import { ProjectWizard } from './components/ProjectWizard'
 import ProjectWorkflowsDialog from './components/ProjectWorkflowsDialog/ProjectWorkflowsDialog'
+import IncompatibleVersionDialog from './components/IncompatibleVersionDialog'
 
 const AGENT_PANEL_WIDTH = 500
 
@@ -94,6 +95,7 @@ export default function App() {
       <CommandPalette />
       <KeyboardShortcuts />
       <NewProjectDialog />
+      <IncompatibleVersionDialog />
       <HelpPanel
         open={helpPanelOpen}
         onClose={() => setHelpPanelOpen(false)}

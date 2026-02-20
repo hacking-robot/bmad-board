@@ -6,6 +6,7 @@ import CloseIcon from '@mui/icons-material/Close'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import { useStore } from '../../store'
 import { WIZARD_STEPS } from '../../data/wizardSteps'
+import { HUMAN_DEV_FILES, HUMAN_DEV_FILES_VERSION } from '../../data/humanDevFiles'
 import { resolveCommand, mergeWorkflowConfig } from '../../utils/workflowMerge'
 import { useWorkflow } from '../../hooks/useWorkflow'
 import { transformCommand } from '../../utils/commandTransform'
@@ -117,7 +118,39 @@ export default function ProjectWizard() {
     })
   }, [bmadScanResult, getAgentName])
 
-  const handleInstallComplete = useCallback(() => {
+  const { appendWizardInstallLog, setWizardError } = useStore()
+
+  const handleInstallComplete = useCallback(async () => {
+    // Apply human developer mode files if selected
+    const { projectWizard: wizState } = useStore.getState()
+    if (wizState.developerMode === 'human' && projectPath) {
+      appendWizardInstallLog('Applying human development mode...')
+
+      // After install, scan to get installed BMAD version and check compatibility
+      try {
+        const scanResult = await window.fileAPI.scanBmad(projectPath)
+        const scan = scanResult as BmadScanResult | null
+        if (scan?.version && scan.version !== HUMAN_DEV_FILES_VERSION) {
+          const major = (v: string) => v.split('.')[0]
+          if (major(scan.version) !== major(HUMAN_DEV_FILES_VERSION)) {
+            appendWizardInstallLog(
+              `Warning: Human dev files target BMAD ${HUMAN_DEV_FILES_VERSION}, ` +
+              `but installed version is ${scan.version}. Files may need updating.`
+            )
+          }
+        }
+      } catch {
+        // Scan failure is non-fatal for this check
+      }
+
+      const result = await window.wizardAPI.writeProjectFiles(projectPath, HUMAN_DEV_FILES)
+      if (!result.success) {
+        setWizardError(`Human dev mode setup failed: ${result.error}`)
+        return
+      }
+      appendWizardInstallLog(`Human development mode applied (${result.written} files updated)`)
+    }
+
     advanceWizardStep()
     // Trigger BMAD scan after install so subsequent steps can resolve dynamically
     if (projectPath) {
@@ -139,7 +172,7 @@ export default function ProjectWizard() {
     } else {
       console.warn('[Wizard] No projectPath for scan')
     }
-  }, [advanceWizardStep, projectPath, setBmadScanResult, setScannedWorkflowConfig])
+  }, [advanceWizardStep, projectPath, setBmadScanResult, setScannedWorkflowConfig, appendWizardInstallLog, setWizardError])
 
   const handleStartAgentStep = useCallback((stepIndex: number) => {
     const step = WIZARD_STEPS[stepIndex]

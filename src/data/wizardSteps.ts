@@ -8,7 +8,8 @@ export const WIZARD_STEPS: WizardStep[] = [
     type: 'system',
     description: 'Install the bmad-method package into this project via npx',
     required: true,
-    outputDir: '_bmad'
+    outputDir: '_bmad',
+    tooltip: 'Runs npx to install the BMAD method framework into your project. This creates the _bmad folder with all agents, workflows, and configuration files needed for the BMAD development process.'
   },
   {
     id: 'brainstorming',
@@ -22,7 +23,8 @@ export const WIZARD_STEPS: WizardStep[] = [
     commandType: 'workflows',
     agentId: 'analyst',
     agentName: 'Analyst',
-    outputFile: 'brainstorming-report.md'
+    outputFile: 'brainstorming-report.md',
+    tooltip: 'An interactive session with the Analyst agent to explore ideas, features, and possibilities for your project. Produces a brainstorming report that feeds into later planning steps. Useful for new projects where the scope is still being defined.'
   },
   {
     id: 'market-research',
@@ -35,7 +37,8 @@ export const WIZARD_STEPS: WizardStep[] = [
     commandModule: 'bmm',
     commandType: 'workflows',
     agentId: 'analyst',
-    agentName: 'Analyst'
+    agentName: 'Analyst',
+    tooltip: 'The Analyst agent researches market size, growth potential, competitive landscape, and target customer insights. Helps validate your product idea against real market conditions before investing in development.'
   },
   {
     id: 'domain-research',
@@ -48,7 +51,8 @@ export const WIZARD_STEPS: WizardStep[] = [
     commandModule: 'bmm',
     commandType: 'workflows',
     agentId: 'analyst',
-    agentName: 'Analyst'
+    agentName: 'Analyst',
+    tooltip: 'Deep dive into your project\'s industry domain: regulatory requirements, technology trends, ecosystem dynamics, and domain-specific constraints. Especially valuable for projects in regulated industries or unfamiliar domains.'
   },
   {
     id: 'technical-research',
@@ -61,7 +65,8 @@ export const WIZARD_STEPS: WizardStep[] = [
     commandModule: 'bmm',
     commandType: 'workflows',
     agentId: 'analyst',
-    agentName: 'Analyst'
+    agentName: 'Analyst',
+    tooltip: 'Evaluates technology options, compares frameworks and tools, and analyzes implementation approaches. Helps make informed tech stack decisions before committing to an architecture.'
   },
   {
     id: 'product-brief',
@@ -75,7 +80,8 @@ export const WIZARD_STEPS: WizardStep[] = [
     commandType: 'workflows',
     agentId: 'analyst',
     agentName: 'Analyst',
-    outputFile: 'product-brief.md'
+    outputFile: 'product-brief.md',
+    tooltip: 'Creates a concise product brief that captures the project vision, target users, core value proposition, and high-level goals. Serves as the foundation document that aligns all subsequent planning and development work.'
   },
   {
     id: 'create-prd',
@@ -89,7 +95,8 @@ export const WIZARD_STEPS: WizardStep[] = [
     commandType: 'workflows',
     agentId: 'pm',
     agentName: 'PM',
-    outputFile: 'PRD.md'
+    outputFile: 'PRD.md',
+    tooltip: 'The PM agent creates a detailed Product Requirements Document (PRD) defining features, user flows, functional and non-functional requirements. This is a required step — the PRD drives all downstream architecture and story creation.'
   },
   {
     id: 'create-ux-design',
@@ -103,7 +110,8 @@ export const WIZARD_STEPS: WizardStep[] = [
     commandType: 'workflows',
     agentId: 'ux-designer',
     agentName: 'UX Designer',
-    outputFile: 'ux-spec.md'
+    outputFile: 'ux-spec.md',
+    tooltip: 'The UX Designer agent creates a UX specification with user flows, wireframe descriptions, and interface guidelines. Produces a ux-spec.md that developers reference during implementation. Skip this if your project has no UI or you prefer to design as you go.'
   },
   {
     id: 'create-architecture',
@@ -117,7 +125,8 @@ export const WIZARD_STEPS: WizardStep[] = [
     commandType: 'workflows',
     agentId: 'architect',
     agentName: 'Architect',
-    outputFile: 'architecture.md'
+    outputFile: 'architecture.md',
+    tooltip: 'The Architect agent designs the system architecture: tech stack, component structure, data models, APIs, and integration patterns. This required step produces architecture.md, which guides all implementation work and ensures technical consistency.'
   },
   {
     id: 'generate-project-context',
@@ -131,7 +140,8 @@ export const WIZARD_STEPS: WizardStep[] = [
     commandType: 'workflows',
     agentId: 'analyst',
     agentName: 'Analyst',
-    outputFile: 'project-context.md'
+    outputFile: 'project-context.md',
+    tooltip: 'Generates a comprehensive project-context.md that summarizes all planning artifacts into a single reference document. AI agents use this during development to understand the full project scope without re-reading every artifact. Required for efficient AI-assisted development.'
   },
   {
     id: 'create-epics-and-stories',
@@ -145,7 +155,8 @@ export const WIZARD_STEPS: WizardStep[] = [
     commandType: 'workflows',
     agentId: 'pm',
     agentName: 'PM',
-    outputFile: 'epics.md'
+    outputFile: 'epics.md',
+    tooltip: 'The PM agent breaks down the PRD and architecture into epics (major feature groups) and individual stories with acceptance criteria. Produces epics.md and story files that populate the sprint board. This is what creates the work items you\'ll see on the board.'
   },
   {
     id: 'readiness-check',
@@ -158,7 +169,8 @@ export const WIZARD_STEPS: WizardStep[] = [
     commandModule: 'bmm',
     commandType: 'workflows',
     agentId: 'architect',
-    agentName: 'Architect'
+    agentName: 'Architect',
+    tooltip: 'The Architect agent reviews all planning artifacts (PRD, architecture, stories) to verify consistency, completeness, and readiness for implementation. Catches gaps or conflicts between documents before development begins, preventing costly rework later.'
   }
 ]
 

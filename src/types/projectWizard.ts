@@ -20,6 +20,7 @@ export interface WizardStep {
   agentName?: string
   outputFile?: string  // File to check for completion (relative to _bmad-output/planning-artifacts/)
   outputDir?: string   // Directory to check for completion
+  tooltip?: string     // Rich tooltip explaining what this step does and why
 }
 
 export type WizardStepStatus = 'pending' | 'active' | 'completed' | 'skipped' | 'error'
@@ -28,6 +29,7 @@ export interface ProjectWizardState {
   isActive: boolean
   projectPath: string | null
   outputFolder?: string // Custom output folder name (defaults to _bmad-output)
+  developerMode?: 'ai' | 'human' // Development mode (ai = standard, human = modified workflows)
   currentStep: number
   stepStatuses: WizardStepStatus[]
   installProgress: string[]  // Log lines from npx install

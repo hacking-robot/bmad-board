@@ -11,10 +11,12 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
+  Tooltip,
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import { useStore } from '../../store'
 import { useWorkflow } from '../../hooks/useWorkflow'
 import { transformCommand } from '../../utils/commandTransform'
@@ -116,9 +118,33 @@ export default function ProjectWorkflowsDialog() {
                         </Avatar>
                       )}
                       <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Typography variant="body2" fontWeight={600}>
-                          {wf.label}
-                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <Typography variant="body2" fontWeight={600}>
+                            {wf.label}
+                          </Typography>
+                          {wf.tooltip && (
+                            <Tooltip
+                              title={wf.tooltip}
+                              placement="top"
+                              arrow
+                              slotProps={{
+                                tooltip: {
+                                  sx: { maxWidth: 300, fontSize: '0.75rem', lineHeight: 1.4 }
+                                }
+                              }}
+                            >
+                              <InfoOutlinedIcon
+                                sx={{
+                                  fontSize: 14,
+                                  color: 'text.disabled',
+                                  cursor: 'help',
+                                  flexShrink: 0,
+                                  '&:hover': { color: 'primary.main' }
+                                }}
+                              />
+                            </Tooltip>
+                          )}
+                        </Box>
                         <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                           {wf.description}
                           {agent && ` · ${agent.name}`}

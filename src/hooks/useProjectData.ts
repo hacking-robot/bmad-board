@@ -30,6 +30,7 @@ export function useProjectData() {
     setBmadInGitignore,
     setBmadScanResult,
     setScannedWorkflowConfig,
+    setBmadVersionError,
     projectWizard
   } = useStore()
 
@@ -299,11 +300,32 @@ export function useProjectData() {
         console.log('[useProjectData] Scan result:', result ? `${result.agents.length} agents` : 'null')
         setBmadScanResult(result)
         if (result) {
+          // Version compatibility check: require BMAD v6+ stable (reject alpha builds)
+          const version = result.version
+          if (version) {
+            const major = parseInt(version.split('.')[0], 10)
+            const isAlpha = /alpha/i.test(version)
+            if (!isNaN(major) && (major < 6 || isAlpha)) {
+              console.warn(`[useProjectData] Incompatible BMAD version: ${version}`)
+              setBmadVersionError(`Detected BMAD v${version}. BMad Board requires BMAD v6.0.0 or later (stable format).`)
+              setScannedWorkflowConfig(null)
+              return
+            }
+          } else {
+            // No version in manifest = pre-6.0 alpha project
+            console.warn('[useProjectData] No BMAD version detected — treating as incompatible')
+            setBmadVersionError('No BMAD version detected. BMad Board requires BMAD v6.0.0 or later (stable format). This project may be using an older alpha installation.')
+            setScannedWorkflowConfig(null)
+            return
+          }
+          setBmadVersionError(null)
           const { projectType: currentProjectType } = useStore.getState()
           const merged = mergeWorkflowConfig(result, currentProjectType)
           console.log('[useProjectData] Merged config agents:', merged.agents.length)
           setScannedWorkflowConfig(merged)
         } else {
+          // No _bmad/ directory at all — not a BMAD project, new project flow handles this
+          setBmadVersionError(null)
           setScannedWorkflowConfig(null)
         }
       }).catch((err) => {

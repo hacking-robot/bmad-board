@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { Box, Typography, Tooltip, IconButton, Chip, CircularProgress } from '@mui/material'
 import CircleIcon from '@mui/icons-material/Circle'
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
@@ -39,6 +39,12 @@ function formatRelativeTime(date: Date | null): string {
 }
 
 export default function StatusBar() {
+  const [appVersion, setAppVersion] = useState<string>('')
+
+  useEffect(() => {
+    window.updaterAPI.getAppVersion().then(setAppVersion)
+  }, [])
+
   const stories = useStore((state) => state.stories)
   const epics = useStore((state) => state.epics)
   const selectedEpicId = useStore((state) => state.selectedEpicId)
@@ -226,6 +232,17 @@ export default function StatusBar() {
             <HelpOutlineIcon sx={{ fontSize: 16 }} />
           </IconButton>
         </Tooltip>
+
+        {/* App version */}
+        {appVersion && (
+          <Typography
+            variant="caption"
+            color="text.disabled"
+            sx={{ fontFamily: 'monospace', fontSize: '0.65rem' }}
+          >
+            v{appVersion}
+          </Typography>
+        )}
       </Box>
     </Box>
   )

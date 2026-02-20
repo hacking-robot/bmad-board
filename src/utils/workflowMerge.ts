@@ -34,6 +34,7 @@ interface OverlayProjectWorkflow {
   commandModule: string
   commandType: 'workflows'
   description: string
+  tooltip?: string
 }
 
 interface OverlayProjectWorkflowPhase {
@@ -198,7 +199,8 @@ function resolveProjectWorkflows(
         label: wf.label,
         agentId: match.agentId,
         command,
-        description: wf.description
+        description: wf.description,
+        ...(wf.tooltip && { tooltip: wf.tooltip })
       })
     }
 

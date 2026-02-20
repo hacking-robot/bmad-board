@@ -330,21 +330,24 @@
           "commandRef": "brainstorm-game",
           "commandModule": "bmgd",
           "commandType": "workflows",
-          "description": "Brainstorm game ideas and features"
+          "description": "Brainstorm game ideas and features",
+          "tooltip": "Interactive brainstorming session to explore game concepts, mechanics, art direction, and core gameplay loops. Produces a brainstorming report to guide game design decisions."
         },
         {
           "label": "Create Game Brief",
           "commandRef": "create-game-brief",
           "commandModule": "bmgd",
           "commandType": "workflows",
-          "description": "Create or update game brief"
+          "description": "Create or update game brief",
+          "tooltip": "Creates a game brief capturing the core concept, genre, target audience, unique selling points, and high-level design pillars. The foundation document for all game development."
         },
         {
           "label": "Narrative",
           "commandRef": "narrative",
           "commandModule": "bmgd",
           "commandType": "workflows",
-          "description": "Develop game narrative and story"
+          "description": "Develop game narrative and story",
+          "tooltip": "Develops the game's narrative elements: world-building, character backgrounds, story arcs, dialogue systems, and lore. Creates a narrative document that informs level and quest design."
         }
       ]
     },
@@ -358,14 +361,16 @@
           "commandRef": "create-gdd",
           "commandModule": "bmgd",
           "commandType": "workflows",
-          "description": "Create or update Game Design Document"
+          "description": "Create or update Game Design Document",
+          "tooltip": "Creates a comprehensive Game Design Document (GDD) covering gameplay mechanics, systems design, progression, controls, and technical requirements. The primary reference for all game development work."
         },
         {
           "label": "Create Story",
           "commandRef": "create-story",
           "commandModule": "bmgd",
           "commandType": "workflows",
-          "description": "Create a new development story"
+          "description": "Create a new development story",
+          "tooltip": "Creates an individual development story with detailed acceptance criteria, technical requirements, and implementation notes. Stories become the work items on your sprint board."
         }
       ]
     },
@@ -379,7 +384,8 @@
           "commandRef": "game-architecture",
           "commandModule": "bmgd",
           "commandType": "workflows",
-          "description": "Design game technical architecture"
+          "description": "Design game technical architecture",
+          "tooltip": "Designs the game's technical architecture: engine systems, rendering pipeline, physics, networking, asset pipeline, and component structure. Produces an architecture document guiding all implementation."
         }
       ]
     },
@@ -393,35 +399,40 @@
           "commandRef": "sprint-planning",
           "commandModule": "bmgd",
           "commandType": "workflows",
-          "description": "Plan sprint work"
+          "description": "Plan sprint work",
+          "tooltip": "Helps prioritize stories, estimate effort, and organize the next sprint. Selects which backlog stories to move into the sprint based on capacity and dependencies."
         },
         {
           "label": "Sprint Status",
           "commandRef": "sprint-status",
           "commandModule": "bmgd",
           "commandType": "workflows",
-          "description": "Check sprint progress"
+          "description": "Check sprint progress",
+          "tooltip": "Generates a progress report of the current sprint: which stories are in progress, completed, or blocked. Updates the sprint-status tracking file."
         },
         {
           "label": "Retrospective",
           "commandRef": "retrospective",
           "commandModule": "bmgd",
           "commandType": "workflows",
-          "description": "Run sprint retrospective"
+          "description": "Run sprint retrospective",
+          "tooltip": "Facilitates a sprint retrospective to review what went well, what didn't, and what to improve. Documents learnings and action items for the next sprint."
         },
         {
           "label": "Correct Course",
           "commandRef": "correct-course",
           "commandModule": "bmgd",
           "commandType": "workflows",
-          "description": "Adjust direction based on findings"
+          "description": "Adjust direction based on findings",
+          "tooltip": "When a story or implementation has gone off-track, this workflow helps diagnose the issue and plan corrections. Use when code review reveals problems or requirements have changed."
         },
         {
           "label": "Generate Project Context",
           "commandRef": "generate-project-context",
           "commandModule": "bmgd",
           "commandType": "workflows",
-          "description": "Generate project context document"
+          "description": "Generate project context document",
+          "tooltip": "Generates a comprehensive project context summary of all planning artifacts. AI agents use this during development to understand the full project scope."
         }
       ]
     }

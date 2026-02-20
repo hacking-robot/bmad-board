@@ -4,6 +4,7 @@ import { readFile, readdir, stat, writeFile, mkdir } from 'fs/promises'
 import { existsSync, watch, FSWatcher } from 'fs'
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 import { spawn as spawnChild, spawnSync } from 'child_process'
+import { autoUpdater } from 'electron-updater'
 import { agentManager } from './agentManager'
 import { detectTool, detectAllTools, clearDetectionCache } from './cliToolManager'
 import { getAugmentedEnv } from './envUtils'
@@ -448,9 +449,90 @@ function createMenu() {
   Menu.setApplicationMenu(menu)
 }
 
+// Auto-updater setup
+function setupAutoUpdater() {
+  // Skip in dev mode
+  if (process.env.VITE_DEV_SERVER_URL) {
+    console.log('[AutoUpdater] Skipping in dev mode')
+    return
+  }
+
+  autoUpdater.autoDownload = false
+  autoUpdater.autoInstallOnAppQuit = true
+
+  const sendStatus = (data: { status: string; [key: string]: unknown }) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('updater:status', data)
+    }
+  }
+
+  autoUpdater.on('checking-for-update', () => {
+    sendStatus({ status: 'checking' })
+  })
+
+  autoUpdater.on('update-available', (info) => {
+    sendStatus({ status: 'available', version: info.version })
+  })
+
+  autoUpdater.on('update-not-available', () => {
+    sendStatus({ status: 'up-to-date' })
+  })
+
+  autoUpdater.on('download-progress', (progress) => {
+    sendStatus({ status: 'downloading', percent: Math.round(progress.percent) })
+  })
+
+  autoUpdater.on('update-downloaded', (info) => {
+    sendStatus({ status: 'ready', version: info.version })
+  })
+
+  autoUpdater.on('error', (err) => {
+    console.error('[AutoUpdater] Error:', err.message)
+    sendStatus({ status: 'error', message: err.message })
+  })
+
+  // Check for updates 5 seconds after startup
+  setTimeout(() => {
+    autoUpdater.checkForUpdates().catch((err) => {
+      console.error('[AutoUpdater] Initial check failed:', err.message)
+    })
+  }, 5000)
+}
+
+// Auto-updater IPC handlers
+ipcMain.handle('updater-check', async () => {
+  if (process.env.VITE_DEV_SERVER_URL) {
+    return { status: 'dev-mode' }
+  }
+  try {
+    await autoUpdater.checkForUpdates()
+    return { success: true }
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Check failed' }
+  }
+})
+
+ipcMain.handle('updater-download', async () => {
+  try {
+    await autoUpdater.downloadUpdate()
+    return { success: true }
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Download failed' }
+  }
+})
+
+ipcMain.handle('updater-install', () => {
+  autoUpdater.quitAndInstall()
+})
+
+ipcMain.handle('get-app-version', () => {
+  return app.getVersion()
+})
+
 app.whenReady().then(() => {
   createWindow()
   createMenu()
+  setupAutoUpdater()
 })
 
 app.on('window-all-closed', () => {
@@ -1890,6 +1972,30 @@ ipcMain.handle('delete-wizard-state', async (_, projectPath: string, outputFolde
     return true
   } catch {
     return false
+  }
+})
+
+// Write project files (for human developer mode - replaces workflow files after install)
+ipcMain.handle('write-project-files', async (_, projectPath: string, files: { relativePath: string; content: string }[]) => {
+  try {
+    if (!existsSync(projectPath)) {
+      return { success: false, written: 0, error: 'Project path does not exist' }
+    }
+
+    let written = 0
+    for (const file of files) {
+      const fullPath = join(projectPath, file.relativePath)
+      const dir = dirname(fullPath)
+      if (!existsSync(dir)) {
+        await mkdir(dir, { recursive: true })
+      }
+      await writeFile(fullPath, file.content, 'utf-8')
+      written++
+    }
+
+    return { success: true, written }
+  } catch (error) {
+    return { success: false, written: 0, error: error instanceof Error ? error.message : 'Failed to write files' }
   }
 })
 

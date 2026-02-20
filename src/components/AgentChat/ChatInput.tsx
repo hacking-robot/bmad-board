@@ -55,10 +55,23 @@ export default function ChatInput({ onSend, onCancel, disabled = false, agentId 
     inputRef.current?.focus()
   }
 
-  // Extract short label from command (e.g., "/bmad:bmm:agents:dev" -> "dev")
+  // Extract short label from command (e.g., "/bmad-agent-bmm-dev" -> "dev", "/bmad-bmm-dev-story" -> "dev-story")
   const getCommandLabel = (cmd: string): string => {
-    const parts = cmd.split(':')
-    return parts[parts.length - 1]
+    // Alpha format: /bmad:bmm:agents:dev
+    if (cmd.includes(':')) {
+      const parts = cmd.split(':')
+      return parts[parts.length - 1]
+    }
+    // Stable agent format: /bmad-agent-bmm-dev -> dev
+    const agentMatch = cmd.match(/^\/bmad-agent-[^-]+-(.+)$/)
+    if (agentMatch) return agentMatch[1]
+    // Stable workflow format: /bmad-bmm-dev-story -> dev-story
+    const workflowMatch = cmd.match(/^\/bmad-[^-]+-(.+)$/)
+    if (workflowMatch) return workflowMatch[1]
+    // Core format: /bmad-brainstorming -> brainstorming
+    const coreMatch = cmd.match(/^\/bmad-(.+)$/)
+    if (coreMatch) return coreMatch[1]
+    return cmd
   }
 
   return (

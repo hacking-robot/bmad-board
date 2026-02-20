@@ -521,6 +521,7 @@ export interface WizardAPI {
   deleteState: (projectPath: string, outputFolder?: string) => Promise<boolean>
   selectDirectoryAny: () => Promise<{ path: string } | null>
   createProjectDirectory: (parentPath: string, projectName: string) => Promise<{ success: boolean; path?: string; error?: string }>
+  writeProjectFiles: (projectPath: string, files: { relativePath: string; content: string }[]) => Promise<{ success: boolean; written: number; error?: string }>
 }
 
 const wizardAPI: WizardAPI = {
@@ -547,10 +548,41 @@ const wizardAPI: WizardAPI = {
   loadState: (projectPath, outputFolder) => ipcRenderer.invoke('load-wizard-state', projectPath, outputFolder),
   deleteState: (projectPath, outputFolder) => ipcRenderer.invoke('delete-wizard-state', projectPath, outputFolder),
   selectDirectoryAny: () => ipcRenderer.invoke('select-directory-any'),
-  createProjectDirectory: (parentPath, projectName) => ipcRenderer.invoke('create-project-directory', parentPath, projectName)
+  createProjectDirectory: (parentPath, projectName) => ipcRenderer.invoke('create-project-directory', parentPath, projectName),
+  writeProjectFiles: (projectPath, files) => ipcRenderer.invoke('write-project-files', projectPath, files)
 }
 
 contextBridge.exposeInMainWorld('wizardAPI', wizardAPI)
+
+// Updater API types
+export interface UpdaterStatusEvent {
+  status: 'checking' | 'available' | 'up-to-date' | 'downloading' | 'ready' | 'error' | 'dev-mode'
+  version?: string
+  percent?: number
+  message?: string
+}
+
+export interface UpdaterAPI {
+  checkForUpdates: () => Promise<{ success?: boolean; status?: string; error?: string }>
+  downloadUpdate: () => Promise<{ success: boolean; error?: string }>
+  installUpdate: () => void
+  getAppVersion: () => Promise<string>
+  onUpdateStatus: (callback: (event: UpdaterStatusEvent) => void) => () => void
+}
+
+const updaterAPI: UpdaterAPI = {
+  checkForUpdates: () => ipcRenderer.invoke('updater-check'),
+  downloadUpdate: () => ipcRenderer.invoke('updater-download'),
+  installUpdate: () => ipcRenderer.invoke('updater-install'),
+  getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+  onUpdateStatus: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: UpdaterStatusEvent) => callback(data)
+    ipcRenderer.on('updater:status', listener)
+    return () => ipcRenderer.removeListener('updater:status', listener)
+  }
+}
+
+contextBridge.exposeInMainWorld('updaterAPI', updaterAPI)
 
 declare global {
   interface Window {
@@ -560,5 +592,6 @@ declare global {
     chatAPI: ChatAPI
     cliAPI: CLIAPI
     wizardAPI: WizardAPI
+    updaterAPI: UpdaterAPI
   }
 }

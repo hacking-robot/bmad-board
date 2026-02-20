@@ -108,7 +108,7 @@ const electronStorage = {
   },
   removeItem: async (_name: string): Promise<void> => {
     await window.fileAPI.saveSettings({
-      themeMode: 'light',
+      themeMode: 'dark',
       aiTool: 'claude-code',
       claudeModel: 'opus',
       customEndpoint: null,
@@ -198,8 +198,10 @@ interface AppState {
   // BMAD Scan (NOT persisted — recalculated on each project load)
   bmadScanResult: BmadScanResult | null
   scannedWorkflowConfig: WorkflowConfig | null
+  bmadVersionError: string | null
   setBmadScanResult: (result: BmadScanResult | null) => void
   setScannedWorkflowConfig: (config: WorkflowConfig | null) => void
+  setBmadVersionError: (error: string | null) => void
 
   // Recent Projects
   recentProjects: RecentProject[]
@@ -371,7 +373,7 @@ interface AppState {
 
   // Project Wizard
   projectWizard: ProjectWizardState
-  startProjectWizard: (projectPath: string, outputFolder?: string) => void
+  startProjectWizard: (projectPath: string, outputFolder?: string, developerMode?: 'ai' | 'human') => void
   updateWizardStep: (stepIndex: number, status: WizardStepStatus) => void
   advanceWizardStep: () => void
   skipWizardStep: (stepIndex: number) => void
@@ -397,7 +399,7 @@ export const useStore = create<AppState>()(
       toggleEnableAgents: () => set((state) => ({ enableAgents: !state.enableAgents })),
 
       // Theme
-      themeMode: 'light',
+      themeMode: 'dark',
       setThemeMode: (mode) => set({ themeMode: mode }),
       toggleTheme: () => set((state) => ({
         themeMode: state.themeMode === 'light' ? 'dark' : 'light'
@@ -443,15 +445,17 @@ export const useStore = create<AppState>()(
       projectPath: null,
       projectType: null,
       outputFolder: '_bmad-output',
-      setProjectPath: (path) => set({ projectPath: path }),
+      setProjectPath: (path) => set({ projectPath: path, bmadVersionError: null }),
       setProjectType: (type) => set({ projectType: type }),
       setOutputFolder: (folder) => set({ outputFolder: folder }),
 
       // BMAD Scan (NOT persisted)
       bmadScanResult: null,
       scannedWorkflowConfig: null,
+      bmadVersionError: null,
       setBmadScanResult: (result) => set({ bmadScanResult: result }),
       setScannedWorkflowConfig: (config) => set({ scannedWorkflowConfig: config }),
+      setBmadVersionError: (error) => set({ bmadVersionError: error }),
 
       // Recent Projects
       recentProjects: [],
@@ -1166,12 +1170,13 @@ export const useStore = create<AppState>()(
 
       // Project Wizard
       projectWizard: initialWizardState,
-      startProjectWizard: (projectPath, outputFolder) => set({
+      startProjectWizard: (projectPath, outputFolder, developerMode) => set({
         projectWizard: {
           ...initialWizardState,
           isActive: true,
           projectPath,
           outputFolder: outputFolder || '_bmad-output',
+          developerMode,
           stepStatuses: new Array(WIZARD_STEPS.length).fill('pending' as WizardStepStatus)
         },
         // Set project path/type so AgentChat can function during wizard
