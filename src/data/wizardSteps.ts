@@ -178,6 +178,21 @@ export const WIZARD_STEPS: WizardStep[] = [
     agentId: 'architect',
     agentName: 'Architect',
     tooltip: 'The Architect agent reviews all planning artifacts (PRD, architecture, stories) to verify consistency, completeness, and readiness for implementation. Catches gaps or conflicts between documents before development begins, preventing costly rework later.'
+  },
+  {
+    id: 'sprint-planning',
+    name: 'Sprint Planning',
+    phase: 'implementation',
+    type: 'agent',
+    description: 'Initialize sprint planning to create story tracking',
+    required: true,
+    commandRef: 'sprint-planning',
+    commandModule: 'bmm',
+    commandType: 'workflows',
+    agentId: 'sm',
+    agentName: 'Scrum Master',
+    outputFile: 'sprint-status.yaml',
+    tooltip: 'The Scrum Master agent initializes sprint planning by creating sprint-status.yaml, which tracks all epics and stories with their statuses. This file is what populates the sprint board — without it, no stories will appear on the board.'
   }
 ]
 
@@ -193,5 +208,6 @@ export const PHASE_LABELS: Record<string, string> = {
   install: 'Setup',
   analysis: 'Analysis (Optional)',
   planning: 'Planning (Required)',
-  solutioning: 'Solutioning'
+  solutioning: 'Solutioning',
+  implementation: 'Implementation'
 }

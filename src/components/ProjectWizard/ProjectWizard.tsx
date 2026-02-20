@@ -32,16 +32,22 @@ function joinPath(...parts: string[]): string {
 // directly under the output folder, so check both locations.
 async function checkStepOutput(step: WizardStep, projectPath: string, outputFolder: string): Promise<boolean> {
   const outputBase = joinPath(projectPath, outputFolder)
-  const planBase = joinPath(outputBase, 'planning-artifacts')
+  const searchDirs = [
+    joinPath(outputBase, 'planning-artifacts'),
+    joinPath(outputBase, 'implementation-artifacts'),
+    outputBase
+  ]
   if (step.outputFile) {
-    // Check planning-artifacts first, then output folder root
-    if (await window.wizardAPI.checkFileExists(joinPath(planBase, step.outputFile))) return true
-    return window.wizardAPI.checkFileExists(joinPath(outputBase, step.outputFile))
+    for (const dir of searchDirs) {
+      if (await window.wizardAPI.checkFileExists(joinPath(dir, step.outputFile))) return true
+    }
+    return false
   }
   if (step.outputDir && step.outputDirPrefix) {
-    // Check planning-artifacts first, then output folder root
-    if (await window.wizardAPI.checkDirHasPrefix(joinPath(planBase, step.outputDir), step.outputDirPrefix)) return true
-    return window.wizardAPI.checkDirHasPrefix(joinPath(outputBase, step.outputDir), step.outputDirPrefix)
+    for (const dir of searchDirs) {
+      if (await window.wizardAPI.checkDirHasPrefix(joinPath(dir, step.outputDir), step.outputDirPrefix)) return true
+    }
+    return false
   }
   return false
 }
@@ -60,6 +66,7 @@ export default function ProjectWizard() {
     setProjectType,
     addRecentProject,
     setViewMode,
+    setSelectedEpicId,
     setSelectedChatAgent,
     setPendingChatMessage,
     clearChatThread,
@@ -327,8 +334,12 @@ export default function ProjectWizard() {
       developerMode: projectWizard.developerMode
     })
 
+    // Switch to board view and reset epic filter so all stories are visible
+    setViewMode('board')
+    setSelectedEpicId(null)
+
     completeWizard()
-  }, [projectPath, outputFolder, setProjectPath, setProjectType, addRecentProject, completeWizard])
+  }, [projectPath, outputFolder, setProjectPath, setProjectType, addRecentProject, setViewMode, setSelectedEpicId, completeWizard])
 
   const handleCancel = useCallback(async () => {
     if (projectPath) {

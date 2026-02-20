@@ -2,7 +2,7 @@
 
 export type WizardStepType = 'system' | 'agent'
 
-export type WizardPhase = 'install' | 'analysis' | 'planning' | 'solutioning'
+export type WizardPhase = 'install' | 'analysis' | 'planning' | 'solutioning' | 'implementation'
 
 export interface WizardStep {
   id: string

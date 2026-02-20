@@ -51,6 +51,7 @@ function getPhaseColor(phase: WizardPhase): string {
     case 'analysis': return '#8B5CF6'
     case 'planning': return '#3B82F6'
     case 'solutioning': return '#10B981'
+    case 'implementation': return '#F59E0B'
     default: return '#6B7280'
   }
 }
