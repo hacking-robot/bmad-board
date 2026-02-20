@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, Menu, screen, Notification } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, Menu, screen, Notification, nativeImage } from 'electron'
 import { join, dirname, basename, resolve } from 'path'
 import { readFile, readdir, stat, writeFile, mkdir } from 'fs/promises'
 import { existsSync, watch, FSWatcher } from 'fs'
@@ -308,10 +308,14 @@ async function createWindow() {
   const settings = await loadSettings()
   const validBounds = getValidWindowBounds(settings.windowBounds)
 
+  const iconPath = join(__dirname, '..', 'build', 'icon.png')
+  const appIcon = existsSync(iconPath) ? nativeImage.createFromPath(iconPath) : undefined
+
   mainWindow = new BrowserWindow({
     ...validBounds,
     minWidth: MIN_WINDOW_WIDTH,
     minHeight: MIN_WINDOW_HEIGHT,
+    icon: appIcon,
     webPreferences: {
       preload: join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -320,6 +324,11 @@ async function createWindow() {
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 15, y: 15 }
   })
+
+  // Set dock icon on macOS (for dev mode)
+  if (process.platform === 'darwin' && appIcon) {
+    app.dock.setIcon(appIcon)
+  }
 
   // Restore maximized state if it was saved
   if (settings.windowBounds?.isMaximized) {
