@@ -1,7 +1,11 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { Epic, Story, StoryContent, StoryStatus, Agent, ProjectType, AgentHistoryEntry, AITool, ClaudeModel, CustomEndpointConfig, HumanReviewChecklistItem, StoryReviewState, ChatMessage, AgentThread, StatusChangeEntry, StatusChangeSource } from './types'
+import type { BmadScanResult } from './types/bmadScan'
+import type { WorkflowConfig } from './types/flow'
 import { FullCycleState, FullCycleStepType, FullCycleStepStatus, initialFullCycleState, EpicCycleState, EpicStoryStatus, initialEpicCycleState } from './types/fullCycle'
+import { ProjectWizardState, WizardStepStatus, initialWizardState } from './types/projectWizard'
+import { WIZARD_STEPS } from './data/wizardSteps'
 
 export type ViewMode = 'board' | 'chat'
 
@@ -186,6 +190,12 @@ interface AppState {
   setProjectPath: (path: string | null) => void
   setProjectType: (type: ProjectType | null) => void
 
+  // BMAD Scan (NOT persisted — recalculated on each project load)
+  bmadScanResult: BmadScanResult | null
+  scannedWorkflowConfig: WorkflowConfig | null
+  setBmadScanResult: (result: BmadScanResult | null) => void
+  setScannedWorkflowConfig: (config: WorkflowConfig | null) => void
+
   // Recent Projects
   recentProjects: RecentProject[]
   addRecentProject: (project: RecentProject) => void
@@ -350,6 +360,22 @@ interface AppState {
   resetEpicCycle: () => void
   retryEpicCycle: () => void
 
+  // Project Workflows Dialog
+  projectWorkflowsDialogOpen: boolean
+  setProjectWorkflowsDialogOpen: (open: boolean) => void
+
+  // Project Wizard
+  projectWizard: ProjectWizardState
+  startProjectWizard: (projectPath: string) => void
+  updateWizardStep: (stepIndex: number, status: WizardStepStatus) => void
+  advanceWizardStep: () => void
+  skipWizardStep: (stepIndex: number) => void
+  appendWizardInstallLog: (line: string) => void
+  setWizardError: (error: string | null) => void
+  completeWizard: () => void
+  cancelWizard: () => void
+  resumeWizard: (state: ProjectWizardState) => void
+
   // Computed - filtered stories
   getFilteredStories: () => Story[]
 }
@@ -413,6 +439,12 @@ export const useStore = create<AppState>()(
       projectType: null,
       setProjectPath: (path) => set({ projectPath: path }),
       setProjectType: (type) => set({ projectType: type }),
+
+      // BMAD Scan (NOT persisted)
+      bmadScanResult: null,
+      scannedWorkflowConfig: null,
+      setBmadScanResult: (result) => set({ bmadScanResult: result }),
+      setScannedWorkflowConfig: (config) => set({ scannedWorkflowConfig: config }),
 
       // Recent Projects
       recentProjects: [],
@@ -1119,6 +1151,89 @@ export const useStore = create<AppState>()(
             storyStatuses: newStatuses
           }
         }
+      }),
+
+      // Project Workflows Dialog
+      projectWorkflowsDialogOpen: false,
+      setProjectWorkflowsDialogOpen: (open) => set({ projectWorkflowsDialogOpen: open }),
+
+      // Project Wizard
+      projectWizard: initialWizardState,
+      startProjectWizard: (projectPath) => set({
+        projectWizard: {
+          ...initialWizardState,
+          isActive: true,
+          projectPath,
+          stepStatuses: new Array(WIZARD_STEPS.length).fill('pending' as WizardStepStatus)
+        },
+        // Set project path/type so AgentChat can function during wizard
+        projectPath,
+        projectType: 'bmm' as ProjectType,
+        // Clear stale scan data from previous project so old agents don't show
+        bmadScanResult: null,
+        scannedWorkflowConfig: null
+      }),
+      updateWizardStep: (stepIndex, status) => set((state) => {
+        const newStatuses = [...state.projectWizard.stepStatuses]
+        newStatuses[stepIndex] = status
+        return {
+          projectWizard: {
+            ...state.projectWizard,
+            stepStatuses: newStatuses,
+            currentStep: status === 'active' ? stepIndex : state.projectWizard.currentStep
+          }
+        }
+      }),
+      advanceWizardStep: () => set((state) => {
+        const newStatuses = [...state.projectWizard.stepStatuses]
+        if (state.projectWizard.currentStep < newStatuses.length) {
+          newStatuses[state.projectWizard.currentStep] = 'completed'
+        }
+        return {
+          projectWizard: {
+            ...state.projectWizard,
+            currentStep: state.projectWizard.currentStep + 1,
+            stepStatuses: newStatuses
+          }
+        }
+      }),
+      skipWizardStep: (stepIndex) => set((state) => {
+        const newStatuses = [...state.projectWizard.stepStatuses]
+        newStatuses[stepIndex] = 'skipped'
+        // If skipping the current step, advance
+        const newCurrentStep = stepIndex === state.projectWizard.currentStep
+          ? stepIndex + 1
+          : state.projectWizard.currentStep
+        return {
+          projectWizard: {
+            ...state.projectWizard,
+            currentStep: newCurrentStep,
+            stepStatuses: newStatuses
+          }
+        }
+      }),
+      appendWizardInstallLog: (line) => set((state) => ({
+        projectWizard: {
+          ...state.projectWizard,
+          installProgress: [...state.projectWizard.installProgress, line]
+        }
+      })),
+      setWizardError: (error) => set((state) => ({
+        projectWizard: {
+          ...state.projectWizard,
+          error
+        }
+      })),
+      completeWizard: () => set({
+        projectWizard: initialWizardState
+      }),
+      cancelWizard: () => set({
+        projectWizard: initialWizardState,
+        projectPath: null,
+        projectType: null
+      }),
+      resumeWizard: (wizardState) => set({
+        projectWizard: wizardState
       }),
 
       // Computed

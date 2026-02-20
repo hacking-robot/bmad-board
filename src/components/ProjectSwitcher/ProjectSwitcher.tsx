@@ -11,8 +11,10 @@ import {
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import CloseIcon from '@mui/icons-material/Close'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
+import AddIcon from '@mui/icons-material/Add'
 import { useStore } from '../../store'
 import { useProjectData } from '../../hooks/useProjectData'
+import { NewProjectForm } from '../NewProjectDialog'
 
 export default function ProjectSwitcher() {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
@@ -83,9 +85,16 @@ export default function ProjectSwitcher() {
     removeRecentProject(path)
   }
 
+  const [newProjectOpen, setNewProjectOpen] = useState(false)
+
   const handleOpenProject = () => {
     selectProject()
     handleClose()
+  }
+
+  const handleNewProject = () => {
+    handleClose()
+    setNewProjectOpen(true)
   }
 
   // Truncate path for display
@@ -95,6 +104,7 @@ export default function ProjectSwitcher() {
   }
 
   return (
+    <>
     <Box
       ref={triggerRef}
       onClick={handleClick}
@@ -275,7 +285,14 @@ export default function ProjectSwitcher() {
           <FolderOpenIcon sx={{ fontSize: 20, mr: 1.5, color: 'text.secondary' }} />
           <Typography variant="body2">Open Project...</Typography>
         </MenuItem>
+        <MenuItem onClick={handleNewProject} sx={{ py: 1.5 }}>
+          <AddIcon sx={{ fontSize: 20, mr: 1.5, color: 'text.secondary' }} />
+          <Typography variant="body2">New Project...</Typography>
+        </MenuItem>
       </Menu>
+
     </Box>
+    <NewProjectForm open={newProjectOpen} onClose={() => setNewProjectOpen(false)} />
+    </>
   )
 }

@@ -12,6 +12,7 @@ import {
 } from '@mui/material'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
+import RocketLaunchIcon from '@mui/icons-material/RocketLaunch'
 import { useStore } from '../../store'
 
 export default function NewProjectDialog() {
@@ -19,11 +20,19 @@ export default function NewProjectDialog() {
     newProjectDialogOpen,
     pendingNewProject,
     setNewProjectDialogOpen,
-    setPendingNewProject
+    setPendingNewProject,
+    startProjectWizard
   } = useStore()
 
   const handleClose = () => {
     setNewProjectDialogOpen(false)
+    setPendingNewProject(null)
+  }
+
+  const handleStartWizard = () => {
+    if (!pendingNewProject) return
+    setNewProjectDialogOpen(false)
+    startProjectWizard(pendingNewProject.path)
     setPendingNewProject(null)
   }
 
@@ -49,7 +58,7 @@ export default function NewProjectDialog() {
               width: 40,
               height: 40,
               borderRadius: 1.5,
-              bgcolor: 'warning.main',
+              bgcolor: 'primary.main',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center'
@@ -73,9 +82,9 @@ export default function NewProjectDialog() {
           </Alert>
 
           <Typography variant="body2" color="text.secondary">
-            This project is missing the required BMAD artifacts. Use the BMAD teammates
-            to initialize your project, then open it in BMad Board to visualize your
-            development progress.
+            The Project Wizard will guide you through setting up your BMAD project step by step.
+            It will install the BMAD method, then walk you through creating a PRD, architecture,
+            and epics using AI agents.
           </Typography>
 
           <Typography variant="caption" color="text.secondary">
@@ -93,12 +102,19 @@ export default function NewProjectDialog() {
         </Stack>
       </DialogContent>
 
-      <DialogActions sx={{ px: 3, pb: 2.5 }}>
+      <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
         <Button
-          variant="contained"
+          variant="text"
           onClick={handleClose}
         >
-          OK
+          Cancel
+        </Button>
+        <Button
+          variant="contained"
+          startIcon={<RocketLaunchIcon />}
+          onClick={handleStartWizard}
+        >
+          Start Project Wizard
         </Button>
       </DialogActions>
     </Dialog>

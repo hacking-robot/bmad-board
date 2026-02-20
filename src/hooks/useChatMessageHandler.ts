@@ -220,6 +220,22 @@ export function useChatMessageHandler() {
             setChatActivity(agentId, undefined)
 
             if (state.currentMessageId) {
+              // If no text was streamed but result contains the response text, use it as fallback.
+              // This handles cases where assistant messages were missed (e.g., stdio timing).
+              const existingMsg = useStore.getState().chatThreads[agentId]?.messages.find(
+                m => m.id === state.currentMessageId
+              )
+              if (!state.streamBuffer && (!existingMsg?.content) && parsed.result) {
+                const resultText = typeof parsed.result === 'string' ? parsed.result : ''
+                if (resultText) {
+                  updateChatMessage(agentId, state.currentMessageId, {
+                    content: resultText,
+                    status: 'streaming'
+                  })
+                  state.streamBuffer = resultText
+                }
+              }
+
               const stats: LLMStats | undefined = parsed.usage ? {
                 model: parsed.modelUsage ? Object.keys(parsed.modelUsage)[0] || 'unknown' : 'unknown',
                 inputTokens: parsed.usage.input_tokens || 0,

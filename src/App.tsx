@@ -19,6 +19,8 @@ import { AgentChat } from './components/AgentChat'
 import StatusHistoryPanel from './components/StatusHistoryPanel/StatusHistoryPanel'
 import { FullCycleDialog, FullCycleOrchestrator, EpicCycleDialog, EpicCycleOrchestrator } from './components/FullCycleDialog'
 import GlobalChatHandler from './components/GlobalChatHandler'
+import { ProjectWizard } from './components/ProjectWizard'
+import ProjectWorkflowsDialog from './components/ProjectWorkflowsDialog/ProjectWorkflowsDialog'
 
 const AGENT_PANEL_WIDTH = 500
 
@@ -34,6 +36,7 @@ export default function App() {
   const viewMode = useStore((state) => state.viewMode)
   const toggleViewMode = useStore((state) => state.toggleViewMode)
   const aiTool = useStore((state) => state.aiTool)
+  const wizardActive = useStore((state) => state.projectWizard.isActive)
 
   // Agent features available for tools with headless CLI support
   const selectedToolInfo = AI_TOOLS.find(t => t.id === aiTool)
@@ -105,7 +108,16 @@ export default function App() {
           overflow: 'hidden'
         }}
       >
-        {!projectPath ? (
+        {wizardActive ? (
+          <GlobalChatHandler>
+            <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+              <ProjectWizard />
+              <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                <AgentChat />
+              </Box>
+            </Box>
+          </GlobalChatHandler>
+        ) : !projectPath ? (
           <WelcomeDialog />
         ) : (
           <GlobalChatHandler>
@@ -198,7 +210,7 @@ export default function App() {
 
                 {/* Toggle button when chat is closed - only for Claude Code */}
                 {!showChatView && toolSupportsHeadless && (
-                  <Tooltip title="Open teammates chat (⌘⇧A)" placement="right">
+                  <Tooltip title="Open agents chat (⌘⇧A)" placement="right">
                     <IconButton
                       onClick={toggleViewMode}
                       sx={{
@@ -230,6 +242,7 @@ export default function App() {
             <FullCycleOrchestrator />
             <EpicCycleDialog />
             <EpicCycleOrchestrator />
+            <ProjectWorkflowsDialog />
           </GlobalChatHandler>
         )}
       </Box>

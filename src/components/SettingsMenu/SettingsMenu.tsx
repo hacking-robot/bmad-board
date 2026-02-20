@@ -22,6 +22,9 @@ import {
   Autocomplete
 } from '@mui/material'
 import SettingsIcon from '@mui/icons-material/Settings'
+import LightModeIcon from '@mui/icons-material/LightMode'
+import DarkModeIcon from '@mui/icons-material/DarkMode'
+import SyncIcon from '@mui/icons-material/Sync'
 import KeyboardIcon from '@mui/icons-material/Keyboard'
 import SmartToyIcon from '@mui/icons-material/SmartToy'
 import NotificationsIcon from '@mui/icons-material/Notifications'
@@ -36,6 +39,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import ErrorIcon from '@mui/icons-material/Error'
 import DesktopWindowsIcon from '@mui/icons-material/DesktopWindows'
 import { useStore } from '../../store'
+import { useProjectData } from '../../hooks/useProjectData'
 import { AI_TOOLS, AITool, CLIDetectionResult, CLAUDE_MODELS, CustomEndpointConfig } from '../../types'
 
 export default function SettingsMenu() {
@@ -80,6 +84,11 @@ export default function SettingsMenu() {
   const fullCycleReviewCount = useStore((state) => state.fullCycleReviewCount)
   const setFullCycleReviewCount = useStore((state) => state.setFullCycleReviewCount)
   const projectPath = useStore((state) => state.projectPath)
+
+  const themeMode = useStore((state) => state.themeMode)
+  const toggleTheme = useStore((state) => state.toggleTheme)
+  const viewMode = useStore((state) => state.viewMode)
+  const { loadProjectData } = useProjectData()
 
   const selectedTool = AI_TOOLS.find((t) => t.id === aiTool) || AI_TOOLS[0]
 
@@ -208,6 +217,20 @@ export default function SettingsMenu() {
           }
         }}
       >
+        <MenuItem onClick={() => { toggleTheme(); handleClose() }}>
+          <ListItemIcon>
+            {themeMode === 'light' ? <DarkModeIcon fontSize="small" /> : <LightModeIcon fontSize="small" />}
+          </ListItemIcon>
+          <ListItemText primary={themeMode === 'light' ? 'Dark Mode' : 'Light Mode'} />
+        </MenuItem>
+        {viewMode === 'board' && (
+          <MenuItem onClick={() => { loadProjectData(); handleClose() }}>
+            <ListItemIcon>
+              <SyncIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText primary="Refresh Board" />
+          </MenuItem>
+        )}
         <MenuItem onClick={handleToolSelect}>
           <ListItemIcon>
             <SmartToyIcon fontSize="small" />
@@ -598,7 +621,7 @@ export default function SettingsMenu() {
         </DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Configure the teammate chat interface settings.
+            Configure the agent chat interface settings.
           </Typography>
 
           <Box sx={{ mb: 3 }}>

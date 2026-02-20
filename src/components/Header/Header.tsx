@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import {
   AppBar,
   Toolbar,
@@ -7,23 +8,25 @@ import {
   Tooltip,
   Badge,
   Chip,
+  Popover,
 } from '@mui/material'
 import logoDark from '../../assets/logo-dark.svg'
 import logoLight from '../../assets/logo-light.svg'
-import RefreshIcon from '@mui/icons-material/Refresh'
 import TerminalIcon from '@mui/icons-material/Terminal'
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
 import SportsEsportsIcon from '@mui/icons-material/SportsEsports'
 import HistoryIcon from '@mui/icons-material/History'
 import RocketLaunchIcon from '@mui/icons-material/RocketLaunch'
+import AccountTreeIcon from '@mui/icons-material/AccountTree'
+import DescriptionIcon from '@mui/icons-material/Description'
 import SearchBar from '../SearchBar/SearchBar'
 import EpicFilter from '../EpicFilter/EpicFilter'
-import ThemeToggle from '../ThemeToggle/ThemeToggle'
 import SettingsMenu from '../SettingsMenu'
 import ProjectSwitcher from '../ProjectSwitcher'
+import ArtifactViewer from '../HelpPanel/ArtifactViewer'
 import { useStore } from '../../store'
-import { useProjectData } from '../../hooks/useProjectData'
 import { AI_TOOLS } from '../../types'
+import { usePlanningArtifacts, getArtifactTypeLabel, getArtifactTypeColor, PlanningArtifact } from '../../hooks/usePlanningArtifacts'
 
 export default function Header() {
   const agents = useStore((state) => state.agents)
@@ -44,7 +47,11 @@ export default function Header() {
   const stories = useStore((state) => state.stories)
   const epicCycle = useStore((state) => state.epicCycle)
   const setEpicCycleDialogOpen = useStore((state) => state.setEpicCycleDialogOpen)
-  const { loadProjectData } = useProjectData()
+  const setProjectWorkflowsDialogOpen = useStore((state) => state.setProjectWorkflowsDialogOpen)
+  const scannedWorkflowConfig = useStore((state) => state.scannedWorkflowConfig)
+  const { artifacts } = usePlanningArtifacts()
+  const [docsAnchor, setDocsAnchor] = useState<null | HTMLElement>(null)
+  const [selectedArtifact, setSelectedArtifact] = useState<PlanningArtifact | null>(null)
 
   // Count chat agents currently running (isTyping)
   const runningChatAgents = Object.values(chatThreads).filter(
@@ -82,38 +89,34 @@ export default function Header() {
         bgcolor: 'background.paper',
         borderBottom: 1,
         borderColor: 'divider',
-        // Make the header draggable for window movement
         WebkitAppRegion: 'drag'
       }}
     >
+      {/* Top bar - Identity & Navigation */}
       <Toolbar
+        variant="dense"
         sx={{
+          minHeight: 44,
           gap: 2,
-          // Add left padding for macOS traffic lights (close/min/max buttons)
+          position: 'relative',
           pl: { xs: 2, sm: 10 },
-          // Exclude interactive elements from drag region
           '& button, & input, & [role="button"]': {
             WebkitAppRegion: 'no-drag'
           }
         }}
       >
-        {/* Left section - Logo and App Name */}
         <Box
           onClick={handleLogoClick}
-          sx={{ display: 'flex', alignItems: 'center', gap: 1.5, cursor: 'default', userSelect: 'none', WebkitAppRegion: 'no-drag' }}
+          sx={{ display: 'flex', alignItems: 'center', gap: 1, cursor: 'default', userSelect: 'none', WebkitAppRegion: 'no-drag' }}
         >
           <Box
             component="img"
             src={logoSrc}
             alt="BMad Board"
-            sx={{
-              width: 36,
-              height: 36,
-              borderRadius: 1.5
-            }}
+            sx={{ width: 28, height: 28, borderRadius: 1 }}
           />
           <Typography
-            variant="subtitle1"
+            variant="body2"
             color="text.secondary"
             fontWeight={500}
             sx={{ whiteSpace: 'nowrap' }}
@@ -122,36 +125,31 @@ export default function Header() {
           </Typography>
           {isGameProject && (
             <Chip
-              icon={<SportsEsportsIcon sx={{ fontSize: 16 }} />}
+              icon={<SportsEsportsIcon sx={{ fontSize: 14 }} />}
               label="Game"
               size="small"
               sx={{
-                ml: 1,
-                height: 24,
+                ml: 0.5,
+                height: 20,
                 bgcolor: '#8B5CF6',
                 color: 'white',
                 fontWeight: 600,
-                fontSize: '0.7rem',
-                '& .MuiChip-icon': {
-                  color: 'white'
-                }
+                fontSize: '0.65rem',
+                '& .MuiChip-icon': { color: 'white' }
               }}
             />
           )}
-
-
-          {/* Running Agents Indicator */}
           {runningChatAgents > 0 && (
             <Chip
-              label={`${runningChatAgents} teammate${runningChatAgents > 1 ? 's' : ''} working`}
+              label={`${runningChatAgents} agent${runningChatAgents > 1 ? 's' : ''} working`}
               size="small"
               sx={{
-                ml: 1,
-                height: 22,
+                ml: 0.5,
+                height: 20,
                 bgcolor: 'success.main',
                 color: 'white',
                 fontWeight: 500,
-                fontSize: '0.7rem',
+                fontSize: '0.65rem',
                 animation: 'pulse 1.5s ease-in-out infinite',
                 '@keyframes pulse': {
                   '0%, 100%': { opacity: 1 },
@@ -162,36 +160,32 @@ export default function Header() {
           )}
         </Box>
 
-        {/* Spacer */}
+        <Box sx={{ flexGrow: 1 }} />
+        <ProjectSwitcher />
         <Box sx={{ flexGrow: 1 }} />
 
-        {/* Center section - Project Switcher (absolutely positioned) */}
-        <ProjectSwitcher />
+        <SettingsMenu />
+      </Toolbar>
 
-        {/* Right section - Search, Filter, Actions */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          {viewMode === 'board' && <SearchBar />}
-          {viewMode === 'board' && <EpicFilter />}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            {enableAgents && viewMode === 'board' && (
-              <Tooltip title={agentPanelOpen ? 'Hide Teammates' : 'Show Teammates'}>
-                <IconButton
-                  onClick={toggleAgentPanel}
-                  size="small"
-                  sx={{
-                    color: agentPanelOpen ? 'primary.main' : 'text.secondary'
-                  }}
-                >
-                  <Badge
-                    badgeContent={runningAgentsCount}
-                    color="success"
-                    invisible={runningAgentsCount === 0}
-                  >
-                    <TerminalIcon />
-                  </Badge>
-                </IconButton>
-              </Tooltip>
-            )}
+      {/* Bottom bar - Board Tools */}
+      {viewMode === 'board' && (
+        <Toolbar
+          variant="dense"
+          sx={{
+            minHeight: 38,
+            gap: 1.5,
+            pl: { xs: 2, sm: 2 },
+            borderTop: 1,
+            borderColor: 'divider',
+            '& button, & input, & [role="button"]': {
+              WebkitAppRegion: 'no-drag'
+            }
+          }}
+        >
+          {/* Filters: Search + Epic */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <SearchBar />
+            <EpicFilter />
             {showRunEpic && (
               <Tooltip title={epicCycle.isRunning ? 'Epic cycle running...' : `Run Epic (${backlogCount} backlog)`}>
                 <IconButton
@@ -208,7 +202,48 @@ export default function Header() {
                     })
                   }}
                 >
-                  <RocketLaunchIcon />
+                  <RocketLaunchIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
+          </Box>
+
+          <Box sx={{ flexGrow: 1 }} />
+
+          {/* Panel toggles & actions */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            {enableAgents && (
+              <Tooltip title={agentPanelOpen ? 'Hide Agents' : 'Show Agents'}>
+                <IconButton
+                  onClick={toggleAgentPanel}
+                  size="small"
+                  sx={{ color: agentPanelOpen ? 'primary.main' : 'text.secondary' }}
+                >
+                  <Badge badgeContent={runningAgentsCount} color="success" invisible={runningAgentsCount === 0}>
+                    <TerminalIcon fontSize="small" />
+                  </Badge>
+                </IconButton>
+              </Tooltip>
+            )}
+            {scannedWorkflowConfig?.projectWorkflows && toolSupportsHeadless && (
+              <Tooltip title="Project Workflows">
+                <IconButton
+                  onClick={() => setProjectWorkflowsDialogOpen(true)}
+                  size="small"
+                  sx={{ color: 'text.secondary' }}
+                >
+                  <AccountTreeIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
+            {artifacts.length > 0 && (
+              <Tooltip title="Planning Documents">
+                <IconButton
+                  onClick={(e) => setDocsAnchor(e.currentTarget)}
+                  size="small"
+                  sx={{ color: 'text.secondary' }}
+                >
+                  <DescriptionIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
             )}
@@ -224,7 +259,7 @@ export default function Header() {
                   invisible={getUnreadStatusHistoryCount() === 0}
                   max={99}
                 >
-                  <HistoryIcon />
+                  <HistoryIcon fontSize="small" />
                 </Badge>
               </IconButton>
             </Tooltip>
@@ -234,25 +269,70 @@ export default function Header() {
                 size="small"
                 sx={{ color: 'text.secondary' }}
               >
-                <HelpOutlineIcon />
+                <HelpOutlineIcon fontSize="small" />
               </IconButton>
             </Tooltip>
-            {viewMode === 'board' && (
-              <Tooltip title="Refresh">
-                <IconButton
-                  onClick={loadProjectData}
-                  size="small"
-                  sx={{ color: 'text.secondary' }}
-                >
-                  <RefreshIcon />
-                </IconButton>
-              </Tooltip>
-            )}
-            <ThemeToggle />
-            <SettingsMenu />
           </Box>
+        </Toolbar>
+      )}
+      {/* Planning Documents Popover */}
+      <Popover
+        open={Boolean(docsAnchor)}
+        anchorEl={docsAnchor}
+        onClose={() => setDocsAnchor(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'center' }}
+        slotProps={{
+          paper: {
+            sx: { p: 2, maxWidth: 360, maxHeight: 400, overflow: 'auto', borderRadius: 1.5 }
+          }
+        }}
+      >
+        <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+          Planning Documents
+        </Typography>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+          {artifacts.map((artifact) => (
+            <Box
+              key={artifact.path}
+              onClick={() => { setSelectedArtifact(artifact); setDocsAnchor(null) }}
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+                p: 0.75,
+                borderRadius: 0.5,
+                cursor: 'pointer',
+                '&:hover': { bgcolor: 'action.selected' }
+              }}
+            >
+              <DescriptionIcon sx={{ fontSize: 16, color: getArtifactTypeColor(artifact.type) }} />
+              <Typography variant="body2" sx={{ flex: 1 }}>
+                {artifact.displayName}
+              </Typography>
+              <Typography
+                variant="caption"
+                sx={{
+                  fontSize: '0.65rem',
+                  px: 0.5,
+                  py: 0.125,
+                  borderRadius: 0.5,
+                  bgcolor: getArtifactTypeColor(artifact.type),
+                  color: 'white'
+                }}
+              >
+                {getArtifactTypeLabel(artifact.type)}
+              </Typography>
+            </Box>
+          ))}
         </Box>
-      </Toolbar>
+      </Popover>
+
+      {/* Artifact Viewer Dialog */}
+      <ArtifactViewer
+        artifact={selectedArtifact}
+        onClose={() => setSelectedArtifact(null)}
+      />
     </AppBar>
   )
 }

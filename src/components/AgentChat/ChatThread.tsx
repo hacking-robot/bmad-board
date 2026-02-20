@@ -129,13 +129,16 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
         const currentAiTool = useStore.getState().aiTool
         const currentClaudeModel = useStore.getState().claudeModel
         const currentCustomEndpoint = useStore.getState().customEndpoint
+        // Pass the resolved agent command from workflow config (first command is the invocation command)
+        const agentCommand = agent?.commands?.[0]
         const result = await window.chatAPI.loadAgent({
           agentId,
           projectPath,
           projectType: currentProjectType,
           tool: currentAiTool,
           model: currentAiTool === 'claude-code' ? currentClaudeModel : undefined,
-          customEndpoint: currentAiTool === 'custom-endpoint' ? currentCustomEndpoint : undefined
+          customEndpoint: currentAiTool === 'custom-endpoint' ? currentCustomEndpoint : undefined,
+          agentCommand
         })
 
         if (!result.success) {
@@ -216,22 +219,15 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
     }
   }, [agentId, setChatTyping, updateChatMessage, clearAgentState])
 
-  // Track pending message ID to prevent duplicate sends
-  const processedPendingRef = useRef<string | null>(null)
+  // Guard against concurrent pending message processing
+  const isSendingRef = useRef(false)
 
-  // Handle pending chat messages from other components (e.g., StoryCard)
+  // Handle pending chat messages from other components (e.g., StoryCard, Wizard)
   useEffect(() => {
     if (pendingChatMessage && pendingChatMessage.agentId === agentId && projectPath) {
-      // Create a unique key for this pending message to prevent duplicate processing
-      const pendingKey = `${pendingChatMessage.agentId}:${pendingChatMessage.message}`
-
-      // Skip if we've already processed this exact message
-      if (processedPendingRef.current === pendingKey) {
-        return
-      }
-
-      // Mark as processed
-      processedPendingRef.current = pendingKey
+      // Skip if already processing a send
+      if (isSendingRef.current) return
+      isSendingRef.current = true
 
       // Store story context if provided
       if (pendingChatMessage.storyId || pendingChatMessage.branchName) {
@@ -245,10 +241,7 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
       // Send the message after a short delay to ensure UI is ready
       setTimeout(() => {
         handleSendMessage(messageToSend)
-        // Reset the processed ref after sending so the same command can be sent again later
-        setTimeout(() => {
-          processedPendingRef.current = null
-        }, 500)
+        isSendingRef.current = false
       }, 100)
     }
   }, [pendingChatMessage, agentId, projectPath, clearPendingChatMessage, handleSendMessage, setThreadContext])
@@ -294,7 +287,7 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
             itemContent={(_index, message) => (
               <ChatMessage
                 message={message}
-                agentName={agent?.name || 'Teammate'}
+                agentName={agent?.name || 'Agent'}
                 agentAvatar={agent?.avatar || 'A'}
               />
             )}
@@ -303,7 +296,7 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
               Footer: () =>
                 isTyping ? (
                   <Box sx={{ px: 2, pb: 2 }}>
-                    <TypingIndicator agentName={agent?.name || 'Teammate'} activity={thinkingActivity} />
+                    <TypingIndicator agentName={agent?.name || 'Agent'} activity={thinkingActivity} />
                   </Box>
                 ) : null
             }}

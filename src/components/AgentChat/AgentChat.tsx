@@ -70,7 +70,8 @@ export default function AgentChat() {
       }
     }
 
-    // Clear the thread
+    // Cancel any running process and clear the thread
+    window.chatAPI.cancelMessage(selectedChatAgent).catch(() => {})
     clearChatThread(selectedChatAgent)
     window.chatAPI.clearThread(selectedChatAgent)
   }, [selectedChatAgent, chatThreads, agents, projectPath, stories, clearChatThread])
@@ -126,7 +127,7 @@ export default function AgentChat() {
       >
         <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
           <Typography variant="subtitle2" color="text.secondary" fontWeight={600}>
-            TEAMMATES
+            AGENTS
           </Typography>
         </Box>
         <AgentSidebar />
@@ -176,7 +177,7 @@ export default function AgentChat() {
                   <Typography variant="subtitle1" fontWeight={600}>
                     {selectedAgent.name}
                   </Typography>
-                  <Tooltip title="View teammate guide">
+                  <Tooltip title="View agent guide">
                     <IconButton
                       onClick={() => setHelpPanelOpen(true, 1, selectedAgent.id)}
                       size="small"
@@ -214,7 +215,7 @@ export default function AgentChat() {
             }}
           >
             <Typography color="text.secondary">
-              Select a teammate to start chatting
+              Select an agent to start chatting
             </Typography>
           </Box>
         )}

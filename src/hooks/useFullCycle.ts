@@ -15,7 +15,6 @@ export function useFullCycle() {
   const fullCycleReviewCount = useStore((state) => state.fullCycleReviewCount)
   const selectedEpicId = useStore((state) => state.selectedEpicId)
   const storyOrder = useStore((state) => state.storyOrder)
-
   // Full cycle state
   const fullCycle = useStore((state) => state.fullCycle)
   const startFullCycle = useStore((state) => state.startFullCycle)

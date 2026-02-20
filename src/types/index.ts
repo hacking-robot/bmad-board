@@ -112,6 +112,7 @@ export const EPIC_COLORS: string[] = [
 // Agent types
 export type AgentStatus = 'running' | 'completed' | 'error' | 'interrupted'
 export type ProjectType = 'bmm' | 'bmgd'
+export type BmadVersion = 'stable'
 
 // AI Tool types - determines command syntax
 export type AITool = 'claude-code' | 'custom-endpoint' | 'cursor' | 'windsurf' | 'roo-code' | 'aider'

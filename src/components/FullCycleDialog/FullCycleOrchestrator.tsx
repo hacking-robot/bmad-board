@@ -463,13 +463,18 @@ export default function FullCycleOrchestrator() {
         // Register pending message with global handler
         setPendingMessage(agentId, command, assistantMsgId)
 
+        // Pass the resolved agent command from workflow config
+        const agentDef = agents.find(a => a.id === agentId)
+        const agentCommand = agentDef?.commands?.[0]
+
         window.chatAPI.loadAgent({
           agentId,
           projectPath,
           projectType: projectType || 'bmm',
           tool: aiTool,
           model: aiTool === 'claude-code' ? claudeModel : undefined,
-          customEndpoint: aiTool === 'custom-endpoint' ? customEndpoint : undefined
+          customEndpoint: aiTool === 'custom-endpoint' ? customEndpoint : undefined,
+          agentCommand
         }).catch((err) => {
           if (!resolved) {
             resolved = true

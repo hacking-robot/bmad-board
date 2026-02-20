@@ -288,7 +288,8 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
     e.stopPropagation()
     // Close the menu
     handleMenuClose()
-    // Clear the chat thread for a fresh start
+    // Cancel any running process and clear the chat thread for a fresh start
+    window.chatAPI.cancelMessage(agentIdParam).catch(() => {})
     clearChatThread(agentIdParam)
     // Switch to chat view
     setViewMode('chat')
@@ -381,7 +382,7 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
                 {/* Spinning icon: shows when teammate working OR for in-progress/review with git activity */}
                 {(workingTeammate || ((effectiveStatus === 'in-progress' || effectiveStatus === 'review') && (runningAgent || isActivelyWorking))) && (
                   <Tooltip
-                    title={workingTeammate ? `${workingTeammate.name} working` : runningAgent ? 'Teammate working' : 'Recent git activity'}
+                    title={workingTeammate ? `${workingTeammate.name} working` : runningAgent ? 'Agent working' : 'Recent git activity'}
                     arrow
                     placement="top"
                   >
@@ -727,7 +728,7 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
               )}
               <GroupsIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
               <Typography variant="body2" fontWeight={500}>
-                Talk to Teammates ({selectedToolInfo?.name || aiTool})
+                Talk to Agents ({selectedToolInfo?.name || aiTool})
               </Typography>
             </Box>
           </Box>
