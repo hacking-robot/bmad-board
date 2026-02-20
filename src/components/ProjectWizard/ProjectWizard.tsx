@@ -98,6 +98,22 @@ export default function ProjectWizard() {
     })
   }, [isActive, projectPath, outputFolder])
 
+  // On resume, if install step is already done, trigger a BMAD scan so agent commands resolve.
+  // The scan normally runs in handleInstallComplete, but on resume it's skipped.
+  useEffect(() => {
+    if (!isActive || !projectPath || bmadScanResult) return
+    if (!stepStatuses.length || stepStatuses[0] !== 'completed') return
+    window.fileAPI.scanBmad(projectPath).then((scanResult) => {
+      const result = scanResult as BmadScanResult | null
+      setBmadScanResult(result)
+      if (result) {
+        const { projectType: currentProjectType } = useStore.getState()
+        const merged = mergeWorkflowConfig(result, currentProjectType)
+        setScannedWorkflowConfig(merged)
+      }
+    }).catch(() => {})
+  }, [isActive, projectPath, bmadScanResult, stepStatuses, setBmadScanResult, setScannedWorkflowConfig])
+
   // After mount, check if any pending/active steps already have their output file.
   // This handles: (1) resume where agent finished but user didn't click "Mark Complete",
   // (2) resume where files were created externally (e.g., by CLI) while wizard was closed.
