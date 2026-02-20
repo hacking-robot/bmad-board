@@ -63,8 +63,8 @@ export default function AgentsTab() {
       </Alert>
 
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        BMAD uses specialized teammates, each with a distinct role in the development process.
-        Work with these teammates in your AI coding assistant to guide your project.
+        BMAD uses specialized agents, each with a distinct role in the development process.
+        Work with these agents in your AI coding assistant to guide your project.
       </Typography>
 
       <Stack spacing={2}>

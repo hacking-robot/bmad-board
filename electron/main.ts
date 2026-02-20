@@ -1,10 +1,12 @@
 import { app, BrowserWindow, ipcMain, dialog, Menu, screen, Notification } from 'electron'
-import { join, dirname, basename } from 'path'
+import { join, dirname, basename, resolve } from 'path'
 import { readFile, readdir, stat, writeFile, mkdir } from 'fs/promises'
 import { existsSync, watch, FSWatcher } from 'fs'
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
+import { spawn as spawnChild, spawnSync } from 'child_process'
 import { agentManager } from './agentManager'
 import { detectTool, detectAllTools, clearDetectionCache } from './cliToolManager'
+import { getAugmentedEnv } from './envUtils'
 
 // Set app name (shows in menu bar on macOS)
 app.setName('BMad Board')
@@ -73,12 +75,15 @@ interface StatusChangeEntry {
   source: StatusChangeSource
 }
 
+type BmadVersion = 'stable' | 'alpha'
+
 interface AppSettings {
   themeMode: 'light' | 'dark'
   aiTool: AITool
   claudeModel: ClaudeModel
   projectPath: string | null
   projectType: ProjectType | null
+  bmadVersion: BmadVersion | null
   selectedEpicId: number | null
   collapsedColumnsByEpic: Record<string, string[]>
   agentHistory?: AgentHistoryEntry[]
@@ -112,6 +117,7 @@ const defaultSettings: AppSettings = {
   claudeModel: 'opus',
   projectPath: null,
   projectType: null,
+  bmadVersion: null,
   selectedEpicId: null,
   collapsedColumnsByEpic: {},
   agentHistory: [],
@@ -465,9 +471,9 @@ ipcMain.handle('select-directory', async () => {
   const projectPath = result.filePaths[0]
   const bmadOutputPath = join(projectPath, '_bmad-output')
 
-  // Check if _bmad-output directory exists
+  // Check if _bmad-output directory exists - if not, it's a new project for the wizard
   if (!existsSync(bmadOutputPath)) {
-    return { error: 'Invalid BMAD project: _bmad-output directory not found' }
+    return { path: projectPath, projectType: 'bmm' as ProjectType, isNewProject: true }
   }
 
   // Check for required files
@@ -644,6 +650,28 @@ ipcMain.handle('get-agent-for-story', async (_, storyId: string) => {
   return agentManager.hasAgentForStory(storyId)
 })
 
+// Detect BMAD version (stable vs alpha) based on command file structure
+ipcMain.handle('detect-bmad-version', async (_, projectPath: string) => {
+  // Alpha uses nested: .claude/commands/bmad/bmm/ or .claude/commands/bmad/bmgd/
+  const nestedPath = join(projectPath, '.claude', 'commands', 'bmad')
+  if (existsSync(nestedPath)) {
+    return 'alpha'
+  }
+  // Stable uses flat: .claude/commands/bmad-agent-bmm-*.md
+  const flatPath = join(projectPath, '.claude', 'commands')
+  if (existsSync(flatPath)) {
+    try {
+      const files = await readdir(flatPath)
+      if (files.some(f => f.startsWith('bmad-'))) {
+        return 'stable'
+      }
+    } catch {
+      // Directory might not be readable
+    }
+  }
+  return null // No bmad detected
+})
+
 // Detect project type (bmm vs bmgd structure)
 ipcMain.handle('detect-project-type', async (_, projectPath: string) => {
   // Check for BMGD structure (epics.md at root of _bmad-output)
@@ -777,8 +805,6 @@ ipcMain.handle('list-agent-outputs', async () => {
 })
 
 // Git IPC handlers
-import { spawnSync } from 'child_process'
-import { resolve } from 'path'
 
 // Security: Validate git ref names (branch names, commit hashes, tags)
 // Only allows alphanumeric, dash, underscore, slash, dot, and caret (for parent refs like HEAD^)
@@ -1634,4 +1660,208 @@ ipcMain.handle('cli-detect-all-tools', async () => {
 
 ipcMain.handle('cli-clear-cache', async () => {
   clearDetectionCache()
+})
+
+// BMAD Install handler - runs npx bmad-method install
+let bmadInstallProcess: ReturnType<typeof spawnChild> | null = null
+
+ipcMain.handle('bmad-install', async (_, projectPath: string, useAlpha?: boolean) => {
+  if (bmadInstallProcess) {
+    return { success: false, error: 'Installation already in progress' }
+  }
+
+  try {
+    const packageName = useAlpha ? 'bmad-method@alpha' : 'bmad-method'
+    // Stable v6 supports non-interactive flags; alpha does not
+    const args = useAlpha
+      ? [packageName, 'install']
+      : [
+          packageName, 'install',
+          '--directory', projectPath,
+          '--modules', 'bmm',
+          '--tools', 'claude-code',
+          '--output-folder', '_bmad-output',
+          '--yes'
+        ]
+
+    console.log('[BMAD Install] Running: npx', args.join(' '))
+
+    const proc = spawnChild('npx', args, {
+      cwd: projectPath,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: getAugmentedEnv()
+    })
+
+    bmadInstallProcess = proc
+
+    proc.stdout?.on('data', (data: Buffer) => {
+      const chunk = data.toString('utf-8')
+      console.log('[BMAD Install stdout]', chunk)
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('bmad:install-output', { type: 'stdout', chunk })
+      }
+    })
+
+    proc.stderr?.on('data', (data: Buffer) => {
+      const chunk = data.toString('utf-8')
+      console.log('[BMAD Install stderr]', chunk)
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('bmad:install-output', { type: 'stderr', chunk })
+      }
+    })
+
+    proc.on('exit', (code, signal) => {
+      console.log('[BMAD Install] Exited:', { code, signal })
+      bmadInstallProcess = null
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('bmad:install-complete', {
+          success: code === 0,
+          code,
+          signal
+        })
+      }
+    })
+
+    proc.on('error', (error) => {
+      console.error('[BMAD Install] Error:', error)
+      bmadInstallProcess = null
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('bmad:install-complete', {
+          success: false,
+          error: error.message
+        })
+      }
+    })
+
+    return { success: true }
+  } catch (error) {
+    bmadInstallProcess = null
+    return { success: false, error: error instanceof Error ? error.message : 'Failed to start install' }
+  }
+})
+
+// Wizard file watcher - watches _bmad-output/planning-artifacts for new files
+let wizardWatcher: FSWatcher | null = null
+let wizardWatchDebounce: NodeJS.Timeout | null = null
+
+ipcMain.handle('wizard-start-watching', async (_, projectPath: string) => {
+  // Stop existing wizard watcher
+  if (wizardWatcher) {
+    wizardWatcher.close()
+    wizardWatcher = null
+  }
+
+  const planningDir = join(projectPath, '_bmad-output', 'planning-artifacts')
+
+  // Create the directory if it doesn't exist yet (install may not have completed)
+  if (!existsSync(planningDir)) {
+    try {
+      await mkdir(planningDir, { recursive: true })
+    } catch {
+      return false
+    }
+  }
+
+  try {
+    wizardWatcher = watch(planningDir, { recursive: true }, (_eventType, filename) => {
+      if (!filename || !filename.endsWith('.md')) return
+
+      if (wizardWatchDebounce) clearTimeout(wizardWatchDebounce)
+      wizardWatchDebounce = setTimeout(() => {
+        console.log('[Wizard Watcher] File changed:', filename)
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('wizard:file-changed', { filename })
+        }
+      }, 500)
+    })
+    return true
+  } catch (error) {
+    console.error('[Wizard Watcher] Failed to start:', error)
+    return false
+  }
+})
+
+ipcMain.handle('wizard-stop-watching', async () => {
+  if (wizardWatchDebounce) {
+    clearTimeout(wizardWatchDebounce)
+    wizardWatchDebounce = null
+  }
+  if (wizardWatcher) {
+    wizardWatcher.close()
+    wizardWatcher = null
+  }
+  return true
+})
+
+// Check if a file exists (for wizard step completion detection)
+ipcMain.handle('check-file-exists', async (_, filePath: string) => {
+  return existsSync(filePath)
+})
+
+// Wizard state persistence
+ipcMain.handle('save-wizard-state', async (_, projectPath: string, state: unknown) => {
+  try {
+    const wizardDir = join(projectPath, '_bmad-output')
+    if (!existsSync(wizardDir)) {
+      await mkdir(wizardDir, { recursive: true })
+    }
+    const wizardPath = join(wizardDir, '.bmadboard-wizard.json')
+    await writeFile(wizardPath, JSON.stringify(state, null, 2))
+    return true
+  } catch (error) {
+    console.error('Failed to save wizard state:', error)
+    return false
+  }
+})
+
+ipcMain.handle('load-wizard-state', async (_, projectPath: string) => {
+  try {
+    const wizardPath = join(projectPath, '_bmad-output', '.bmadboard-wizard.json')
+    if (!existsSync(wizardPath)) return null
+    const content = await readFile(wizardPath, 'utf-8')
+    return JSON.parse(content)
+  } catch {
+    return null
+  }
+})
+
+ipcMain.handle('delete-wizard-state', async (_, projectPath: string) => {
+  try {
+    const wizardPath = join(projectPath, '_bmad-output', '.bmadboard-wizard.json')
+    if (existsSync(wizardPath)) {
+      const { unlink } = await import('fs/promises')
+      await unlink(wizardPath)
+    }
+    return true
+  } catch {
+    return false
+  }
+})
+
+// Allow selecting a directory without validating _bmad-output (for wizard)
+ipcMain.handle('select-directory-any', async () => {
+  const result = await dialog.showOpenDialog(mainWindow!, {
+    properties: ['openDirectory'],
+    title: 'Select Project Folder'
+  })
+
+  if (result.canceled || result.filePaths.length === 0) {
+    return null
+  }
+
+  return { path: result.filePaths[0] }
+})
+
+// Create a new project directory (for "New Project" flow)
+ipcMain.handle('create-project-directory', async (_, parentPath: string, projectName: string) => {
+  try {
+    const projectPath = join(parentPath, projectName)
+    if (existsSync(projectPath)) {
+      return { success: false, error: 'A folder with that name already exists' }
+    }
+    await mkdir(projectPath, { recursive: true })
+    return { success: true, path: projectPath }
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Failed to create directory' }
+  }
 })

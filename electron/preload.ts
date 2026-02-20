@@ -73,6 +73,7 @@ export interface AppSettings {
   customEndpoint: CustomEndpointConfig | null
   projectPath: string | null
   projectType: ProjectType | null
+  bmadVersion: BmadVersion | null
   selectedEpicId: number | null
   collapsedColumnsByEpic: Record<string, string[]>
   agentHistory?: AgentHistoryEntry[]
@@ -101,6 +102,8 @@ export interface AppSettings {
   lastViewedStatusHistoryAt: number
 }
 
+export type BmadVersion = 'stable' | 'alpha'
+
 export interface FileAPI {
   selectDirectory: () => Promise<{ path?: string; projectType?: ProjectType; isNewProject?: boolean; error?: string } | null>
   readFile: (filePath: string) => Promise<{ content?: string; error?: string }>
@@ -112,6 +115,7 @@ export interface FileAPI {
   updateStoryStatus: (filePath: string, newStatus: string) => Promise<{ success: boolean; error?: string }>
   showNotification: (title: string, body: string) => Promise<void>
   checkBmadInGitignore: (projectPath: string) => Promise<{ inGitignore: boolean; error?: string }>
+  detectBmadVersion: (projectPath: string) => Promise<BmadVersion | null>
   onFilesChanged: (callback: () => void) => () => void
   onShowKeyboardShortcuts: (callback: () => void) => () => void
 }
@@ -127,6 +131,7 @@ const fileAPI: FileAPI = {
   updateStoryStatus: (filePath: string, newStatus: string) => ipcRenderer.invoke('update-story-status', filePath, newStatus),
   showNotification: (title: string, body: string) => ipcRenderer.invoke('show-notification', title, body),
   checkBmadInGitignore: (projectPath: string) => ipcRenderer.invoke('check-bmad-in-gitignore', projectPath),
+  detectBmadVersion: (projectPath: string) => ipcRenderer.invoke('detect-bmad-version', projectPath),
   onFilesChanged: (callback: () => void) => {
     const listener = () => callback()
     ipcRenderer.on('files-changed', listener)
@@ -486,6 +491,67 @@ const cliAPI: CLIAPI = {
 
 contextBridge.exposeInMainWorld('cliAPI', cliAPI)
 
+// Wizard API types
+export interface WizardInstallOutputEvent {
+  type: 'stdout' | 'stderr'
+  chunk: string
+}
+
+export interface WizardInstallCompleteEvent {
+  success: boolean
+  code?: number | null
+  signal?: string | null
+  error?: string
+}
+
+export interface WizardFileChangedEvent {
+  filename: string
+}
+
+export interface WizardAPI {
+  install: (projectPath: string, useAlpha?: boolean) => Promise<{ success: boolean; error?: string }>
+  onInstallOutput: (callback: (event: WizardInstallOutputEvent) => void) => () => void
+  onInstallComplete: (callback: (event: WizardInstallCompleteEvent) => void) => () => void
+  startWatching: (projectPath: string) => Promise<boolean>
+  stopWatching: () => Promise<boolean>
+  onFileChanged: (callback: (event: WizardFileChangedEvent) => void) => () => void
+  checkFileExists: (filePath: string) => Promise<boolean>
+  saveState: (projectPath: string, state: unknown) => Promise<boolean>
+  loadState: (projectPath: string) => Promise<unknown | null>
+  deleteState: (projectPath: string) => Promise<boolean>
+  selectDirectoryAny: () => Promise<{ path: string } | null>
+  createProjectDirectory: (parentPath: string, projectName: string) => Promise<{ success: boolean; path?: string; error?: string }>
+}
+
+const wizardAPI: WizardAPI = {
+  install: (projectPath, useAlpha) => ipcRenderer.invoke('bmad-install', projectPath, useAlpha),
+  onInstallOutput: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: WizardInstallOutputEvent) => callback(data)
+    ipcRenderer.on('bmad:install-output', listener)
+    return () => ipcRenderer.removeListener('bmad:install-output', listener)
+  },
+  onInstallComplete: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: WizardInstallCompleteEvent) => callback(data)
+    ipcRenderer.on('bmad:install-complete', listener)
+    return () => ipcRenderer.removeListener('bmad:install-complete', listener)
+  },
+  startWatching: (projectPath) => ipcRenderer.invoke('wizard-start-watching', projectPath),
+  stopWatching: () => ipcRenderer.invoke('wizard-stop-watching'),
+  onFileChanged: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: WizardFileChangedEvent) => callback(data)
+    ipcRenderer.on('wizard:file-changed', listener)
+    return () => ipcRenderer.removeListener('wizard:file-changed', listener)
+  },
+  checkFileExists: (filePath) => ipcRenderer.invoke('check-file-exists', filePath),
+  saveState: (projectPath, state) => ipcRenderer.invoke('save-wizard-state', projectPath, state),
+  loadState: (projectPath) => ipcRenderer.invoke('load-wizard-state', projectPath),
+  deleteState: (projectPath) => ipcRenderer.invoke('delete-wizard-state', projectPath),
+  selectDirectoryAny: () => ipcRenderer.invoke('select-directory-any'),
+  createProjectDirectory: (parentPath, projectName) => ipcRenderer.invoke('create-project-directory', parentPath, projectName)
+}
+
+contextBridge.exposeInMainWorld('wizardAPI', wizardAPI)
+
 declare global {
   interface Window {
     fileAPI: FileAPI
@@ -493,5 +559,6 @@ declare global {
     gitAPI: GitAPI
     chatAPI: ChatAPI
     cliAPI: CLIAPI
+    wizardAPI: WizardAPI
   }
 }

@@ -10,17 +10,20 @@ import {
   Divider
 } from '@mui/material'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
+import AddIcon from '@mui/icons-material/Add'
 import DashboardIcon from '@mui/icons-material/Dashboard'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import ExpandLessIcon from '@mui/icons-material/ExpandLess'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import { useProjectData } from '../../hooks/useProjectData'
 import { useStore } from '../../store'
+import { NewProjectForm } from '../NewProjectDialog'
 
 export default function WelcomeDialog() {
   const { selectProject } = useProjectData()
   const error = useStore((state) => state.error)
   const [showInfo, setShowInfo] = useState(false)
+  const [newProjectOpen, setNewProjectOpen] = useState(false)
 
   const handleSelectProject = async () => {
     await selectProject()
@@ -78,19 +81,30 @@ export default function WelcomeDialog() {
             </Typography>
           )}
 
-          <Button
-            variant="contained"
-            size="large"
-            startIcon={<FolderOpenIcon />}
-            onClick={handleSelectProject}
-            sx={{ mt: 2 }}
-          >
-            Select Project Folder
-          </Button>
+          <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
+            <Button
+              variant="contained"
+              size="large"
+              startIcon={<FolderOpenIcon />}
+              onClick={handleSelectProject}
+            >
+              Open Project
+            </Button>
+            <Button
+              variant="outlined"
+              size="large"
+              startIcon={<AddIcon />}
+              onClick={() => setNewProjectOpen(true)}
+            >
+              New Project
+            </Button>
+          </Stack>
 
           <Typography variant="caption" color="text.secondary">
-            Choose a folder containing a <code>_bmad-output</code> directory
+            Open an existing BMAD project or create a new one
           </Typography>
+
+          <NewProjectForm open={newProjectOpen} onClose={() => setNewProjectOpen(false)} />
 
           <Divider sx={{ width: '100%', my: 1 }} />
 
@@ -122,10 +136,10 @@ export default function WelcomeDialog() {
               >
                 <Typography variant="body2" sx={{ mb: 1.5 }}>
                   <strong>BMAD</strong> (Breakthrough Method of Agile AI-Driven Development) is an AI-powered
-                  framework that uses specialized teammates to guide you through software development.
+                  framework that uses specialized agents to guide you through software development.
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                  Each teammate has a specific role: <strong>Analyst</strong> (Mary) handles research,{' '}
+                  Each agent has a specific role: <strong>Analyst</strong> (Mary) handles research,{' '}
                   <strong>PM</strong> (John) creates requirements, <strong>Architect</strong> (Winston)
                   designs systems, <strong>SM</strong> (Bob) manages stories, and <strong>DEV</strong> (Amelia)
                   implements features.

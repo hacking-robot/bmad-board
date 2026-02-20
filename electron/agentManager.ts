@@ -339,13 +339,22 @@ class ChatAgentManager {
       // Track session ID from response
       let capturedSessionId: string | undefined
 
+      // Line buffer to handle partial JSON lines split across data chunks
+      let loadLineBuffer = ''
+
       // Handle stdout - capture session ID
       proc.stdout?.on('data', (data: Buffer) => {
-        const chunk = data.toString('utf-8')
-        console.log('[ChatAgentManager] Agent load stdout:', chunk.substring(0, 500))
+        loadLineBuffer += data.toString('utf-8')
 
-        const lines = chunk.split('\n').filter(Boolean)
-        for (const line of lines) {
+        // Split into lines - last element may be incomplete
+        const parts = loadLineBuffer.split('\n')
+        // Keep the last (potentially incomplete) part in the buffer
+        loadLineBuffer = parts.pop() || ''
+
+        // Process only complete lines
+        const completeLines = parts.filter(Boolean)
+
+        for (const line of completeLines) {
           try {
             const parsed = JSON.parse(line)
             console.log('[ChatAgentManager] Parsed JSON type:', parsed.type)
@@ -358,14 +367,16 @@ class ChatAgentManager {
           }
         }
 
-        // Send output for agent loading display
-        this.sendToRenderer('chat:output', {
-          agentId: options.agentId,
-          type: 'stdout',
-          chunk,
-          timestamp: Date.now(),
-          isAgentLoad: true
-        })
+        // Send complete lines to renderer for display
+        if (completeLines.length > 0) {
+          this.sendToRenderer('chat:output', {
+            agentId: options.agentId,
+            type: 'stdout',
+            chunk: completeLines.join('\n') + '\n',
+            timestamp: Date.now(),
+            isAgentLoad: true
+          })
+        }
       })
 
       // Handle stderr
@@ -380,8 +391,29 @@ class ChatAgentManager {
         })
       })
 
-      // Handle exit - send agent-loaded event with session ID
-      proc.on('exit', (code, signal) => {
+      // Use 'close' instead of 'exit' to ensure all stdio streams are fully consumed
+      // before processing. 'exit' can fire while stdout still has buffered data.
+      proc.on('close', (code, signal) => {
+        // Flush any remaining data in the line buffer
+        if (loadLineBuffer.trim()) {
+          try {
+            const parsed = JSON.parse(loadLineBuffer)
+            if (parsed.type === 'result' && parsed.session_id) {
+              capturedSessionId = parsed.session_id
+            }
+          } catch {
+            // Not JSON, ignore
+          }
+          this.sendToRenderer('chat:output', {
+            agentId: options.agentId,
+            type: 'stdout',
+            chunk: loadLineBuffer + '\n',
+            timestamp: Date.now(),
+            isAgentLoad: true
+          })
+          loadLineBuffer = ''
+        }
+
         console.log('[ChatAgentManager] Agent load completed:', { agentId: options.agentId, code, signal, sessionId: capturedSessionId })
         this.runningProcesses.delete(options.agentId)
         this.sendToRenderer('chat:agent-loaded', {
@@ -507,31 +539,44 @@ class ChatAgentManager {
       // Track session ID from response
       let capturedSessionId: string | undefined
 
+      // Line buffer to handle partial JSON lines split across data chunks
+      let msgLineBuffer = ''
+
       // Handle stdout - also capture session ID from result message
       proc.stdout?.on('data', (data: Buffer) => {
-        const chunk = data.toString('utf-8')
+        msgLineBuffer += data.toString('utf-8')
 
-        // Try to capture session ID from stream-json output
-        const lines = chunk.split('\n').filter(Boolean)
-        for (const line of lines) {
+        // Split into lines - last element may be incomplete
+        const parts = msgLineBuffer.split('\n')
+        // Keep the last (potentially incomplete) part in the buffer
+        msgLineBuffer = parts.pop() || ''
+
+        // Process only complete lines
+        const completeLines = parts.filter(Boolean)
+
+        for (const line of completeLines) {
           try {
             const parsed = JSON.parse(line)
+            console.log('[ChatAgentManager] Message JSON type:', parsed.type)
             // Session ID typically comes in the result message
             if (parsed.type === 'result' && parsed.session_id) {
               capturedSessionId = parsed.session_id
               console.log('[ChatAgentManager] Captured session ID:', capturedSessionId)
             }
           } catch {
-            // Not JSON, ignore
+            console.log('[ChatAgentManager] Non-JSON line:', line.substring(0, 100))
           }
         }
 
-        this.sendToRenderer('chat:output', {
-          agentId: options.agentId,
-          type: 'stdout',
-          chunk,
-          timestamp: Date.now()
-        })
+        // Send complete lines to renderer
+        if (completeLines.length > 0) {
+          this.sendToRenderer('chat:output', {
+            agentId: options.agentId,
+            type: 'stdout',
+            chunk: completeLines.join('\n') + '\n',
+            timestamp: Date.now()
+          })
+        }
       })
 
       // Handle stderr
@@ -545,10 +590,30 @@ class ChatAgentManager {
         })
       })
 
-      // Handle exit - include session ID if captured
-      proc.on('exit', (code, signal) => {
+      // Use 'close' instead of 'exit' to ensure all stdio streams are fully consumed
+      // before processing. 'exit' can fire while stdout still has buffered data.
+      proc.on('close', (code, signal) => {
+        // Flush any remaining data in the line buffer
+        if (msgLineBuffer.trim()) {
+          try {
+            const parsed = JSON.parse(msgLineBuffer)
+            if (parsed.type === 'result' && parsed.session_id) {
+              capturedSessionId = parsed.session_id
+            }
+          } catch {
+            // Not JSON, ignore
+          }
+          this.sendToRenderer('chat:output', {
+            agentId: options.agentId,
+            type: 'stdout',
+            chunk: msgLineBuffer + '\n',
+            timestamp: Date.now()
+          })
+          msgLineBuffer = ''
+        }
+
         const wasCancelled = signal === 'SIGTERM' || signal === 'SIGKILL'
-        console.log('[ChatAgentManager] Process exited:', { agentId: options.agentId, code, signal, sessionId: capturedSessionId, wasCancelled })
+        console.log('[ChatAgentManager] Process closed:', { agentId: options.agentId, code, signal, sessionId: capturedSessionId, wasCancelled })
         this.runningProcesses.delete(options.agentId)
         this.sendToRenderer('chat:exit', {
           agentId: options.agentId,

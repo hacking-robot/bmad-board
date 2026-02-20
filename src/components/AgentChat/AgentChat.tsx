@@ -176,7 +176,7 @@ export default function AgentChat() {
                   <Typography variant="subtitle1" fontWeight={600}>
                     {selectedAgent.name}
                   </Typography>
-                  <Tooltip title="View teammate guide">
+                  <Tooltip title="View agent guide">
                     <IconButton
                       onClick={() => setHelpPanelOpen(true, 1, selectedAgent.id)}
                       size="small"
@@ -214,7 +214,7 @@ export default function AgentChat() {
             }}
           >
             <Typography color="text.secondary">
-              Select a teammate to start chatting
+              Select an agent to start chatting
             </Typography>
           </Box>
         )}

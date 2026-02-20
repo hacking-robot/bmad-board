@@ -294,7 +294,7 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
             itemContent={(_index, message) => (
               <ChatMessage
                 message={message}
-                agentName={agent?.name || 'Teammate'}
+                agentName={agent?.name || 'Agent'}
                 agentAvatar={agent?.avatar || 'A'}
               />
             )}
@@ -303,7 +303,7 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
               Footer: () =>
                 isTyping ? (
                   <Box sx={{ px: 2, pb: 2 }}>
-                    <TypingIndicator agentName={agent?.name || 'Teammate'} activity={thinkingActivity} />
+                    <TypingIndicator agentName={agent?.name || 'Agent'} activity={thinkingActivity} />
                   </Box>
                 ) : null
             }}

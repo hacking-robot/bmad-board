@@ -223,8 +223,8 @@ export default function CommandPalette() {
         },
         {
           id: 'command:help-agents',
-          label: 'Help: Meet the Teammates',
-          description: 'Learn about BMAD teammates and their roles',
+          label: 'Help: Meet the Agents',
+          description: 'Learn about BMAD agents and their roles',
           icon: <GroupIcon sx={{ color: 'text.secondary' }} />,
           action: () => {
             setOpen(false)

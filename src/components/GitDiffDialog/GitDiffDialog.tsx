@@ -1043,7 +1043,7 @@ export default function GitDiffDialog({ open, onClose, branchName }: GitDiffDial
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mr: 2 }}>
                             <CommitIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
                             {agent && (
-                              <Tooltip title={`${agent.name} teammate work`}>
+                              <Tooltip title={`${agent.name} agent work`}>
                                 <Chip
                                   label={agent.name}
                                   size="small"

@@ -1,7 +1,9 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import { Epic, Story, StoryContent, StoryStatus, Agent, ProjectType, AgentHistoryEntry, AITool, ClaudeModel, CustomEndpointConfig, HumanReviewChecklistItem, StoryReviewState, ChatMessage, AgentThread, StatusChangeEntry, StatusChangeSource } from './types'
+import { Epic, Story, StoryContent, StoryStatus, Agent, ProjectType, BmadVersion, AgentHistoryEntry, AITool, ClaudeModel, CustomEndpointConfig, HumanReviewChecklistItem, StoryReviewState, ChatMessage, AgentThread, StatusChangeEntry, StatusChangeSource } from './types'
 import { FullCycleState, FullCycleStepType, FullCycleStepStatus, initialFullCycleState, EpicCycleState, EpicStoryStatus, initialEpicCycleState } from './types/fullCycle'
+import { ProjectWizardState, WizardStepStatus, initialWizardState } from './types/projectWizard'
+import { WIZARD_STEPS } from './data/wizardSteps'
 
 export type ViewMode = 'board' | 'chat'
 
@@ -55,7 +57,7 @@ const electronStorage = {
       const parsed = JSON.parse(value)
       if (parsed.state) {
         // Only save the settings we care about
-        const { themeMode, aiTool, claudeModel, customEndpoint, projectPath, projectType, selectedEpicId, collapsedColumnsByEpic, agentHistory, recentProjects, notificationsEnabled, baseBranch, allowDirectEpicMerge, bmadInGitignore, bmadInGitignoreUserSet, storyOrder, enableHumanReviewColumn, humanReviewChecklist, humanReviewStates, humanReviewStories, maxThreadMessages, statusHistoryByStory, globalStatusHistory, lastViewedStatusHistoryAt, enableEpicBranches, disableGitBranching, fullCycleReviewCount } = parsed.state
+        const { themeMode, aiTool, claudeModel, customEndpoint, projectPath, projectType, bmadVersion, selectedEpicId, collapsedColumnsByEpic, agentHistory, recentProjects, notificationsEnabled, baseBranch, allowDirectEpicMerge, bmadInGitignore, bmadInGitignoreUserSet, storyOrder, enableHumanReviewColumn, humanReviewChecklist, humanReviewStates, humanReviewStories, maxThreadMessages, statusHistoryByStory, globalStatusHistory, lastViewedStatusHistoryAt, enableEpicBranches, disableGitBranching, fullCycleReviewCount } = parsed.state
 
         // Don't persist full output - it can contain characters that break JSON
         // Just save metadata and a small summary
@@ -73,6 +75,7 @@ const electronStorage = {
           customEndpoint: customEndpoint || null,
           projectPath,
           projectType,
+          bmadVersion: bmadVersion || null,
           selectedEpicId,
           collapsedColumnsByEpic,
           agentHistory: sanitizedHistory,
@@ -108,6 +111,7 @@ const electronStorage = {
       customEndpoint: null,
       projectPath: null,
       projectType: null,
+      bmadVersion: null,
       selectedEpicId: null,
       collapsedColumnsByEpic: {},
       agentHistory: [],
@@ -183,8 +187,10 @@ interface AppState {
   // Project
   projectPath: string | null
   projectType: ProjectType | null
+  bmadVersion: BmadVersion | null
   setProjectPath: (path: string | null) => void
   setProjectType: (type: ProjectType | null) => void
+  setBmadVersion: (version: BmadVersion | null) => void
 
   // Recent Projects
   recentProjects: RecentProject[]
@@ -350,6 +356,18 @@ interface AppState {
   resetEpicCycle: () => void
   retryEpicCycle: () => void
 
+  // Project Wizard
+  projectWizard: ProjectWizardState
+  startProjectWizard: (projectPath: string) => void
+  updateWizardStep: (stepIndex: number, status: WizardStepStatus) => void
+  advanceWizardStep: () => void
+  skipWizardStep: (stepIndex: number) => void
+  appendWizardInstallLog: (line: string) => void
+  setWizardError: (error: string | null) => void
+  completeWizard: () => void
+  cancelWizard: () => void
+  resumeWizard: (state: ProjectWizardState) => void
+
   // Computed - filtered stories
   getFilteredStories: () => Story[]
 }
@@ -411,8 +429,10 @@ export const useStore = create<AppState>()(
       // Project
       projectPath: null,
       projectType: null,
+      bmadVersion: null,
       setProjectPath: (path) => set({ projectPath: path }),
       setProjectType: (type) => set({ projectType: type }),
+      setBmadVersion: (version) => set({ bmadVersion: version }),
 
       // Recent Projects
       recentProjects: [],
@@ -1119,6 +1139,82 @@ export const useStore = create<AppState>()(
             storyStatuses: newStatuses
           }
         }
+      }),
+
+      // Project Wizard
+      projectWizard: initialWizardState,
+      startProjectWizard: (projectPath) => set({
+        projectWizard: {
+          ...initialWizardState,
+          isActive: true,
+          projectPath,
+          stepStatuses: new Array(WIZARD_STEPS.length).fill('pending' as WizardStepStatus)
+        },
+        // Set project path/type so AgentChat can function during wizard
+        projectPath,
+        projectType: 'bmm' as ProjectType
+      }),
+      updateWizardStep: (stepIndex, status) => set((state) => {
+        const newStatuses = [...state.projectWizard.stepStatuses]
+        newStatuses[stepIndex] = status
+        return {
+          projectWizard: {
+            ...state.projectWizard,
+            stepStatuses: newStatuses,
+            currentStep: status === 'active' ? stepIndex : state.projectWizard.currentStep
+          }
+        }
+      }),
+      advanceWizardStep: () => set((state) => {
+        const newStatuses = [...state.projectWizard.stepStatuses]
+        if (state.projectWizard.currentStep < newStatuses.length) {
+          newStatuses[state.projectWizard.currentStep] = 'completed'
+        }
+        return {
+          projectWizard: {
+            ...state.projectWizard,
+            currentStep: state.projectWizard.currentStep + 1,
+            stepStatuses: newStatuses
+          }
+        }
+      }),
+      skipWizardStep: (stepIndex) => set((state) => {
+        const newStatuses = [...state.projectWizard.stepStatuses]
+        newStatuses[stepIndex] = 'skipped'
+        // If skipping the current step, advance
+        const newCurrentStep = stepIndex === state.projectWizard.currentStep
+          ? stepIndex + 1
+          : state.projectWizard.currentStep
+        return {
+          projectWizard: {
+            ...state.projectWizard,
+            currentStep: newCurrentStep,
+            stepStatuses: newStatuses
+          }
+        }
+      }),
+      appendWizardInstallLog: (line) => set((state) => ({
+        projectWizard: {
+          ...state.projectWizard,
+          installProgress: [...state.projectWizard.installProgress, line]
+        }
+      })),
+      setWizardError: (error) => set((state) => ({
+        projectWizard: {
+          ...state.projectWizard,
+          error
+        }
+      })),
+      completeWizard: () => set({
+        projectWizard: initialWizardState
+      }),
+      cancelWizard: () => set({
+        projectWizard: initialWizardState,
+        projectPath: null,
+        projectType: null
+      }),
+      resumeWizard: (wizardState) => set({
+        projectWizard: wizardState
       }),
 
       // Computed

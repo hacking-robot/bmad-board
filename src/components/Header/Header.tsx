@@ -143,7 +143,7 @@ export default function Header() {
           {/* Running Agents Indicator */}
           {runningChatAgents > 0 && (
             <Chip
-              label={`${runningChatAgents} teammate${runningChatAgents > 1 ? 's' : ''} working`}
+              label={`${runningChatAgents} agent${runningChatAgents > 1 ? 's' : ''} working`}
               size="small"
               sx={{
                 ml: 1,
@@ -174,7 +174,7 @@ export default function Header() {
           {viewMode === 'board' && <EpicFilter />}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
             {enableAgents && viewMode === 'board' && (
-              <Tooltip title={agentPanelOpen ? 'Hide Teammates' : 'Show Teammates'}>
+              <Tooltip title={agentPanelOpen ? 'Hide Agents' : 'Show Agents'}>
                 <IconButton
                   onClick={toggleAgentPanel}
                   size="small"

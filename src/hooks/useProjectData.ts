@@ -23,7 +23,8 @@ export function useProjectData() {
     selectedStory,
     setNewProjectDialogOpen,
     setPendingNewProject,
-    setBmadInGitignore
+    setBmadInGitignore,
+    setBmadVersion
   } = useStore()
 
   const selectProject = useCallback(async () => {
@@ -77,6 +78,10 @@ export function useProjectData() {
 
   const loadProjectData = useCallback(async () => {
     if (!projectPath || !projectType) return
+
+    // Skip loading if wizard is active (project artifacts don't exist yet)
+    const { projectWizard } = useStore.getState()
+    if (projectWizard.isActive) return
 
     // Get current state values (don't use reactive values to avoid infinite loops)
     const { stories: currentStories, notificationsEnabled, isUserDragging, setIsUserDragging } = useStore.getState()
@@ -230,7 +235,34 @@ export function useProjectData() {
   // Load project data when path changes or after hydration
   useEffect(() => {
     if (_hasHydrated && projectPath && projectType) {
-      loadProjectData()
+      // Skip if wizard is active (project artifacts don't exist yet)
+      const { projectWizard } = useStore.getState()
+      if (projectWizard.isActive) return
+
+      // Check if this is an incomplete project with a saved wizard state
+      // This happens when the app restarts mid-wizard (projectPath persisted but wizard state isn't)
+      window.wizardAPI.loadState(projectPath).then((savedState) => {
+        if (savedState && typeof savedState === 'object' && 'isActive' in (savedState as Record<string, unknown>)) {
+          const ws = savedState as { isActive: boolean }
+          if (ws.isActive) {
+            // Resume the wizard instead of trying to load incomplete project data
+            const { startProjectWizard, resumeWizard } = useStore.getState()
+            startProjectWizard(projectPath)
+            resumeWizard(savedState as import('../types/projectWizard').ProjectWizardState)
+            return
+          }
+        }
+        // No wizard state — load project data normally
+        loadProjectData()
+      }).catch(() => {
+        // No wizard state file — load normally
+        loadProjectData()
+      })
+
+      // Detect BMAD version (stable vs alpha) based on command file structure
+      window.fileAPI.detectBmadVersion(projectPath).then((version) => {
+        setBmadVersion(version)
+      })
 
       // Check if bmad folders are in .gitignore (affects branch restrictions)
       // Defer this check so it doesn't compete with initial project load
@@ -250,6 +282,10 @@ export function useProjectData() {
   // File watcher setup - separate effect with minimal deps to avoid repeated start/stop
   useEffect(() => {
     if (!_hasHydrated || !projectPath || !projectType) return
+
+    // Skip file watching if wizard is active (wizard has its own watcher)
+    const { projectWizard } = useStore.getState()
+    if (projectWizard.isActive) return
 
     // Start watching for file changes
     window.fileAPI.startWatching(projectPath, projectType)

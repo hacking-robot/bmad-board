@@ -1,29 +1,35 @@
 import { useMemo } from 'react'
-import flowBmm from '../data/flow-bmm.json'
+import flowBmmAlpha from '../data/flow-bmm.json'
+import flowBmmStable from '../data/flow-bmm-stable.json'
 import flowBmgd from '../data/flow-bmgd.json'
 import { useStore } from '../store'
-import type { StoryStatus, ProjectType } from '../types'
+import type { StoryStatus, ProjectType, BmadVersion } from '../types'
 import type { WorkflowConfig, StatusDefinition, AgentDefinition, NextStepAction } from '../types/flow'
 
 // Cast the imported JSON to our typed configs
-const workflowBmm = flowBmm as unknown as WorkflowConfig
+const workflowBmmAlpha = flowBmmAlpha as unknown as WorkflowConfig
+const workflowBmmStable = flowBmmStable as unknown as WorkflowConfig
 const workflowBmgd = flowBmgd as unknown as WorkflowConfig
 
-// Get workflow config for a specific project type
-function getWorkflowForType(projectType: ProjectType | null): WorkflowConfig {
+// Get workflow config for a specific project type and version
+function getWorkflowForType(projectType: ProjectType | null, bmadVersion: BmadVersion | null): WorkflowConfig {
   if (projectType === 'bmgd') {
-    return workflowBmgd
+    return workflowBmgd // BMGD is alpha-only
   }
-  // Default to BMM for null or 'bmm'
-  return workflowBmm
+  if (bmadVersion === 'stable') {
+    return workflowBmmStable
+  }
+  // Default to alpha BMM
+  return workflowBmmAlpha
 }
 
 export function useWorkflow() {
   const projectType = useStore((state) => state.projectType)
+  const bmadVersion = useStore((state) => state.bmadVersion)
 
-  // Memoize the helper functions based on project type
+  // Memoize the helper functions based on project type and version
   const helpers = useMemo(() => {
-    const workflow = getWorkflowForType(projectType)
+    const workflow = getWorkflowForType(projectType, bmadVersion)
 
     return {
       // Get all statuses
@@ -81,15 +87,15 @@ export function useWorkflow() {
         return workflow.transitions.some((t) => t.from === from && t.to === to)
       }
     }
-  }, [projectType])
+  }, [projectType, bmadVersion])
 
   return helpers
 }
 
 // Export functions for direct access when needed
-export function getWorkflow(projectType: ProjectType | null): WorkflowConfig {
-  return getWorkflowForType(projectType)
+export function getWorkflow(projectType: ProjectType | null, bmadVersion: BmadVersion | null = null): WorkflowConfig {
+  return getWorkflowForType(projectType, bmadVersion)
 }
 
-// Export both workflow configs for components that need direct access
-export { workflowBmm, workflowBmgd }
+// Export workflow configs for components that need direct access
+export { workflowBmmAlpha, workflowBmmStable, workflowBmgd }

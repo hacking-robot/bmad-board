@@ -79,12 +79,12 @@ function getDescription(projectType: ProjectType | null): { title: string; descr
   if (projectType === 'bmgd') {
     return {
       title: 'BMAD Game Dev',
-      description: 'BMAD Game Dev is an AI-powered framework for game development. Specialized teammates guide you from concept to playable game, covering design, architecture, implementation, and testing.'
+      description: 'BMAD Game Dev is an AI-powered framework for game development. Specialized agents guide you from concept to playable game, covering design, architecture, implementation, and testing.'
     }
   }
   return {
     title: 'BMAD Method',
-    description: 'BMAD (Breakthrough Method of Agile AI-Driven Development) is an AI-powered framework that uses specialized teammates to guide you through software development. Each teammate has a specific role, from analysis through implementation.'
+    description: 'BMAD (Breakthrough Method of Agile AI-Driven Development) is an AI-powered framework that uses specialized agents to guide you through software development. Each agent has a specific role, from analysis through implementation.'
   }
 }
 

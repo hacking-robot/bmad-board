@@ -598,7 +598,7 @@ export default function SettingsMenu() {
         </DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Configure the teammate chat interface settings.
+            Configure the agent chat interface settings.
           </Typography>
 
           <Box sx={{ mb: 3 }}>
