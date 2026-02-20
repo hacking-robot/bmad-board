@@ -77,7 +77,7 @@ export default function ProjectWizard() {
   const persistRef = useRef(false)
   const [docsAnchor, setDocsAnchor] = useState<null | HTMLElement>(null)
   const [selectedArtifact, setSelectedArtifact] = useState<PlanningArtifact | null>(null)
-  const { artifacts } = usePlanningArtifacts()
+  const { artifacts, refresh: refreshArtifacts } = usePlanningArtifacts()
 
   const resumeChecked = useRef(false)
 
@@ -167,6 +167,9 @@ export default function ProjectWizard() {
     if (!isActive || !projectPath) return
 
     const cleanup = window.wizardAPI.onFileChanged(async () => {
+      // Refresh planning documents list
+      refreshArtifacts()
+
       // Check each pending (not yet started) step for output file existence.
       // Active steps are excluded — the agent may still be building the file,
       // so the user should decide when it's done via "Mark Complete".
