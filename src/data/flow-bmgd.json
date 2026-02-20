@@ -306,7 +306,7 @@
       "description": "Elite Indie Game Developer and Quick Flow Specialist. Combines rapid prototyping with flexible development for solo developers and small teams.",
       "whenToUse": "For quick prototypes, rapid iteration, or when working solo without full planning overhead.",
       "color": "#EC4899",
-      "commands": ["/bmad:bmgd:agents:game-solo-dev", "/bmad:bmgd:workflows:quick-prototype", "/bmad:bmgd:workflows:quick-dev", "/bmad:bmgd:workflows:quick-spec", "/bmad:bmgd:workflows:code-review", "/bmad:bmgd:workflows:test-framework"],
+      "commands": ["/bmad:bmgd:agents:game-solo-dev", "/bmad:bmgd:workflows:quick-prototype", "/bmad:bmgd:workflows:quick-dev", "/bmad:bmgd:workflows:quick-spec", "/bmad:bmgd:workflows:code-review", "/bmad:bmgd:workflows:gametest-framework"],
       "examplePrompts": [
         "Quick prototype the core gameplay loop",
         "Rapidly implement the save system",

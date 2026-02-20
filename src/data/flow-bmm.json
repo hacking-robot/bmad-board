@@ -234,7 +234,7 @@
       "description": "Business analysis and research specialist. Handles brainstorming, market research, and documenting existing projects.",
       "whenToUse": "At the start of a project to understand requirements, research competitors, or document an existing codebase.",
       "color": "#8B5CF6",
-      "commands": ["/bmad:bmm:agents:analyst", "/bmad:bmm:workflows:research", "/bmad:bmm:workflows:brainstorming", "/bmad:bmm:workflows:create-product-brief", "/bmad:bmm:workflows:document-project", "/bmad:bmm:workflows:generate-project-context"],
+      "commands": ["/bmad:bmm:agents:analyst", "/bmad:bmm:workflows:research", "/bmad:core:workflows:brainstorming", "/bmad:bmm:workflows:create-product-brief", "/bmad:bmm:workflows:document-project", "/bmad:bmm:workflows:generate-project-context"],
       "examplePrompts": [
         "Help me brainstorm features for a task management app",
         "Research the competitive landscape for project management tools",
@@ -249,7 +249,7 @@
       "description": "Product Manager for requirements and planning. Creates PRDs, breaks work into epics and stories, and validates alignment.",
       "whenToUse": "After analysis to define product requirements, create user stories, and plan the project structure.",
       "color": "#3B82F6",
-      "commands": ["/bmad:bmm:agents:pm", "/bmad:bmm:workflows:prd", "/bmad:bmm:workflows:validate-prd", "/bmad:bmm:workflows:edit-prd", "/bmad:bmm:workflows:create-epics-and-stories", "/bmad:bmm:workflows:check-implementation-readiness", "/bmad:bmm:workflows:correct-course"],
+      "commands": ["/bmad:bmm:agents:pm", "/bmad:bmm:workflows:prd", "/bmad:bmm:workflows:create-epics-and-stories", "/bmad:bmm:workflows:check-implementation-readiness", "/bmad:bmm:workflows:correct-course"],
       "examplePrompts": [
         "Create a PRD for user authentication",
         "Break this feature into epics and stories",

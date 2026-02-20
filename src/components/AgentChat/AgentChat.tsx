@@ -126,7 +126,7 @@ export default function AgentChat() {
       >
         <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
           <Typography variant="subtitle2" color="text.secondary" fontWeight={600}>
-            TEAMMATES
+            AGENTS
           </Typography>
         </Box>
         <AgentSidebar />

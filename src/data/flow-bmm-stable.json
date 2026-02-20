@@ -127,9 +127,9 @@
           "primary": true
         },
         {
-          "label": "Sprint Planning",
+          "label": "Sprint Status",
           "agentId": "sm",
-          "command": "/bmad-bmm-sprint-planning",
+          "command": "/bmad-bmm-sprint-status",
           "description": "Use SM to check sprint progress"
         },
         {
@@ -156,10 +156,10 @@
           "primary": true
         },
         {
-          "label": "QA Review",
-          "agentId": "qa",
-          "command": "/bmad-bmm-qa-automate",
-          "description": "Use QA to review test coverage"
+          "label": "Test Review",
+          "agentId": "tea",
+          "command": "/bmad-bmm-testarch-test-review",
+          "description": "Use TEA to review test coverage"
         },
         {
           "label": "Correct Course",
@@ -179,10 +179,10 @@
           "primary": true
         },
         {
-          "label": "QA Review",
-          "agentId": "qa",
-          "command": "/bmad-bmm-qa-automate",
-          "description": "Use QA to review test coverage"
+          "label": "Test Review",
+          "agentId": "tea",
+          "command": "/bmad-bmm-testarch-test-review",
+          "description": "Use TEA to review test coverage"
         },
         {
           "label": "Correct Course",
@@ -234,7 +234,7 @@
       "description": "Business analysis and research specialist. Handles brainstorming, market research, and documenting existing projects.",
       "whenToUse": "At the start of a project to understand requirements, research competitors, or document an existing codebase.",
       "color": "#8B5CF6",
-      "commands": ["/bmad-agent-bmm-analyst", "/bmad-bmm-domain-research", "/bmad-bmm-market-research", "/bmad-bmm-technical-research", "/bmad-bmm-create-product-brief", "/bmad-bmm-document-project"],
+      "commands": ["/bmad-agent-bmm-analyst", "/bmad-bmm-research", "/bmad-core-brainstorming", "/bmad-bmm-create-product-brief", "/bmad-bmm-document-project", "/bmad-bmm-generate-project-context"],
       "examplePrompts": [
         "Help me brainstorm features for a task management app",
         "Research the competitive landscape for project management tools",
@@ -249,7 +249,7 @@
       "description": "Product Manager for requirements and planning. Creates PRDs, breaks work into epics and stories, and validates alignment.",
       "whenToUse": "After analysis to define product requirements, create user stories, and plan the project structure.",
       "color": "#3B82F6",
-      "commands": ["/bmad-agent-bmm-pm", "/bmad-bmm-create-prd", "/bmad-bmm-validate-prd", "/bmad-bmm-edit-prd", "/bmad-bmm-create-epics-and-stories", "/bmad-bmm-check-implementation-readiness", "/bmad-bmm-correct-course"],
+      "commands": ["/bmad-agent-bmm-pm", "/bmad-bmm-prd", "/bmad-bmm-create-epics-and-stories", "/bmad-bmm-check-implementation-readiness", "/bmad-bmm-correct-course"],
       "examplePrompts": [
         "Create a PRD for user authentication",
         "Break this feature into epics and stories",
@@ -264,7 +264,7 @@
       "description": "System architecture and technical design expert. Produces architecture documents and generates technical diagrams.",
       "whenToUse": "After planning to design the system architecture, choose technologies, and create technical specifications.",
       "color": "#10B981",
-      "commands": ["/bmad-agent-bmm-architect", "/bmad-bmm-create-architecture", "/bmad-bmm-check-implementation-readiness"],
+      "commands": ["/bmad-agent-bmm-architect", "/bmad-bmm-create-architecture", "/bmad-bmm-check-implementation-readiness", "/bmad-bmm-create-excalidraw-diagram"],
       "examplePrompts": [
         "Design the database schema for user management",
         "Create an architecture diagram for the microservices",
@@ -279,7 +279,7 @@
       "description": "Scrum Master for sprint planning and story preparation. Generates sprint status, creates individual stories, and facilitates retrospectives.",
       "whenToUse": "During sprints to plan work, track progress, prepare stories for development, and run retrospectives.",
       "color": "#F59E0B",
-      "commands": ["/bmad-agent-bmm-sm", "/bmad-bmm-sprint-planning", "/bmad-bmm-create-story", "/bmad-bmm-retrospective", "/bmad-bmm-correct-course"],
+      "commands": ["/bmad-agent-bmm-sm", "/bmad-bmm-sprint-planning", "/bmad-bmm-sprint-status", "/bmad-bmm-create-story", "/bmad-bmm-retrospective", "/bmad-bmm-correct-course"],
       "examplePrompts": [
         "Generate the current sprint status",
         "Prepare story 2.3 for development",
@@ -317,18 +317,18 @@
       ]
     },
     {
-      "id": "qa",
-      "name": "Quinn",
-      "role": "QA",
-      "avatar": "QA",
-      "description": "Quality Assurance specialist for test automation. Automates testing and validates quality requirements.",
-      "whenToUse": "When setting up test automation, reviewing test coverage, or validating quality requirements.",
+      "id": "tea",
+      "name": "Murat",
+      "role": "TEA",
+      "avatar": "TE",
+      "description": "Test Architect for quality strategy. Initializes test frameworks, generates E2E tests, automates testing, and validates non-functional requirements.",
+      "whenToUse": "When setting up testing infrastructure, writing E2E tests, or validating performance requirements.",
       "color": "#06B6D4",
-      "commands": ["/bmad-agent-bmm-qa", "/bmad-bmm-qa-automate"],
+      "commands": ["/bmad-agent-bmm-tea", "/bmad-bmm-testarch-framework", "/bmad-bmm-testarch-automate", "/bmad-bmm-testarch-nfr", "/bmad-bmm-testarch-test-review", "/bmad-bmm-testarch-atdd", "/bmad-bmm-testarch-ci", "/bmad-bmm-testarch-test-design", "/bmad-bmm-testarch-trace"],
       "examplePrompts": [
-        "Automate tests for the checkout flow",
-        "Review the test coverage for authentication",
-        "Validate the quality requirements"
+        "Set up the E2E testing framework",
+        "Generate E2E tests for the checkout flow",
+        "Validate the performance requirements"
       ]
     },
     {
@@ -339,7 +339,7 @@
       "description": "User experience and UI design specialist. Creates UX deliverables from product requirements and validates specifications.",
       "whenToUse": "When designing user interfaces, creating wireframes, or validating UX requirements.",
       "color": "#A855F7",
-      "commands": ["/bmad-agent-bmm-ux-designer", "/bmad-bmm-create-ux-design"],
+      "commands": ["/bmad-agent-bmm-ux-designer", "/bmad-bmm-create-ux-design", "/bmad-bmm-create-excalidraw-wireframe"],
       "examplePrompts": [
         "Design the user onboarding flow",
         "Create wireframes for the dashboard",
@@ -354,7 +354,7 @@
       "description": "Documentation and diagrams specialist. Produces project documentation, flowcharts, and concept explanations.",
       "whenToUse": "When creating documentation, explaining complex concepts, or generating diagrams.",
       "color": "#64748B",
-      "commands": ["/bmad-agent-bmm-tech-writer", "/bmad-bmm-document-project"],
+      "commands": ["/bmad-agent-bmm-tech-writer", "/bmad-bmm-document-project", "/bmad-bmm-create-excalidraw-flowchart", "/bmad-bmm-create-excalidraw-diagram", "/bmad-bmm-create-excalidraw-dataflow"],
       "examplePrompts": [
         "Write API documentation for the user endpoints",
         "Create a flowchart for the order process",
