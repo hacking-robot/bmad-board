@@ -45,6 +45,8 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
   const clearChatThread = useStore((state) => state.clearChatThread)
   const chatThreads = useStore((state) => state.chatThreads)
 
+  const developerMode = useStore((state) => state.developerMode)
+
   // Check if selected AI tool supports headless CLI operation
   const selectedToolInfo = AI_TOOLS.find(t => t.id === aiTool)
   const toolSupportsHeadless = selectedToolInfo?.cli.supportsHeadless ?? false
@@ -313,7 +315,7 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
   }
 
   // Check if full cycle can be started (available from any status except done)
-  const canStartFullCycle = toolSupportsHeadless && effectiveStatus !== 'done'
+  const canStartFullCycle = toolSupportsHeadless && effectiveStatus !== 'done' && developerMode !== 'human'
   const isFullCycleRunning = fullCycle.isRunning && fullCycle.storyId === story.id
 
   return (
@@ -728,7 +730,7 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
               )}
               <GroupsIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
               <Typography variant="body2" fontWeight={500}>
-                Talk to Agents ({selectedToolInfo?.name || aiTool})
+                {developerMode === 'human' ? 'Next Steps' : `Talk to Agents (${selectedToolInfo?.name || aiTool})`}
               </Typography>
             </Box>
           </Box>
@@ -747,7 +749,7 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
                 <Typography variant="body2" fontWeight={500}>
                   {step.label}
                 </Typography>
-                {step.command && toolSupportsHeadless && (() => {
+                {step.command && toolSupportsHeadless && developerMode !== 'human' && (() => {
                   const agentThread = chatThreads[step.agentId]
                   const isAgentWorking = agentThread?.isTyping || false
                   // Backlog/ready-for-dev stories can be worked on from epic branch (or base branch when epic branches disabled)
@@ -792,12 +794,14 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
                   </Tooltip>
                 )}
               </Box>
-              <Typography variant="caption" color="text.secondary" component="div" sx={{ mb: 1, ml: 3.25 }}>
-                {agent?.role} ({agent?.name})
-              </Typography>
+              {developerMode !== 'human' && (
+                <Typography variant="caption" color="text.secondary" component="div" sx={{ mb: 1, ml: 3.25 }}>
+                  {agent?.role} ({agent?.name})
+                </Typography>
+              )}
 
-              {/* Agent invocation command */}
-              {agent?.commands?.[0] && (
+              {/* Agent invocation command - hidden in human mode */}
+              {agent?.commands?.[0] && developerMode !== 'human' && (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, ml: 3.25 }}>
                   <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.65rem', minWidth: 16 }}>
                     1.

@@ -23,7 +23,8 @@ export const WIZARD_STEPS: WizardStep[] = [
     commandType: 'workflows',
     agentId: 'analyst',
     agentName: 'Analyst',
-    outputFile: 'brainstorming-report.md',
+    outputDir: 'brainstorming',
+    outputDirPrefix: 'brainstorming-session-',
     tooltip: 'An interactive session with the Analyst agent to explore ideas, features, and possibilities for your project. Produces a brainstorming report that feeds into later planning steps. Useful for new projects where the scope is still being defined.'
   },
   {
@@ -38,6 +39,8 @@ export const WIZARD_STEPS: WizardStep[] = [
     commandType: 'workflows',
     agentId: 'analyst',
     agentName: 'Analyst',
+    outputDir: 'research',
+    outputDirPrefix: 'market-',
     tooltip: 'The Analyst agent researches market size, growth potential, competitive landscape, and target customer insights. Helps validate your product idea against real market conditions before investing in development.'
   },
   {
@@ -52,6 +55,8 @@ export const WIZARD_STEPS: WizardStep[] = [
     commandType: 'workflows',
     agentId: 'analyst',
     agentName: 'Analyst',
+    outputDir: 'research',
+    outputDirPrefix: 'domain-',
     tooltip: 'Deep dive into your project\'s industry domain: regulatory requirements, technology trends, ecosystem dynamics, and domain-specific constraints. Especially valuable for projects in regulated industries or unfamiliar domains.'
   },
   {
@@ -66,6 +71,8 @@ export const WIZARD_STEPS: WizardStep[] = [
     commandType: 'workflows',
     agentId: 'analyst',
     agentName: 'Analyst',
+    outputDir: 'research',
+    outputDirPrefix: 'technical-',
     tooltip: 'Evaluates technology options, compares frameworks and tools, and analyzes implementation approaches. Helps make informed tech stack decisions before committing to an architecture.'
   },
   {

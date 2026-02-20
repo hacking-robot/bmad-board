@@ -20,6 +20,7 @@ export interface WizardStep {
   agentName?: string
   outputFile?: string  // File to check for completion (relative to _bmad-output/planning-artifacts/)
   outputDir?: string   // Directory to check for completion
+  outputDirPrefix?: string  // File prefix to match in outputDir (e.g., 'market-' matches 'market-*.md')
   tooltip?: string     // Rich tooltip explaining what this step does and why
 }
 

@@ -135,7 +135,6 @@ export default function ChatInput({ onSend, onCancel, disabled = false, agentId 
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={handleKeyDown}
-          disabled={disabled}
           variant="outlined"
           size="small"
           sx={{

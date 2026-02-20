@@ -239,7 +239,9 @@ export function useChatMessageHandler() {
               }
 
               const stats: LLMStats | undefined = parsed.usage ? {
-                model: parsed.modelUsage ? Object.keys(parsed.modelUsage)[0] || 'unknown' : 'unknown',
+                model: parsed.modelUsage
+                  ? Object.entries(parsed.modelUsage).sort((a, b) => ((b[1] as Record<string, number>).costUSD || 0) - ((a[1] as Record<string, number>).costUSD || 0))[0]?.[0] || 'unknown'
+                  : 'unknown',
                 inputTokens: parsed.usage.input_tokens || 0,
                 outputTokens: parsed.usage.output_tokens || 0,
                 cacheReadTokens: parsed.usage.cache_read_input_tokens,
@@ -373,13 +375,15 @@ export function useChatMessageHandler() {
           showChatNotification(agent, finalContent)
         }
 
-        // Store session ID for continuity (unless just fallback content)
-        if (event.sessionId && finalContent !== 'Response completed.') {
+        // Store session ID for continuity (unless just fallback content or thread was cleared)
+        const threadAfterExit = useStore.getState().chatThreads[agentId]
+        if (event.sessionId && finalContent !== 'Response completed.' && threadAfterExit?.isInitialized !== false) {
           setChatSessionId(agentId, event.sessionId)
         }
       } else {
-        // No pending message - still store session ID
-        if (event.sessionId) {
+        // No pending message - still store session ID (unless thread was cleared)
+        const threadAfterExit = useStore.getState().chatThreads[agentId]
+        if (event.sessionId && threadAfterExit?.isInitialized !== false) {
           setChatSessionId(agentId, event.sessionId)
         }
       }

@@ -3,11 +3,12 @@ import { join, dirname, basename, resolve } from 'path'
 import { readFile, readdir, stat, writeFile, mkdir } from 'fs/promises'
 import { existsSync, watch, FSWatcher } from 'fs'
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
-import { spawn as spawnChild, spawnSync } from 'child_process'
+import { spawn as spawnChild, spawnSync, execFile } from 'child_process'
+import { promisify } from 'util'
 import { autoUpdater } from 'electron-updater'
 import { agentManager } from './agentManager'
 import { detectTool, detectAllTools, clearDetectionCache } from './cliToolManager'
-import { getAugmentedEnv } from './envUtils'
+import { getAugmentedEnv, findBinary } from './envUtils'
 import { scanBmadProject } from './bmadScanner'
 
 // Set app name (shows in menu bar on macOS)
@@ -645,16 +646,19 @@ ipcMain.handle('list-directory', async (_, dirPath: string) => {
   try {
     const entries = await readdir(dirPath)
     const files: string[] = []
+    const dirs: string[] = []
 
     for (const entry of entries) {
       const fullPath = join(dirPath, entry)
       const stats = await stat(fullPath)
       if (stats.isFile()) {
         files.push(entry)
+      } else if (stats.isDirectory()) {
+        dirs.push(entry)
       }
     }
 
-    return { files }
+    return { files, dirs }
   } catch (error) {
     return { error: `Failed to list directory: ${dirPath}` }
   }
@@ -1531,6 +1535,71 @@ ipcMain.handle('update-story-status', async (_, filePath: string, newStatus: str
   }
 })
 
+// Toggle a task checkbox in a story markdown file
+ipcMain.handle('toggle-story-task', async (_, filePath: string, taskIndex: number, subtaskIndex: number) => {
+  try {
+    const content = await readFile(filePath, 'utf-8')
+    const lines = content.split('\n')
+
+    let inTasksSection = false
+    let currentTaskIdx = -1
+    let currentSubtaskIdx = -1
+    let targetLine = -1
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+
+      if (line.startsWith('## Tasks')) {
+        inTasksSection = true
+        continue
+      }
+      if (inTasksSection && (line.startsWith('## ') || line.startsWith('# '))) {
+        break
+      }
+
+      if (!inTasksSection) continue
+
+      // Match main task: - [x] or - [ ]
+      if (/^- \[[ xX]\]\s+/.test(line)) {
+        currentTaskIdx++
+        currentSubtaskIdx = -1
+
+        if (currentTaskIdx === taskIndex && subtaskIndex === -1) {
+          targetLine = i
+          break
+        }
+      }
+
+      // Match subtask: indented - [x] or - [ ]
+      if (/^\s+- \[[ xX]\]\s+/.test(line) && currentTaskIdx === taskIndex) {
+        currentSubtaskIdx++
+        if (currentSubtaskIdx === subtaskIndex) {
+          targetLine = i
+          break
+        }
+      }
+    }
+
+    if (targetLine === -1) {
+      return { success: false, error: 'Task not found' }
+    }
+
+    // Toggle the checkbox
+    const line = lines[targetLine]
+    if (/\[x\]/i.test(line)) {
+      lines[targetLine] = line.replace(/\[[xX]\]/, '[ ]')
+    } else {
+      lines[targetLine] = line.replace(/\[ \]/, '[x]')
+    }
+
+    await writeFile(filePath, lines.join('\n'), 'utf-8')
+    return { success: true }
+  } catch (error) {
+    console.error('Failed to toggle story task:', error)
+    return { success: false, error: String(error) }
+  }
+})
+
 // Show native notification
 ipcMain.handle('show-notification', async (_, title: string, body: string) => {
   if (Notification.isSupported()) {
@@ -1794,6 +1863,131 @@ ipcMain.handle('cli-clear-cache', async () => {
   clearDetectionCache()
 })
 
+// Environment check handler - verifies dev environment prerequisites
+ipcMain.handle('check-environment', async () => {
+  interface EnvCheckItem {
+    id: string
+    label: string
+    status: 'checking' | 'ok' | 'warning' | 'error'
+    version?: string | null
+    detail?: string
+  }
+
+  const items: EnvCheckItem[] = []
+
+  // 1. Claude CLI
+  const claudeResult = await detectTool('claude-code')
+  const claudeAvailable = claudeResult.available
+  items.push({
+    id: 'claude',
+    label: 'Claude CLI',
+    status: claudeAvailable ? 'ok' : 'error',
+    version: claudeResult.version,
+    detail: claudeAvailable ? undefined : 'Not found in PATH'
+  })
+
+  // 2. Git
+  const gitPath = findBinary('git')
+  let gitVersion: string | null = null
+  if (gitPath) {
+    try {
+      const execFileAsync = promisify(execFile)
+      const gitResult = await execFileAsync('git', ['--version'], { encoding: 'utf-8', timeout: 5000 })
+      if (gitResult.stdout) {
+        const match = gitResult.stdout.match(/(\d+\.\d+\.\d+)/)
+        if (match) gitVersion = match[1]
+      }
+    } catch { /* git --version failed */ }
+  }
+  items.push({
+    id: 'git',
+    label: 'Git',
+    status: gitPath ? 'ok' : 'error',
+    version: gitVersion,
+    detail: gitPath ? undefined : 'Not found in PATH'
+  })
+
+  // 3-6. Plugins and MCP servers - read Claude settings file
+  let enabledPlugins: Record<string, boolean> = {}
+  try {
+    const claudeSettingsPath = join(homedir(), '.claude', 'settings.json')
+    if (existsSync(claudeSettingsPath)) {
+      const content = await readFile(claudeSettingsPath, 'utf-8')
+      const settings = JSON.parse(content)
+      enabledPlugins = settings.enabledPlugins || {}
+    }
+  } catch {
+    // Settings file may not exist or be unreadable
+  }
+
+  // 3. Context7 Plugin
+  const context7Enabled = enabledPlugins['context7@claude-plugins-official'] === true
+  items.push({
+    id: 'context7',
+    label: 'Context7 Plugin',
+    status: context7Enabled ? 'ok' : 'warning',
+    detail: context7Enabled ? 'Enabled' : 'Not enabled in Claude settings'
+  })
+
+  // 4. Web Search (built-in to Claude Code)
+  items.push({
+    id: 'web-search',
+    label: 'Web Search (built-in)',
+    status: claudeAvailable ? 'ok' : 'warning',
+    detail: claudeAvailable ? 'Available' : 'Requires Claude CLI'
+  })
+
+  // 5. Web Reader MCP
+  let webReaderStatus: 'ok' | 'warning' | 'error' = 'warning'
+  let webReaderDetail = 'Not configured'
+  if (!claudeAvailable) {
+    webReaderDetail = 'Requires Claude CLI'
+  } else {
+    try {
+      // Strip CLAUDECODE env var to avoid "nested session" error
+      const mcpEnv = { ...getAugmentedEnv() }
+      delete mcpEnv.CLAUDECODE
+      // Also remove any CLAUDE_ session env vars that might cause nested session detection
+      for (const key of Object.keys(mcpEnv)) {
+        if (key.startsWith('CLAUDE_') && key !== 'CLAUDE_CONFIG_DIR') {
+          delete mcpEnv[key]
+        }
+      }
+
+      const execFileAsync = promisify(execFile)
+      const mcpResult = await execFileAsync('claude', ['mcp', 'list'], {
+        encoding: 'utf-8',
+        timeout: 8000,
+        env: mcpEnv
+      })
+
+      if (mcpResult.stdout?.toLowerCase().includes('web-reader')) {
+        webReaderStatus = 'ok'
+        webReaderDetail = 'Configured'
+      }
+    } catch {
+      webReaderDetail = 'Could not verify'
+    }
+  }
+  items.push({
+    id: 'web-reader',
+    label: 'Web Reader MCP',
+    status: webReaderStatus,
+    detail: webReaderDetail
+  })
+
+  // 6. TypeScript LSP Plugin
+  const tsLspEnabled = enabledPlugins['typescript-lsp@claude-plugins-official'] === true
+  items.push({
+    id: 'ts-lsp',
+    label: 'TypeScript LSP',
+    status: tsLspEnabled ? 'ok' : 'warning',
+    detail: tsLspEnabled ? 'Enabled' : 'Not enabled in Claude settings'
+  })
+
+  return { items }
+})
+
 // BMAD Install handler - runs npx bmad-method install
 let bmadInstallProcess: ReturnType<typeof spawnChild> | null = null
 
@@ -1930,6 +2124,16 @@ ipcMain.handle('wizard-stop-watching', async () => {
 // Check if a file exists (for wizard step completion detection)
 ipcMain.handle('check-file-exists', async (_, filePath: string) => {
   return existsSync(filePath)
+})
+
+ipcMain.handle('check-dir-has-prefix', async (_, dirPath: string, prefix: string) => {
+  try {
+    if (!existsSync(dirPath)) return false
+    const entries = await readdir(dirPath)
+    return entries.some(entry => entry.startsWith(prefix) && entry.endsWith('.md'))
+  } catch {
+    return false
+  }
 })
 
 // Wizard state persistence

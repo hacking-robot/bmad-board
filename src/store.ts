@@ -14,6 +14,7 @@ export interface RecentProject {
   projectType: ProjectType
   name: string
   outputFolder?: string
+  developerMode?: 'ai' | 'human'
 }
 
 const MAX_HISTORY_ENTRIES = 50
@@ -60,7 +61,7 @@ const electronStorage = {
       const parsed = JSON.parse(value)
       if (parsed.state) {
         // Only save the settings we care about
-        const { themeMode, aiTool, claudeModel, customEndpoint, projectPath, projectType, outputFolder, selectedEpicId, collapsedColumnsByEpic, agentHistory, recentProjects, notificationsEnabled, baseBranch, allowDirectEpicMerge, bmadInGitignore, bmadInGitignoreUserSet, storyOrder, enableHumanReviewColumn, humanReviewChecklist, humanReviewStates, humanReviewStories, maxThreadMessages, statusHistoryByStory, globalStatusHistory, lastViewedStatusHistoryAt, enableEpicBranches, disableGitBranching, fullCycleReviewCount } = parsed.state
+        const { themeMode, aiTool, claudeModel, customEndpoint, projectPath, projectType, outputFolder, selectedEpicId, collapsedColumnsByEpic, agentHistory, recentProjects, notificationsEnabled, baseBranch, allowDirectEpicMerge, bmadInGitignore, bmadInGitignoreUserSet, storyOrder, enableHumanReviewColumn, humanReviewChecklist, humanReviewStates, humanReviewStories, maxThreadMessages, statusHistoryByStory, globalStatusHistory, lastViewedStatusHistoryAt, enableEpicBranches, disableGitBranching, fullCycleReviewCount, developerMode } = parsed.state
 
         // Don't persist full output - it can contain characters that break JSON
         // Just save metadata and a small summary
@@ -99,7 +100,8 @@ const electronStorage = {
           lastViewedStatusHistoryAt: lastViewedStatusHistoryAt || 0,
           enableEpicBranches: enableEpicBranches ?? false,
           disableGitBranching: disableGitBranching ?? true,
-          fullCycleReviewCount: fullCycleReviewCount ?? 1
+          fullCycleReviewCount: fullCycleReviewCount ?? 1,
+          developerMode: developerMode || 'ai'
         })
       }
     } catch (error) {
@@ -135,7 +137,8 @@ const electronStorage = {
       lastViewedStatusHistoryAt: 0,
       enableEpicBranches: false,
       disableGitBranching: true,
-      fullCycleReviewCount: 1
+      fullCycleReviewCount: 1,
+      developerMode: 'ai'
     })
   }
 }
@@ -186,6 +189,10 @@ interface AppState {
   setDisableGitBranching: (disabled: boolean) => void
   fullCycleReviewCount: number // 0-5, how many code review rounds in full cycle
   setFullCycleReviewCount: (count: number) => void
+
+  // Developer Mode (per-project, persisted)
+  developerMode: 'ai' | 'human'
+  setDeveloperMode: (mode: 'ai' | 'human') => void
 
   // Project
   projectPath: string | null
@@ -367,6 +374,14 @@ interface AppState {
   resetEpicCycle: () => void
   retryEpicCycle: () => void
 
+  // Environment Check Dialog
+  envCheckDialogOpen: boolean
+  envCheckResults: import('../electron/preload').EnvCheckItem[] | null
+  envCheckLoading: boolean
+  setEnvCheckDialogOpen: (open: boolean) => void
+  setEnvCheckResults: (results: import('../electron/preload').EnvCheckItem[] | null) => void
+  setEnvCheckLoading: (loading: boolean) => void
+
   // Project Workflows Dialog
   projectWorkflowsDialogOpen: boolean
   setProjectWorkflowsDialogOpen: (open: boolean) => void
@@ -382,6 +397,8 @@ interface AppState {
   completeWizard: () => void
   cancelWizard: () => void
   resumeWizard: (state: ProjectWizardState) => void
+  goToWizardStep: (stepIndex: number) => void
+  rerunWizardStep: (stepIndex: number) => void
 
   // Computed - filtered stories
   getFilteredStories: () => Story[]
@@ -440,6 +457,10 @@ export const useStore = create<AppState>()(
       setDisableGitBranching: (disabled) => set({ disableGitBranching: disabled }),
       fullCycleReviewCount: 1,
       setFullCycleReviewCount: (count) => set({ fullCycleReviewCount: Math.max(0, Math.min(5, count)) }),
+
+      // Developer Mode
+      developerMode: 'ai',
+      setDeveloperMode: (mode) => set({ developerMode: mode }),
 
       // Project
       projectPath: null,
@@ -1164,6 +1185,14 @@ export const useStore = create<AppState>()(
         }
       }),
 
+      // Environment Check Dialog (NOT persisted)
+      envCheckDialogOpen: false,
+      envCheckResults: null,
+      envCheckLoading: false,
+      setEnvCheckDialogOpen: (open) => set({ envCheckDialogOpen: open }),
+      setEnvCheckResults: (results) => set({ envCheckResults: results }),
+      setEnvCheckLoading: (loading) => set({ envCheckLoading: loading }),
+
       // Project Workflows Dialog
       projectWorkflowsDialogOpen: false,
       setProjectWorkflowsDialogOpen: (open) => set({ projectWorkflowsDialogOpen: open }),
@@ -1183,6 +1212,7 @@ export const useStore = create<AppState>()(
         projectPath,
         projectType: 'bmm' as ProjectType,
         outputFolder: outputFolder || '_bmad-output',
+        developerMode: developerMode || 'ai',
         // Clear stale scan data from previous project so old agents don't show
         bmadScanResult: null,
         scannedWorkflowConfig: null
@@ -1247,7 +1277,30 @@ export const useStore = create<AppState>()(
         projectType: null
       }),
       resumeWizard: (wizardState) => set({
-        projectWizard: wizardState
+        projectWizard: wizardState,
+        projectPath: wizardState.projectPath,
+        projectType: 'bmm' as ProjectType,
+        outputFolder: wizardState.outputFolder || '_bmad-output',
+        developerMode: wizardState.developerMode || 'ai',
+        bmadScanResult: null,
+        scannedWorkflowConfig: null
+      }),
+      goToWizardStep: (stepIndex) => set((state) => ({
+        projectWizard: {
+          ...state.projectWizard,
+          currentStep: stepIndex
+        }
+      })),
+      rerunWizardStep: (stepIndex) => set((state) => {
+        const newStatuses = [...state.projectWizard.stepStatuses]
+        newStatuses[stepIndex] = 'pending'
+        return {
+          projectWizard: {
+            ...state.projectWizard,
+            currentStep: stepIndex,
+            stepStatuses: newStatuses
+          }
+        }
       }),
 
       // Computed

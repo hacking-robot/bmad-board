@@ -75,8 +75,8 @@ export default function ProjectSwitcher() {
     setAnchorEl(null)
   }
 
-  const handleProjectClick = (path: string, projectType: 'bmm' | 'bmgd', recentOutputFolder?: string) => {
-    switchToProject(path, projectType, recentOutputFolder)
+  const handleProjectClick = (path: string, projectType: 'bmm' | 'bmgd', recentOutputFolder?: string, recentDeveloperMode?: 'ai' | 'human') => {
+    switchToProject(path, projectType, recentOutputFolder, recentDeveloperMode)
     handleClose()
   }
 
@@ -186,7 +186,7 @@ export default function ProjectSwitcher() {
                 if (e.key === 'Enter' && filteredProjects.length > 0) {
                   const selectedProject = filteredProjects[preSelectedIndex]
                   if (selectedProject) {
-                    handleProjectClick(selectedProject.path, selectedProject.projectType, selectedProject.outputFolder)
+                    handleProjectClick(selectedProject.path, selectedProject.projectType, selectedProject.outputFolder, selectedProject.developerMode)
                   }
                 } else if (e.key === 'ArrowDown') {
                   e.preventDefault()
@@ -224,7 +224,7 @@ export default function ProjectSwitcher() {
             {filteredProjects.map((project, index) => (
               <MenuItem
                 key={project.path}
-                onClick={() => handleProjectClick(project.path, project.projectType, project.outputFolder)}
+                onClick={() => handleProjectClick(project.path, project.projectType, project.outputFolder, project.developerMode)}
                 selected={project.path === projectPath}
                 onMouseEnter={() => {
                   setHoveredItem(project.path)

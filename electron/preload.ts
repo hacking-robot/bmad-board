@@ -19,6 +19,7 @@ export interface RecentProject {
   projectType: ProjectType
   name: string
   outputFolder?: string
+  developerMode?: 'ai' | 'human'
 }
 
 export type AITool = 'claude-code' | 'custom-endpoint' | 'cursor' | 'windsurf' | 'roo-code' | 'aider'
@@ -90,6 +91,7 @@ export interface AppSettings {
   enableEpicBranches: boolean // When true, show epic branch features
   disableGitBranching: boolean // When true, bypass all branch restrictions and hide branch UI
   fullCycleReviewCount: number // 0-5, how many code review rounds in full cycle
+  developerMode: 'ai' | 'human' // Development mode (ai = standard, human = modified workflows)
   // Human Review feature
   enableHumanReviewColumn: boolean
   humanReviewChecklist: HumanReviewChecklistItem[]
@@ -106,12 +108,13 @@ export interface AppSettings {
 export interface FileAPI {
   selectDirectory: () => Promise<{ path?: string; projectType?: ProjectType; isNewProject?: boolean; outputFolder?: string; error?: string } | null>
   readFile: (filePath: string) => Promise<{ content?: string; error?: string }>
-  listDirectory: (dirPath: string) => Promise<{ files?: string[]; error?: string }>
+  listDirectory: (dirPath: string) => Promise<{ files?: string[]; dirs?: string[]; error?: string }>
   getSettings: () => Promise<AppSettings>
   saveSettings: (settings: Partial<AppSettings>) => Promise<boolean>
   startWatching: (projectPath: string, projectType: ProjectType, outputFolder?: string) => Promise<boolean>
   stopWatching: () => Promise<boolean>
   updateStoryStatus: (filePath: string, newStatus: string) => Promise<{ success: boolean; error?: string }>
+  toggleStoryTask: (filePath: string, taskIndex: number, subtaskIndex: number) => Promise<{ success: boolean; error?: string }>
   showNotification: (title: string, body: string) => Promise<void>
   checkBmadInGitignore: (projectPath: string, outputFolder?: string) => Promise<{ inGitignore: boolean; error?: string }>
   scanBmad: (projectPath: string) => Promise<unknown | null>
@@ -128,6 +131,7 @@ const fileAPI: FileAPI = {
   startWatching: (projectPath: string, projectType: ProjectType, outputFolder?: string) => ipcRenderer.invoke('start-watching', projectPath, projectType, outputFolder),
   stopWatching: () => ipcRenderer.invoke('stop-watching'),
   updateStoryStatus: (filePath: string, newStatus: string) => ipcRenderer.invoke('update-story-status', filePath, newStatus),
+  toggleStoryTask: (filePath: string, taskIndex: number, subtaskIndex: number) => ipcRenderer.invoke('toggle-story-task', filePath, taskIndex, subtaskIndex),
   showNotification: (title: string, body: string) => ipcRenderer.invoke('show-notification', title, body),
   checkBmadInGitignore: (projectPath: string, outputFolder?: string) => ipcRenderer.invoke('check-bmad-in-gitignore', projectPath, outputFolder),
   scanBmad: (projectPath: string) => ipcRenderer.invoke('scan-bmad', projectPath),
@@ -477,16 +481,26 @@ export interface CLIDetectionResult {
   error: string | null
 }
 
+export interface EnvCheckItem {
+  id: string
+  label: string
+  status: 'checking' | 'ok' | 'warning' | 'error'
+  version?: string | null
+  detail?: string
+}
+
 export interface CLIAPI {
   detectTool: (toolId: AITool) => Promise<CLIDetectionResult>
   detectAllTools: () => Promise<Record<string, CLIDetectionResult>>
   clearCache: () => Promise<void>
+  checkEnvironment: () => Promise<{ items: EnvCheckItem[] }>
 }
 
 const cliAPI: CLIAPI = {
   detectTool: (toolId) => ipcRenderer.invoke('cli-detect-tool', toolId),
   detectAllTools: () => ipcRenderer.invoke('cli-detect-all-tools'),
-  clearCache: () => ipcRenderer.invoke('cli-clear-cache')
+  clearCache: () => ipcRenderer.invoke('cli-clear-cache'),
+  checkEnvironment: () => ipcRenderer.invoke('check-environment')
 }
 
 contextBridge.exposeInMainWorld('cliAPI', cliAPI)
@@ -516,6 +530,7 @@ export interface WizardAPI {
   stopWatching: () => Promise<boolean>
   onFileChanged: (callback: (event: WizardFileChangedEvent) => void) => () => void
   checkFileExists: (filePath: string) => Promise<boolean>
+  checkDirHasPrefix: (dirPath: string, prefix: string) => Promise<boolean>
   saveState: (projectPath: string, state: unknown, outputFolder?: string) => Promise<boolean>
   loadState: (projectPath: string, outputFolder?: string) => Promise<unknown | null>
   deleteState: (projectPath: string, outputFolder?: string) => Promise<boolean>
@@ -544,6 +559,7 @@ const wizardAPI: WizardAPI = {
     return () => ipcRenderer.removeListener('wizard:file-changed', listener)
   },
   checkFileExists: (filePath) => ipcRenderer.invoke('check-file-exists', filePath),
+  checkDirHasPrefix: (dirPath, prefix) => ipcRenderer.invoke('check-dir-has-prefix', dirPath, prefix),
   saveState: (projectPath, state, outputFolder) => ipcRenderer.invoke('save-wizard-state', projectPath, state, outputFolder),
   loadState: (projectPath, outputFolder) => ipcRenderer.invoke('load-wizard-state', projectPath, outputFolder),
   deleteState: (projectPath, outputFolder) => ipcRenderer.invoke('delete-wizard-state', projectPath, outputFolder),

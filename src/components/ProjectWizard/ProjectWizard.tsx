@@ -1,22 +1,49 @@
-import { useCallback, useEffect, useRef, useMemo } from 'react'
-import { Box, Typography, Button, Stack, Divider, IconButton, Tooltip, Alert } from '@mui/material'
+import { useCallback, useEffect, useRef, useMemo, useState } from 'react'
+import { Box, Typography, Button, Stack, Divider, IconButton, Tooltip, Alert, Chip, Popover, Badge } from '@mui/material'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import CheckIcon from '@mui/icons-material/Check'
 import CloseIcon from '@mui/icons-material/Close'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
+import NavigateNextIcon from '@mui/icons-material/NavigateNext'
+import ReplayIcon from '@mui/icons-material/Replay'
+import SkipNextIcon from '@mui/icons-material/SkipNext'
+import DescriptionIcon from '@mui/icons-material/Description'
 import { useStore } from '../../store'
 import { WIZARD_STEPS } from '../../data/wizardSteps'
 import { HUMAN_DEV_FILES, HUMAN_DEV_FILES_VERSION } from '../../data/humanDevFiles'
 import { resolveCommand, mergeWorkflowConfig } from '../../utils/workflowMerge'
 import { useWorkflow } from '../../hooks/useWorkflow'
 import { transformCommand } from '../../utils/commandTransform'
+import { CLAUDE_MODELS } from '../../types'
 import type { BmadScanResult } from '../../types/bmadScan'
+import type { WizardStep } from '../../types/projectWizard'
 import WizardStepper from './WizardStepper'
 import InstallStep from './InstallStep'
+import ArtifactViewer from '../HelpPanel/ArtifactViewer'
+import { usePlanningArtifacts, getArtifactTypeLabel, getArtifactTypeColor, PlanningArtifact } from '../../hooks/usePlanningArtifacts'
 
 // Simple path join for renderer (no Node path module available)
 function joinPath(...parts: string[]): string {
   return parts.join('/').replace(/\/+/g, '/')
+}
+
+// Check if a wizard step's output exists (file or dir+prefix)
+// BMAD places some outputs in planning-artifacts/ and others (brainstorming/, research/)
+// directly under the output folder, so check both locations.
+async function checkStepOutput(step: WizardStep, projectPath: string, outputFolder: string): Promise<boolean> {
+  const outputBase = joinPath(projectPath, outputFolder)
+  const planBase = joinPath(outputBase, 'planning-artifacts')
+  if (step.outputFile) {
+    // Check planning-artifacts first, then output folder root
+    if (await window.wizardAPI.checkFileExists(joinPath(planBase, step.outputFile))) return true
+    return window.wizardAPI.checkFileExists(joinPath(outputBase, step.outputFile))
+  }
+  if (step.outputDir && step.outputDirPrefix) {
+    // Check planning-artifacts first, then output folder root
+    if (await window.wizardAPI.checkDirHasPrefix(joinPath(planBase, step.outputDir), step.outputDirPrefix)) return true
+    return window.wizardAPI.checkDirHasPrefix(joinPath(outputBase, step.outputDir), step.outputDirPrefix)
+  }
+  return false
 }
 
 export default function ProjectWizard() {
@@ -25,6 +52,8 @@ export default function ProjectWizard() {
     advanceWizardStep,
     skipWizardStep,
     updateWizardStep,
+    goToWizardStep,
+    rerunWizardStep,
     completeWizard,
     cancelWizard,
     setProjectPath,
@@ -38,12 +67,18 @@ export default function ProjectWizard() {
     setBmadScanResult,
     setScannedWorkflowConfig,
     aiTool,
+    claudeModel,
+    setClaudeModel,
     outputFolder
   } = useStore()
 
   const { getAgentName } = useWorkflow()
   const { isActive, projectPath, currentStep, stepStatuses, error } = projectWizard
   const persistRef = useRef(false)
+  const [docsAnchor, setDocsAnchor] = useState<null | HTMLElement>(null)
+  const [selectedArtifact, setSelectedArtifact] = useState<PlanningArtifact | null>(null)
+  const { artifacts } = usePlanningArtifacts()
+
   const resumeChecked = useRef(false)
 
   // On mount, check for saved wizard state and resume if found
@@ -62,6 +97,36 @@ export default function ProjectWizard() {
       }
     })
   }, [isActive, projectPath, outputFolder])
+
+  // After mount, check if any pending/active steps already have their output file.
+  // This handles: (1) resume where agent finished but user didn't click "Mark Complete",
+  // (2) resume where files were created externally (e.g., by CLI) while wizard was closed.
+  // The file watcher only fires on changes, so pre-existing files need this initial scan.
+  const initialFileCheckDone = useRef(false)
+  useEffect(() => {
+    if (!isActive || !projectPath || initialFileCheckDone.current) return
+    if (!stepStatuses.length) return
+    // Wait for any resume to settle
+    const timer = setTimeout(async () => {
+      initialFileCheckDone.current = true
+      const { projectWizard: wiz } = useStore.getState()
+      for (let i = 0; i < WIZARD_STEPS.length; i++) {
+        const status = wiz.stepStatuses[i]
+        if (status !== 'pending' && status !== 'active') continue
+        const step = WIZARD_STEPS[i]
+        if (!step.outputFile && !step.outputDir) continue
+        const exists = await checkStepOutput(step, projectPath, outputFolder)
+        if (exists) {
+          const { updateWizardStep, advanceWizardStep, projectWizard: freshWiz } = useStore.getState()
+          updateWizardStep(i, 'completed')
+          if (i === freshWiz.currentStep) {
+            advanceWizardStep()
+          }
+        }
+      }
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [isActive, projectPath, outputFolder, stepStatuses])
 
   // Persist wizard state on changes
   useEffect(() => {
@@ -86,15 +151,20 @@ export default function ProjectWizard() {
     if (!isActive || !projectPath) return
 
     const cleanup = window.wizardAPI.onFileChanged(async () => {
-      // Check each pending agent step for output file existence
+      // Check each pending (not yet started) step for output file existence.
+      // Active steps are excluded — the agent may still be building the file,
+      // so the user should decide when it's done via "Mark Complete".
+      const { projectWizard: wiz } = useStore.getState()
       for (let i = 0; i < WIZARD_STEPS.length; i++) {
         const step = WIZARD_STEPS[i]
-        const status = stepStatuses[i]
-        if (status !== 'pending' && status !== 'active') continue
-        if (!step.outputFile) continue
+        const status = wiz.stepStatuses[i]
+        if (status !== 'pending') continue
+        // Skip the current step — the user may have navigated back to re-run it,
+        // so don't auto-complete based on a pre-existing output file.
+        if (i === wiz.currentStep) continue
+        if (!step.outputFile && !step.outputDir) continue
 
-        const filePath = joinPath(projectPath, outputFolder, 'planning-artifacts', step.outputFile)
-        const exists = await window.wizardAPI.checkFileExists(filePath)
+        const exists = await checkStepOutput(step, projectPath, outputFolder)
         if (exists) {
           updateWizardStep(i, 'completed')
         }
@@ -102,7 +172,7 @@ export default function ProjectWizard() {
     })
 
     return cleanup
-  }, [isActive, projectPath, stepStatuses, updateWizardStep])
+  }, [isActive, projectPath, outputFolder, updateWizardStep, advanceWizardStep])
 
   // Enrich wizard steps with dynamically resolved agent names from scan data
   const resolvedSteps = useMemo(() => {
@@ -234,7 +304,8 @@ export default function ProjectWizard() {
       path: projectPath,
       projectType: 'bmm',
       name: projectName,
-      outputFolder
+      outputFolder,
+      developerMode: projectWizard.developerMode
     })
 
     completeWizard()
@@ -242,11 +313,11 @@ export default function ProjectWizard() {
 
   const handleCancel = useCallback(async () => {
     if (projectPath) {
-      await window.wizardAPI.deleteState(projectPath, outputFolder)
+      // Keep the wizard state file so the wizard can be resumed later
       await window.wizardAPI.stopWatching()
     }
     cancelWizard()
-  }, [projectPath, outputFolder, cancelWizard])
+  }, [projectPath, cancelWizard])
 
   if (!isActive) return null
 
@@ -255,7 +326,7 @@ export default function ProjectWizard() {
   const allRequiredDone = WIZARD_STEPS.every((step, i) =>
     !step.required || stepStatuses[i] === 'completed'
   )
-  const isFinished = currentStep >= WIZARD_STEPS.length || allRequiredDone
+  const isFinished = currentStep >= WIZARD_STEPS.length
 
   return (
     <Box
@@ -279,15 +350,43 @@ export default function ProjectWizard() {
               New Project Setup
             </Typography>
           </Stack>
-          <Tooltip title="Cancel wizard">
-            <IconButton size="small" onClick={handleCancel}>
-              <CloseIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
+          <Stack direction="row" spacing={0.5} alignItems="center">
+            {artifacts.length > 0 && (
+              <Tooltip title="Planning Documents">
+                <IconButton size="small" onClick={(e) => setDocsAnchor(e.currentTarget)}>
+                  <Badge badgeContent={artifacts.length} color="primary" max={99}>
+                    <DescriptionIcon fontSize="small" />
+                  </Badge>
+                </IconButton>
+              </Tooltip>
+            )}
+            <Tooltip title="Cancel wizard">
+              <IconButton size="small" onClick={handleCancel}>
+                <CloseIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Stack>
         </Stack>
         <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
           {projectPath?.split('/').pop() || 'Unknown'}
         </Typography>
+        {aiTool === 'claude-code' && (
+          <Tooltip title="Applied on the next new conversation" placement="bottom" arrow>
+            <Box sx={{ display: 'flex', gap: 0.5, mt: 1 }}>
+              {CLAUDE_MODELS.map((model) => (
+                <Chip
+                  key={model.id}
+                  label={model.name}
+                  size="small"
+                  onClick={() => setClaudeModel(model.id)}
+                  color={claudeModel === model.id ? 'primary' : 'default'}
+                  variant={claudeModel === model.id ? 'filled' : 'outlined'}
+                  sx={{ cursor: 'pointer', fontSize: '0.7rem', height: 22 }}
+                />
+              ))}
+            </Box>
+          </Tooltip>
+        )}
       </Box>
 
       {/* Stepper */}
@@ -298,6 +397,7 @@ export default function ProjectWizard() {
           stepStatuses={stepStatuses}
           onSkipStep={handleSkipStep}
           onStartStep={handleStartAgentStep}
+          onGoToStep={goToWizardStep}
         />
 
         {/* Current step detail area */}
@@ -312,14 +412,27 @@ export default function ProjectWizard() {
               </Typography>
 
               {currentStepData.type === 'agent' && stepStatuses[currentStep] === 'pending' && (
-                <Button
-                  variant="contained"
-                  startIcon={<PlayArrowIcon />}
-                  onClick={() => handleStartAgentStep(currentStep)}
-                  fullWidth
-                >
-                  Start with {currentStepData.agentName}
-                </Button>
+                <Stack direction="row" spacing={1}>
+                  <Button
+                    variant="contained"
+                    size="small"
+                    startIcon={<PlayArrowIcon />}
+                    onClick={() => handleStartAgentStep(currentStep)}
+                    sx={{ flex: 1 }}
+                  >
+                    Start with {currentStepData.agentName}
+                  </Button>
+                  {!currentStepData.required && (
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<SkipNextIcon />}
+                      onClick={() => handleSkipStep(currentStep)}
+                    >
+                      Skip
+                    </Button>
+                  )}
+                </Stack>
               )}
 
               {currentStepData.type === 'agent' && stepStatuses[currentStep] === 'active' && (
@@ -329,13 +442,85 @@ export default function ProjectWizard() {
               )}
 
               {stepStatuses[currentStep] === 'active' && (
+                <Stack direction="row" spacing={1}>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<CheckIcon />}
+                    onClick={() => handleMarkStepComplete(currentStep)}
+                    sx={{ flex: 1 }}
+                  >
+                    Mark Complete
+                  </Button>
+                  {!currentStepData.required && (
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      color="inherit"
+                      startIcon={<SkipNextIcon />}
+                      onClick={() => handleSkipStep(currentStep)}
+                    >
+                      Skip
+                    </Button>
+                  )}
+                </Stack>
+              )}
+
+              {stepStatuses[currentStep] === 'completed' && (
+                <Stack direction="row" spacing={1}>
+                  <Button
+                    variant="contained"
+                    endIcon={<NavigateNextIcon />}
+                    onClick={() => advanceWizardStep()}
+                    sx={{ flex: 1 }}
+                  >
+                    Next Step
+                  </Button>
+                  {currentStepData.type === 'agent' && (
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<ReplayIcon />}
+                      onClick={() => rerunWizardStep(currentStep)}
+                    >
+                      Re-run
+                    </Button>
+                  )}
+                </Stack>
+              )}
+
+              {(stepStatuses[currentStep] === 'skipped') && currentStepData.type === 'agent' && (
+                <Stack direction="row" spacing={1}>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<ReplayIcon />}
+                    onClick={() => rerunWizardStep(currentStep)}
+                    sx={{ flex: 1 }}
+                  >
+                    Run this step
+                  </Button>
+                  <Button
+                    variant="contained"
+                    size="small"
+                    endIcon={<NavigateNextIcon />}
+                    onClick={() => advanceWizardStep()}
+                  >
+                    Next Step
+                  </Button>
+                </Stack>
+              )}
+
+              {allRequiredDone && (
                 <Button
-                  variant="outlined"
-                  startIcon={<CheckIcon />}
-                  onClick={() => handleMarkStepComplete(currentStep)}
+                  variant="contained"
+                  color="success"
+                  onClick={handleFinishSetup}
                   fullWidth
+                  size="small"
+                  sx={{ mt: 1 }}
                 >
-                  Mark Complete
+                  Finish Setup
                 </Button>
               )}
             </Stack>
@@ -367,6 +552,64 @@ export default function ProjectWizard() {
           )}
         </Box>
       </Box>
+      {/* Planning Documents Popover */}
+      <Popover
+        open={Boolean(docsAnchor)}
+        anchorEl={docsAnchor}
+        onClose={() => setDocsAnchor(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'center' }}
+        slotProps={{
+          paper: {
+            sx: { p: 2, maxWidth: 360, maxHeight: 400, overflow: 'auto', borderRadius: 1.5 }
+          }
+        }}
+      >
+        <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+          Planning Documents
+        </Typography>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+          {artifacts.map((artifact) => (
+            <Box
+              key={artifact.path}
+              onClick={() => { setSelectedArtifact(artifact); setDocsAnchor(null) }}
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+                p: 0.75,
+                borderRadius: 0.5,
+                cursor: 'pointer',
+                '&:hover': { bgcolor: 'action.selected' }
+              }}
+            >
+              <DescriptionIcon sx={{ fontSize: 16, color: getArtifactTypeColor(artifact.type) }} />
+              <Typography variant="body2" sx={{ flex: 1 }}>
+                {artifact.displayName}
+              </Typography>
+              <Typography
+                variant="caption"
+                sx={{
+                  fontSize: '0.65rem',
+                  px: 0.5,
+                  py: 0.125,
+                  borderRadius: 0.5,
+                  bgcolor: getArtifactTypeColor(artifact.type),
+                  color: 'white'
+                }}
+              >
+                {getArtifactTypeLabel(artifact.type)}
+              </Typography>
+            </Box>
+          ))}
+        </Box>
+      </Popover>
+
+      {/* Planning Artifact Viewer Dialog */}
+      <ArtifactViewer
+        artifact={selectedArtifact}
+        onClose={() => setSelectedArtifact(null)}
+      />
     </Box>
   )
 }

@@ -16,6 +16,7 @@ interface WizardStepperProps {
   stepStatuses: WizardStepStatus[]
   onSkipStep?: (stepIndex: number) => void
   onStartStep?: (stepIndex: number) => void
+  onGoToStep?: (stepIndex: number) => void
 }
 
 function getStatusIcon(status: WizardStepStatus, isActive: boolean) {
@@ -54,7 +55,7 @@ function getPhaseColor(phase: WizardPhase): string {
   }
 }
 
-export default function WizardStepper({ steps, currentStep, stepStatuses, onSkipStep, onStartStep }: WizardStepperProps) {
+export default function WizardStepper({ steps, currentStep, stepStatuses, onSkipStep, onStartStep, onGoToStep }: WizardStepperProps) {
   let lastPhase: WizardPhase | null = null
 
   return (
@@ -91,6 +92,8 @@ export default function WizardStepper({ steps, currentStep, stepStatuses, onSkip
               onClick={() => {
                 if (isActive && status === 'pending' && onStartStep) {
                   onStartStep(index)
+                } else if (isPast && index > 0 && onGoToStep) {
+                  onGoToStep(index)
                 }
               }}
               sx={{
@@ -103,8 +106,8 @@ export default function WizardStepper({ steps, currentStep, stepStatuses, onSkip
                 bgcolor: isActive ? 'action.selected' : 'transparent',
                 opacity: isFuture ? 0.5 : 1,
                 transition: 'all 0.2s',
-                cursor: isActive && status === 'pending' ? 'pointer' : 'default',
-                '&:hover': isActive && status === 'pending' ? { bgcolor: 'action.hover' } : {}
+                cursor: (isActive && status === 'pending') || (isPast && index > 0) ? 'pointer' : 'default',
+                '&:hover': (isActive && status === 'pending') || (isPast && index > 0) ? { bgcolor: 'action.hover' } : {}
               }}
             >
               {/* Status icon */}
@@ -175,9 +178,12 @@ export default function WizardStepper({ steps, currentStep, stepStatuses, onSkip
                 )}
               </Box>
 
-              {/* Required badge */}
+              {/* Required / Optional badge */}
               {step.required && status === 'pending' && (
                 <Chip label="Required" size="small" sx={{ height: 18, fontSize: '0.65rem', bgcolor: 'warning.light', color: 'warning.contrastText' }} />
+              )}
+              {!step.required && (status === 'pending' || (isActive && status === 'active')) && (
+                <Chip label="Optional" size="small" variant="outlined" sx={{ height: 18, fontSize: '0.65rem', borderColor: 'text.disabled', color: 'text.disabled' }} />
               )}
 
               {/* Skip button for optional steps */}

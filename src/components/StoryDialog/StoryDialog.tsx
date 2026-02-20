@@ -38,6 +38,7 @@ import { useStore } from '../../store'
 import { gruvbox } from '../../theme'
 import { EPIC_COLORS, STATUS_COLUMNS } from '../../types'
 import { useWorkflow } from '../../hooks/useWorkflow'
+import { parseStoryContent } from '../../utils/parseStory'
 import GitDiffDialog from '../GitDiffDialog'
 import ChatHistorySection from './ChatHistorySection'
 import StatusHistorySection from './StatusHistorySection'
@@ -91,6 +92,7 @@ export default function StoryDialog() {
   const selectedStory = useStore((state) => state.selectedStory)
   const storyContent = useStore((state) => state.storyContent)
   const setSelectedStory = useStore((state) => state.setSelectedStory)
+  const setStoryContent = useStore((state) => state.setStoryContent)
   const epics = useStore((state) => state.epics)
   const humanReviewChecklist = useStore((state) => state.humanReviewChecklist)
   const humanReviewStates = useStore((state) => state.humanReviewStates)
@@ -131,6 +133,17 @@ export default function StoryDialog() {
 
   const handleClose = () => {
     setSelectedStory(null)
+  }
+
+  const handleToggleTask = async (taskIndex: number, subtaskIndex: number = -1) => {
+    if (!selectedStory?.filePath) return
+    const result = await window.fileAPI.toggleStoryTask(selectedStory.filePath, taskIndex, subtaskIndex)
+    if (result.success) {
+      const fileResult = await window.fileAPI.readFile(selectedStory.filePath)
+      if (fileResult.content) {
+        setStoryContent(parseStoryContent(fileResult.content))
+      }
+    }
   }
 
   if (!selectedStory) return null
@@ -602,14 +615,17 @@ export default function StoryDialog() {
                     <Typography variant="h6">
                       Tasks ({storyContent.tasks.filter((t) => t.completed).length}/{storyContent.tasks.length})
                     </Typography>
-                    <Tooltip title="Implementation tasks for DEV (Amelia) to complete. Check them off as you work." arrow>
+                    <Tooltip title="Implementation tasks. Click to toggle completion." arrow>
                       <InfoOutlinedIcon sx={{ fontSize: 18, color: 'text.disabled', cursor: 'help' }} />
                     </Tooltip>
                   </Box>
                   <List dense disablePadding>
-                    {storyContent.tasks.map((task) => (
+                    {storyContent.tasks.map((task, taskIdx) => (
                       <Box key={task.id}>
-                        <ListItem sx={{ px: 0, py: 0.5 }}>
+                        <ListItem
+                          sx={{ px: 0, py: 0.5, cursor: 'pointer', borderRadius: 0.5, '&:hover': { bgcolor: 'action.hover' } }}
+                          onClick={() => handleToggleTask(taskIdx)}
+                        >
                           <ListItemIcon sx={{ minWidth: 32 }}>
                             {task.completed ? (
                               <CheckCircleIcon color="success" fontSize="small" />
@@ -631,8 +647,12 @@ export default function StoryDialog() {
                         </ListItem>
                         {task.subtasks.length > 0 && (
                           <List dense disablePadding sx={{ pl: 4 }}>
-                            {task.subtasks.map((subtask) => (
-                              <ListItem key={subtask.id} sx={{ px: 0, py: 0.25 }}>
+                            {task.subtasks.map((subtask, subtaskIdx) => (
+                              <ListItem
+                                key={subtask.id}
+                                sx={{ px: 0, py: 0.25, cursor: 'pointer', borderRadius: 0.5, '&:hover': { bgcolor: 'action.hover' } }}
+                                onClick={() => handleToggleTask(taskIdx, subtaskIdx)}
+                              >
                                 <ListItemIcon sx={{ minWidth: 28 }}>
                                   {subtask.completed ? (
                                     <CheckCircleIcon

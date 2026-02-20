@@ -49,6 +49,7 @@ export default function Header() {
   const setEpicCycleDialogOpen = useStore((state) => state.setEpicCycleDialogOpen)
   const setProjectWorkflowsDialogOpen = useStore((state) => state.setProjectWorkflowsDialogOpen)
   const scannedWorkflowConfig = useStore((state) => state.scannedWorkflowConfig)
+  const developerMode = useStore((state) => state.developerMode)
   const { artifacts } = usePlanningArtifacts()
   const [docsAnchor, setDocsAnchor] = useState<null | HTMLElement>(null)
   const [selectedArtifact, setSelectedArtifact] = useState<PlanningArtifact | null>(null)
@@ -65,7 +66,7 @@ export default function Header() {
   const backlogCount = selectedEpicId !== null
     ? stories.filter((s) => s.epicId === selectedEpicId && s.status === 'backlog').length
     : 0
-  const showRunEpic = selectedEpicId !== null && toolSupportsHeadless && backlogCount > 0 && viewMode === 'board'
+  const showRunEpic = selectedEpicId !== null && toolSupportsHeadless && backlogCount > 0 && viewMode === 'board' && developerMode !== 'human'
 
   const isGameProject = projectType === 'bmgd'
   const logoSrc = themeMode === 'dark' ? logoDark : logoLight

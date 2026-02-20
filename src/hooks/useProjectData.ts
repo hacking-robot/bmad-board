@@ -58,9 +58,7 @@ export function useProjectData() {
           const ws = savedWizard as import('../types/projectWizard').ProjectWizardState & { outputFolder?: string }
           if (ws.isActive) {
             // Resume the wizard with its stored output folder
-            const wizardOutputFolder = ws.outputFolder || dirOutputFolder
-            const { startProjectWizard, resumeWizard } = useStore.getState()
-            startProjectWizard(result.path, wizardOutputFolder)
+            const { resumeWizard } = useStore.getState()
             resumeWizard(ws)
             return true
           }
@@ -91,19 +89,23 @@ export function useProjectData() {
     return false
   }, [setProjectPath, setProjectType, setOutputFolder, setError, addRecentProject, setNewProjectDialogOpen, setPendingNewProject])
 
-  const switchToProject = useCallback((path: string, type: typeof projectType, recentOutputFolder?: string) => {
+  const setDeveloperMode = useStore((state) => state.setDeveloperMode)
+
+  const switchToProject = useCallback((path: string, type: typeof projectType, recentOutputFolder?: string, recentDeveloperMode?: 'ai' | 'human') => {
     if (!type) return
     const projectName = path.split('/').pop() || 'Unknown'
     setProjectPath(path)
     setProjectType(type)
     setOutputFolder(recentOutputFolder || '_bmad-output')
+    setDeveloperMode(recentDeveloperMode || 'ai')
     addRecentProject({
       path,
       projectType: type,
       name: projectName,
-      outputFolder: recentOutputFolder
+      outputFolder: recentOutputFolder,
+      developerMode: recentDeveloperMode
     })
-  }, [setProjectPath, setProjectType, setOutputFolder, addRecentProject])
+  }, [setProjectPath, setProjectType, setOutputFolder, setDeveloperMode, addRecentProject])
 
   const loadProjectData = useCallback(async () => {
     if (!projectPath || !projectType) return
@@ -279,9 +281,7 @@ export function useProjectData() {
           const ws = savedState as import('../types/projectWizard').ProjectWizardState
           if (ws.isActive) {
             // Resume the wizard with its stored output folder (prefer wizard state over store)
-            const wizardOutputFolder = ws.outputFolder || outputFolder
-            const { startProjectWizard, resumeWizard } = useStore.getState()
-            startProjectWizard(projectPath, wizardOutputFolder)
+            const { resumeWizard } = useStore.getState()
             resumeWizard(ws)
             return
           }
