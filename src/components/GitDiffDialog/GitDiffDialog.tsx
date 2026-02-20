@@ -671,7 +671,8 @@ export default function GitDiffDialog({ open, onClose, branchName }: GitDiffDial
   // Filter out BMAD folders if enabled
   const filteredFiles = useMemo(() => {
     if (!hideBmadFolders) return changedFiles
-    return changedFiles.filter((f) => !f.path.startsWith('_bmad-output/') && !f.path.startsWith('_bmad/'))
+    const folder = useStore.getState().outputFolder
+    return changedFiles.filter((f) => !f.path.startsWith(folder + '/') && !f.path.startsWith('_bmad/'))
   }, [changedFiles, hideBmadFolders])
 
   // Calculate total stats

@@ -12,8 +12,10 @@ export function useProjectData() {
     _hasHydrated,
     projectPath,
     projectType,
+    outputFolder,
     setProjectPath,
     setProjectType,
+    setOutputFolder,
     addRecentProject,
     setEpics,
     setStories,
@@ -48,39 +50,59 @@ export function useProjectData() {
     if (result.path && result.projectType) {
       // Check if this is a new/empty project
       if (result.isNewProject) {
+        // Check if there's a saved wizard state (interrupted install with possibly custom output folder)
+        const dirOutputFolder = result.outputFolder || '_bmad-output'
+        const savedWizard = await window.wizardAPI.loadState(result.path, dirOutputFolder)
+        if (savedWizard && typeof savedWizard === 'object' && 'isActive' in (savedWizard as Record<string, unknown>)) {
+          const ws = savedWizard as import('../types/projectWizard').ProjectWizardState & { outputFolder?: string }
+          if (ws.isActive) {
+            // Resume the wizard with its stored output folder
+            const wizardOutputFolder = ws.outputFolder || dirOutputFolder
+            const { startProjectWizard, resumeWizard } = useStore.getState()
+            startProjectWizard(result.path, wizardOutputFolder)
+            resumeWizard(ws)
+            return true
+          }
+        }
         setPendingNewProject({
           path: result.path,
-          projectType: result.projectType
+          projectType: result.projectType,
+          outputFolder: dirOutputFolder
         })
         setNewProjectDialogOpen(true)
         return false // Don't set project yet - let dialog handle it
       }
 
       const projectName = result.path.split('/').pop() || 'Unknown'
+      const resolvedOutputFolder = result.outputFolder || '_bmad-output'
       setProjectPath(result.path)
       setProjectType(result.projectType)
+      setOutputFolder(resolvedOutputFolder)
       addRecentProject({
         path: result.path,
         projectType: result.projectType,
-        name: projectName
+        name: projectName,
+        outputFolder: resolvedOutputFolder
       })
       return true
     }
 
     return false
-  }, [setProjectPath, setProjectType, setError, addRecentProject, setNewProjectDialogOpen, setPendingNewProject])
+  }, [setProjectPath, setProjectType, setOutputFolder, setError, addRecentProject, setNewProjectDialogOpen, setPendingNewProject])
 
-  const switchToProject = useCallback((path: string, type: typeof projectType) => {
+  const switchToProject = useCallback((path: string, type: typeof projectType, recentOutputFolder?: string) => {
     if (!type) return
     const projectName = path.split('/').pop() || 'Unknown'
     setProjectPath(path)
     setProjectType(type)
+    setOutputFolder(recentOutputFolder || '_bmad-output')
     addRecentProject({
       path,
       projectType: type,
-      name: projectName
+      name: projectName,
+      outputFolder: recentOutputFolder
     })
-  }, [setProjectPath, setProjectType, addRecentProject])
+  }, [setProjectPath, setProjectType, setOutputFolder, addRecentProject])
 
   const loadProjectData = useCallback(async () => {
     if (!projectPath || !projectType) return
@@ -99,7 +121,8 @@ export function useProjectData() {
 
     try {
       // Load sprint-status.yaml
-      const sprintStatusPath = getSprintStatusFullPath(projectPath, projectType)
+      const currentOutputFolder = useStore.getState().outputFolder
+      const sprintStatusPath = getSprintStatusFullPath(projectPath, projectType, currentOutputFolder)
       const statusResult = await window.fileAPI.readFile(sprintStatusPath)
 
       if (statusResult.error || !statusResult.content) {
@@ -109,7 +132,7 @@ export function useProjectData() {
       const sprintStatus = parseSprintStatus(statusResult.content)
 
       // Load epics.md from correct location based on project type
-      const epicsPath = getEpicsFullPath(projectPath, projectType)
+      const epicsPath = getEpicsFullPath(projectPath, projectType, currentOutputFolder)
       const epicsResult = await window.fileAPI.readFile(epicsPath)
 
       if (epicsResult.error || !epicsResult.content) {
@@ -121,7 +144,7 @@ export function useProjectData() {
       const stories = getAllStories(epics)
 
       // Update file paths for stories that have files
-      const implementationPath = `${projectPath}/_bmad-output/implementation-artifacts`
+      const implementationPath = `${projectPath}/${currentOutputFolder}/implementation-artifacts`
       const filesResult = await window.fileAPI.listDirectory(implementationPath)
 
       if (filesResult.files) {
@@ -250,14 +273,15 @@ export function useProjectData() {
 
       // Check if this is an incomplete project with a saved wizard state
       // This happens when the app restarts mid-wizard (projectPath persisted but wizard state isn't)
-      window.wizardAPI.loadState(projectPath).then((savedState) => {
+      window.wizardAPI.loadState(projectPath, outputFolder).then((savedState) => {
         if (savedState && typeof savedState === 'object' && 'isActive' in (savedState as Record<string, unknown>)) {
-          const ws = savedState as { isActive: boolean }
+          const ws = savedState as import('../types/projectWizard').ProjectWizardState
           if (ws.isActive) {
-            // Resume the wizard instead of trying to load incomplete project data
+            // Resume the wizard with its stored output folder (prefer wizard state over store)
+            const wizardOutputFolder = ws.outputFolder || outputFolder
             const { startProjectWizard, resumeWizard } = useStore.getState()
-            startProjectWizard(projectPath)
-            resumeWizard(savedState as import('../types/projectWizard').ProjectWizardState)
+            startProjectWizard(projectPath, wizardOutputFolder)
+            resumeWizard(ws)
             return
           }
         }
@@ -293,7 +317,7 @@ export function useProjectData() {
       setTimeout(() => {
         const { bmadInGitignoreUserSet } = useStore.getState()
         if (!bmadInGitignoreUserSet) {
-          window.fileAPI.checkBmadInGitignore(projectPath).then((result) => {
+          window.fileAPI.checkBmadInGitignore(projectPath, outputFolder).then((result) => {
             setBmadInGitignore(result.inGitignore)
           })
         }
@@ -301,7 +325,7 @@ export function useProjectData() {
     }
   // Note: setBmadInGitignore is stable (Zustand setter) and intentionally omitted from deps
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [_hasHydrated, projectPath, projectType, wizardIsActive, loadProjectData])
+  }, [_hasHydrated, projectPath, projectType, outputFolder, wizardIsActive, loadProjectData])
 
   // File watcher setup - separate effect with minimal deps to avoid repeated start/stop
   useEffect(() => {
@@ -311,7 +335,7 @@ export function useProjectData() {
     if (wizardIsActive) return
 
     // Start watching for file changes
-    window.fileAPI.startWatching(projectPath, projectType)
+    window.fileAPI.startWatching(projectPath, projectType, outputFolder)
     setIsWatching(true)
 
     // Listen for file changes - use refs to get latest callbacks without triggering effect
@@ -335,8 +359,8 @@ export function useProjectData() {
       window.fileAPI.stopWatching()
       setIsWatching(false)
     }
-  // Only re-run when project path/type actually changes, not on callback recreation
-  }, [_hasHydrated, projectPath, projectType, wizardIsActive, setIsWatching])
+  // Only re-run when project path/type/outputFolder actually changes, not on callback recreation
+  }, [_hasHydrated, projectPath, projectType, outputFolder, wizardIsActive, setIsWatching])
 
   // Load story content when selected story changes
   useEffect(() => {

@@ -9,11 +9,22 @@ import {
   Box,
   Stack,
   TextField,
-  Alert
+  Alert,
+  Autocomplete,
+  Chip,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from '@mui/material'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import AddIcon from '@mui/icons-material/Add'
 import { useStore } from '../../store'
+
+const BMAD_MODULES = [
+  { id: 'bmad-core', label: 'BMad Core Module', required: true },
+  { id: 'bmad-method', label: 'BMad Method Agile-AI Driven-Development', required: true }
+]
 
 interface NewProjectFormProps {
   open: boolean
@@ -28,6 +39,9 @@ export default function NewProjectForm({ open, onClose }: NewProjectFormProps) {
   const [projectName, setProjectName] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
+  const [selectedModules, setSelectedModules] = useState(BMAD_MODULES)
+  const [developerType, setDeveloperType] = useState<'ai' | 'human'>('ai')
+  const [outputFolder, setOutputFolderLocal] = useState('_bmad-output')
 
   // When dialog opens, preselect parent of current project
   useEffect(() => {
@@ -41,6 +55,9 @@ export default function NewProjectForm({ open, onClose }: NewProjectFormProps) {
     setProjectName('')
     setError(null)
     setCreating(false)
+    setSelectedModules(BMAD_MODULES)
+    setDeveloperType('ai')
+    setOutputFolderLocal('_bmad-output')
   }, [])
 
   const handleClose = useCallback(() => {
@@ -75,11 +92,11 @@ export default function NewProjectForm({ open, onClose }: NewProjectFormProps) {
       return
     }
 
-    startProjectWizard(result.path)
+    startProjectWizard(result.path, outputFolder)
     setCreating(false)
     reset()
     onClose()
-  }, [parentPath, projectName, startProjectWizard, reset, onClose])
+  }, [parentPath, projectName, outputFolder, startProjectWizard, reset, onClose])
 
   return (
     <Dialog
@@ -144,6 +161,71 @@ export default function NewProjectForm({ open, onClose }: NewProjectFormProps) {
               ? `Will create: ${parentPath}/${projectName.trim()}`
               : 'Choose a location first, then enter a name for your project'
             }
+          />
+
+          <Autocomplete
+            multiple
+            options={BMAD_MODULES}
+            value={selectedModules}
+            onChange={(_, value) => {
+              const required = BMAD_MODULES.filter(m => m.required)
+              const merged = [...required]
+              for (const v of value) {
+                if (!merged.some(m => m.id === v.id)) merged.push(v)
+              }
+              setSelectedModules(merged)
+            }}
+            getOptionLabel={(option) => option.label}
+            isOptionEqualToValue={(option, value) => option.id === value.id}
+            disableCloseOnSelect
+            getOptionDisabled={(option) => option.required}
+            renderTags={(value, getTagProps) =>
+              value.map((option, index) => {
+                const { onDelete, ...tagProps } = getTagProps({ index })
+                return (
+                  <Chip
+                    label={option.label}
+                    size="small"
+                    {...tagProps}
+                    {...(option.required ? {} : { onDelete })}
+                    key={option.id}
+                  />
+                )
+              })
+            }
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="BMAD Modules"
+                size="small"
+                helperText="Modules to install in the new project"
+              />
+            )}
+          />
+
+          <FormControl size="small" fullWidth disabled>
+            <InputLabel>Development Mode</InputLabel>
+            <Select
+              value={developerType}
+              label="Development Mode"
+              onChange={(e) => setDeveloperType(e.target.value as 'ai' | 'human')}
+            >
+              <MenuItem value="ai">AI Driven Development</MenuItem>
+              <MenuItem value="human">Manual Development</MenuItem>
+            </Select>
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, ml: 1.75 }}>
+              Not implemented yet
+            </Typography>
+          </FormControl>
+
+          <TextField
+            label="Output Folder"
+            size="small"
+            value={outputFolder}
+            onChange={(e) => setOutputFolderLocal(e.target.value)}
+            placeholder="_bmad-output"
+            fullWidth
+            helperText="Folder name for BMAD output files (default: _bmad-output)"
           />
 
           {error && (

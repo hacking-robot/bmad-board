@@ -33,6 +33,7 @@ export function unregisterCompletionCallback(agentId: string) {
 // Global handler hook - manages all IPC subscriptions
 export function useChatMessageHandler() {
   const projectPath = useStore((state) => state.projectPath)
+  const outputFolder = useStore((state) => state.outputFolder)
   const addChatMessage = useStore((state) => state.addChatMessage)
   const updateChatMessage = useStore((state) => state.updateChatMessage)
   const setChatTyping = useStore((state) => state.setChatTyping)
@@ -107,11 +108,12 @@ export function useChatMessageHandler() {
           agent.name,
           agent.role,
           thread.messages,
-          thread.branchName
+          thread.branchName,
+          outputFolder
         )
       }
     }
-  }, [projectPath, agents])
+  }, [projectPath, outputFolder, agents])
 
   // Subscribe to all chat events
   useEffect(() => {

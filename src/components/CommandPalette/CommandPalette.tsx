@@ -110,7 +110,7 @@ export default function CommandPalette() {
             description: truncatePath(project.path),
             icon: <FolderIcon sx={{ color: project.path === projectPath ? 'primary.main' : 'text.secondary' }} />,
             action: () => {
-              switchToProject(project.path, project.projectType)
+              switchToProject(project.path, project.projectType, project.outputFolder)
               setOpen(false)
             }
           })

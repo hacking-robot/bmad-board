@@ -36,6 +36,7 @@ interface RecentProject {
   path: string
   projectType: ProjectType
   name: string
+  outputFolder?: string
 }
 
 type AITool = 'claude-code' | 'cursor' | 'windsurf' | 'roo-code' | 'aider'
@@ -82,6 +83,7 @@ interface AppSettings {
   claudeModel: ClaudeModel
   projectPath: string | null
   projectType: ProjectType | null
+  outputFolder: string
   selectedEpicId: number | null
   collapsedColumnsByEpic: Record<string, string[]>
   agentHistory?: AgentHistoryEntry[]
@@ -115,6 +117,7 @@ const defaultSettings: AppSettings = {
   claudeModel: 'opus',
   projectPath: null,
   projectType: null,
+  outputFolder: '_bmad-output',
   selectedEpicId: null,
   collapsedColumnsByEpic: {},
   agentHistory: [],
@@ -462,6 +465,24 @@ app.on('activate', () => {
   }
 })
 
+// Read BMAD config to discover the output folder name
+async function readBmadOutputFolder(projectPath: string): Promise<string> {
+  try {
+    const configPath = join(projectPath, '_bmad', '_memory', 'config.yaml')
+    if (!existsSync(configPath)) return '_bmad-output'
+    const content = await readFile(configPath, 'utf-8')
+    const config = parseYaml(content)
+    if (config?.output_folder) {
+      // Strip {project-root}/ prefix if present
+      const folder = String(config.output_folder).replace(/^\{project-root\}\//, '')
+      if (folder) return folder
+    }
+  } catch {
+    // Fall back to default
+  }
+  return '_bmad-output'
+}
+
 // IPC Handlers for file operations
 
 ipcMain.handle('select-directory', async () => {
@@ -475,11 +496,40 @@ ipcMain.handle('select-directory', async () => {
   }
 
   const projectPath = result.filePaths[0]
-  const bmadOutputPath = join(projectPath, '_bmad-output')
 
-  // Check if _bmad-output directory exists - if not, it's a new project for the wizard
+  // Discover the actual output folder name from BMAD config
+  let outputFolder = await readBmadOutputFolder(projectPath)
+  let bmadOutputPath = join(projectPath, outputFolder)
+
+  // Check if output directory exists - if not, scan for BMAD output folders
+  // (handles custom output folder names when config.yaml is missing or unreadable)
   if (!existsSync(bmadOutputPath)) {
-    return { path: projectPath, projectType: 'bmm' as ProjectType, isNewProject: true }
+    try {
+      const entries = await readdir(projectPath)
+      for (const entry of entries) {
+        if (entry === '_bmad' || entry === 'node_modules' || entry === '.git') continue
+        const candidatePath = join(projectPath, entry)
+        const stats2 = await stat(candidatePath)
+        if (stats2.isDirectory()) {
+          // Check for wizard state file (interrupted install) or BMAD output structure (completed install)
+          const hasWizardState = existsSync(join(candidatePath, '.bmadboard-wizard.json'))
+          const hasBmadStructure = existsSync(join(candidatePath, 'implementation-artifacts'))
+            || existsSync(join(candidatePath, 'planning-artifacts'))
+          if (hasWizardState || hasBmadStructure) {
+            outputFolder = entry
+            bmadOutputPath = candidatePath
+            break
+          }
+        }
+      }
+    } catch {
+      // Ignore scan errors
+    }
+  }
+
+  // Check if output directory exists - if not, it's a new project for the wizard
+  if (!existsSync(bmadOutputPath)) {
+    return { path: projectPath, projectType: 'bmm' as ProjectType, isNewProject: true, outputFolder }
   }
 
   // Check for required files
@@ -497,7 +547,7 @@ ipcMain.handle('select-directory', async () => {
   // Check if this is a new/empty project
   const isNewProject = !hasSprintStatus || (!hasBmgdEpics && !hasBmmEpics)
 
-  return { path: projectPath, projectType, isNewProject }
+  return { path: projectPath, projectType, isNewProject, outputFolder }
 })
 
 ipcMain.handle('read-file', async (_, filePath: string) => {
@@ -540,17 +590,17 @@ ipcMain.handle('save-settings', async (_, settings: Partial<AppSettings>) => {
 // File watching for auto-refresh
 let fileWatchers: FSWatcher[] = []
 
-function startWatching(projectPath: string, projectType: ProjectType) {
+function startWatching(projectPath: string, projectType: ProjectType, outputFolder: string = '_bmad-output') {
   // Stop any existing watchers
   stopWatching()
 
   const watchPaths: string[] = [
-    join(projectPath, '_bmad-output', 'implementation-artifacts')
+    join(projectPath, outputFolder, 'implementation-artifacts')
   ]
 
   // For BMM projects, also watch planning-artifacts (where epics.md lives)
   if (projectType === 'bmm') {
-    watchPaths.push(join(projectPath, '_bmad-output', 'planning-artifacts'))
+    watchPaths.push(join(projectPath, outputFolder, 'planning-artifacts'))
   }
 
   for (const watchPath of watchPaths) {
@@ -602,8 +652,8 @@ function stopWatching() {
   fileWatchers = []
 }
 
-ipcMain.handle('start-watching', async (_, projectPath: string, projectType: ProjectType) => {
-  startWatching(projectPath, projectType)
+ipcMain.handle('start-watching', async (_, projectPath: string, projectType: ProjectType, outputFolder?: string) => {
+  startWatching(projectPath, projectType, outputFolder || '_bmad-output')
   return true
 })
 
@@ -668,9 +718,10 @@ ipcMain.handle('scan-bmad', async (_, projectPath: string) => {
 })
 
 // Detect project type (bmm vs bmgd structure)
-ipcMain.handle('detect-project-type', async (_, projectPath: string) => {
-  // Check for BMGD structure (epics.md at root of _bmad-output)
-  const bmgdEpicsPath = join(projectPath, '_bmad-output', 'epics.md')
+ipcMain.handle('detect-project-type', async (_, projectPath: string, outputFolder?: string) => {
+  const folder = outputFolder || '_bmad-output'
+  // Check for BMGD structure (epics.md at root of output folder)
+  const bmgdEpicsPath = join(projectPath, folder, 'epics.md')
 
   if (existsSync(bmgdEpicsPath)) {
     return 'bmgd'
@@ -682,8 +733,9 @@ ipcMain.handle('detect-project-type', async (_, projectPath: string) => {
 
 // Check if bmad folders are in .gitignore
 // When bmad is gitignored, the data persists across branch switches since it's not tracked
-ipcMain.handle('check-bmad-in-gitignore', async (_, projectPath: string) => {
+ipcMain.handle('check-bmad-in-gitignore', async (_, projectPath: string, outputFolder?: string) => {
   try {
+    const folder = outputFolder || '_bmad-output'
     const gitignorePath = join(projectPath, '.gitignore')
     if (!existsSync(gitignorePath)) {
       return { inGitignore: false }
@@ -693,12 +745,11 @@ ipcMain.handle('check-bmad-in-gitignore', async (_, projectPath: string) => {
     const lines = content.split('\n').map(line => line.trim())
 
     // Check for patterns that would ignore bmad folders
-    // Common patterns: bmad, _bmad-output, _bmad-output/, docs/planning-artifacts, etc.
     const bmadPatterns = [
       'bmad',
-      '_bmad-output',
-      '_bmad-output/',
-      '_bmad-output/*',
+      folder,
+      folder + '/',
+      folder + '/*',
       'docs/planning-artifacts',
       'docs/implementation-artifacts'
     ]
@@ -1362,7 +1413,7 @@ ipcMain.handle('git-merge-branch', async (_, projectPath: string, branchToMerge:
 ipcMain.handle('update-story-status', async (_, filePath: string, newStatus: string) => {
   try {
     // Extract story key from file path (filename without .md)
-    // Story path: {projectPath}/_bmad-output/implementation-artifacts/{story-key}.md
+    // Story path: {projectPath}/{outputFolder}/implementation-artifacts/{story-key}.md
     const storyKey = basename(filePath, '.md')
 
     // Derive sprint-status.yaml path from story file path
@@ -1484,14 +1535,14 @@ interface StoryChatHistory {
   lastUpdated: number
 }
 
-const getProjectStoryChatDir = (projectPath: string) => join(projectPath, '_bmad-output', 'chat-history')
-const getProjectStoryChatPath = (projectPath: string, storyId: string) => join(getProjectStoryChatDir(projectPath), `${storyId}.json`)
+const getProjectStoryChatDir = (projectPath: string, outputFolder: string = '_bmad-output') => join(projectPath, outputFolder, 'chat-history')
+const getProjectStoryChatPath = (projectPath: string, storyId: string, outputFolder: string = '_bmad-output') => join(getProjectStoryChatDir(projectPath, outputFolder), `${storyId}.json`)
 const getUserStoryChatDir = () => join(homedir(), '.config', 'bmadboard', 'story-chats')
 const getUserStoryChatPath = (storyId: string) => join(getUserStoryChatDir(), `${storyId}.json`)
 
 // Ensure story chat directories exist
-async function ensureStoryChatDirs(projectPath: string) {
-  const projectDir = getProjectStoryChatDir(projectPath)
+async function ensureStoryChatDirs(projectPath: string, outputFolder: string = '_bmad-output') {
+  const projectDir = getProjectStoryChatDir(projectPath, outputFolder)
   const userDir = getUserStoryChatDir()
   if (!existsSync(projectDir)) {
     await mkdir(projectDir, { recursive: true })
@@ -1502,10 +1553,11 @@ async function ensureStoryChatDirs(projectPath: string) {
 }
 
 // Save story chat history to both project and user data locations
-ipcMain.handle('save-story-chat-history', async (_, projectPath: string, storyId: string, history: StoryChatHistory) => {
+ipcMain.handle('save-story-chat-history', async (_, projectPath: string, storyId: string, history: StoryChatHistory, outputFolder?: string) => {
   try {
-    await ensureStoryChatDirs(projectPath)
-    const projectFilePath = getProjectStoryChatPath(projectPath, storyId)
+    const folder = outputFolder || '_bmad-output'
+    await ensureStoryChatDirs(projectPath, folder)
+    const projectFilePath = getProjectStoryChatPath(projectPath, storyId, folder)
     const userFilePath = getUserStoryChatPath(storyId)
     const content = JSON.stringify(history, null, 2)
 
@@ -1523,9 +1575,10 @@ ipcMain.handle('save-story-chat-history', async (_, projectPath: string, storyId
 
 // Load story chat history - user dir first (primary), fallback to project dir (backup)
 // If found in project dir but not user dir, sync to user dir
-ipcMain.handle('load-story-chat-history', async (_, projectPath: string, storyId: string) => {
+ipcMain.handle('load-story-chat-history', async (_, projectPath: string, storyId: string, outputFolder?: string) => {
   try {
-    const projectFilePath = getProjectStoryChatPath(projectPath, storyId)
+    const folder = outputFolder || '_bmad-output'
+    const projectFilePath = getProjectStoryChatPath(projectPath, storyId, folder)
     const userFilePath = getUserStoryChatPath(storyId)
 
     // Try user directory first (primary)
@@ -1562,12 +1615,13 @@ ipcMain.handle('load-story-chat-history', async (_, projectPath: string, storyId
 })
 
 // List all story IDs that have chat history
-ipcMain.handle('list-story-chat-histories', async (_, projectPath: string) => {
+ipcMain.handle('list-story-chat-histories', async (_, projectPath: string, outputFolder?: string) => {
   try {
+    const folder = outputFolder || '_bmad-output'
     const storyIds = new Set<string>()
 
     // Check project directory
-    const projectDir = getProjectStoryChatDir(projectPath)
+    const projectDir = getProjectStoryChatDir(projectPath, folder)
     if (existsSync(projectDir)) {
       const files = await readdir(projectDir)
       files.filter(f => f.endsWith('.json')).forEach(f => storyIds.add(f.replace('.json', '')))
@@ -1661,12 +1715,13 @@ ipcMain.handle('cli-clear-cache', async () => {
 // BMAD Install handler - runs npx bmad-method install
 let bmadInstallProcess: ReturnType<typeof spawnChild> | null = null
 
-ipcMain.handle('bmad-install', async (_, projectPath: string, useAlpha?: boolean) => {
+ipcMain.handle('bmad-install', async (_, projectPath: string, useAlpha?: boolean, outputFolder?: string) => {
   if (bmadInstallProcess) {
     return { success: false, error: 'Installation already in progress' }
   }
 
   try {
+    const folder = outputFolder || '_bmad-output'
     const packageName = useAlpha ? 'bmad-method@alpha' : 'bmad-method'
     // Stable v6 supports non-interactive flags; alpha does not
     const args = useAlpha
@@ -1676,7 +1731,7 @@ ipcMain.handle('bmad-install', async (_, projectPath: string, useAlpha?: boolean
           '--directory', projectPath,
           '--modules', 'bmm',
           '--tools', 'claude-code',
-          '--output-folder', '_bmad-output',
+          '--output-folder', folder,
           '--yes'
         ]
 
@@ -1740,14 +1795,15 @@ ipcMain.handle('bmad-install', async (_, projectPath: string, useAlpha?: boolean
 let wizardWatcher: FSWatcher | null = null
 let wizardWatchDebounce: NodeJS.Timeout | null = null
 
-ipcMain.handle('wizard-start-watching', async (_, projectPath: string) => {
+ipcMain.handle('wizard-start-watching', async (_, projectPath: string, outputFolder?: string) => {
+  const folder = outputFolder || '_bmad-output'
   // Stop existing wizard watcher
   if (wizardWatcher) {
     wizardWatcher.close()
     wizardWatcher = null
   }
 
-  const planningDir = join(projectPath, '_bmad-output', 'planning-artifacts')
+  const planningDir = join(projectPath, folder, 'planning-artifacts')
 
   // Create the directory if it doesn't exist yet (install may not have completed)
   if (!existsSync(planningDir)) {
@@ -1795,9 +1851,10 @@ ipcMain.handle('check-file-exists', async (_, filePath: string) => {
 })
 
 // Wizard state persistence
-ipcMain.handle('save-wizard-state', async (_, projectPath: string, state: unknown) => {
+ipcMain.handle('save-wizard-state', async (_, projectPath: string, state: unknown, outputFolder?: string) => {
   try {
-    const wizardDir = join(projectPath, '_bmad-output')
+    const folder = outputFolder || '_bmad-output'
+    const wizardDir = join(projectPath, folder)
     if (!existsSync(wizardDir)) {
       await mkdir(wizardDir, { recursive: true })
     }
@@ -1810,9 +1867,10 @@ ipcMain.handle('save-wizard-state', async (_, projectPath: string, state: unknow
   }
 })
 
-ipcMain.handle('load-wizard-state', async (_, projectPath: string) => {
+ipcMain.handle('load-wizard-state', async (_, projectPath: string, outputFolder?: string) => {
   try {
-    const wizardPath = join(projectPath, '_bmad-output', '.bmadboard-wizard.json')
+    const folder = outputFolder || '_bmad-output'
+    const wizardPath = join(projectPath, folder, '.bmadboard-wizard.json')
     if (!existsSync(wizardPath)) return null
     const content = await readFile(wizardPath, 'utf-8')
     return JSON.parse(content)
@@ -1821,9 +1879,10 @@ ipcMain.handle('load-wizard-state', async (_, projectPath: string) => {
   }
 })
 
-ipcMain.handle('delete-wizard-state', async (_, projectPath: string) => {
+ipcMain.handle('delete-wizard-state', async (_, projectPath: string, outputFolder?: string) => {
   try {
-    const wizardPath = join(projectPath, '_bmad-output', '.bmadboard-wizard.json')
+    const folder = outputFolder || '_bmad-output'
+    const wizardPath = join(projectPath, folder, '.bmadboard-wizard.json')
     if (existsSync(wizardPath)) {
       const { unlink } = await import('fs/promises')
       await unlink(wizardPath)
@@ -1856,6 +1915,10 @@ ipcMain.handle('create-project-directory', async (_, parentPath: string, project
       return { success: false, error: 'A folder with that name already exists' }
     }
     await mkdir(projectPath, { recursive: true })
+    const gitInit = spawnSync('git', ['init'], { cwd: projectPath })
+    if (gitInit.status !== 0) {
+      return { success: false, error: 'Created folder but git init failed: ' + (gitInit.stderr?.toString() || 'unknown error') }
+    }
     return { success: true, path: projectPath }
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Failed to create directory' }

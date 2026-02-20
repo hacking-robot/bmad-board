@@ -36,7 +36,8 @@ export default function ProjectWizard() {
     bmadScanResult,
     setBmadScanResult,
     setScannedWorkflowConfig,
-    aiTool
+    aiTool,
+    outputFolder
   } = useStore()
 
   const { getAgentName } = useWorkflow()
@@ -49,7 +50,7 @@ export default function ProjectWizard() {
     if (!isActive || !projectPath || resumeChecked.current) return
     resumeChecked.current = true
 
-    window.wizardAPI.loadState(projectPath).then((savedState) => {
+    window.wizardAPI.loadState(projectPath, outputFolder).then((savedState) => {
       if (savedState && typeof savedState === 'object' && 'stepStatuses' in (savedState as Record<string, unknown>)) {
         const { resumeWizard } = useStore.getState()
         const ws = savedState as import('../../types/projectWizard').ProjectWizardState
@@ -59,7 +60,7 @@ export default function ProjectWizard() {
         }
       }
     })
-  }, [isActive, projectPath])
+  }, [isActive, projectPath, outputFolder])
 
   // Persist wizard state on changes
   useEffect(() => {
@@ -69,15 +70,15 @@ export default function ProjectWizard() {
       persistRef.current = true
       return
     }
-    window.wizardAPI.saveState(projectPath, projectWizard)
-  }, [isActive, projectPath, currentStep, stepStatuses, projectWizard])
+    window.wizardAPI.saveState(projectPath, projectWizard, outputFolder)
+  }, [isActive, projectPath, outputFolder, currentStep, stepStatuses, projectWizard])
 
   // Start wizard file watcher when active
   useEffect(() => {
     if (!isActive || !projectPath) return
-    window.wizardAPI.startWatching(projectPath)
+    window.wizardAPI.startWatching(projectPath, outputFolder)
     return () => { window.wizardAPI.stopWatching() }
-  }, [isActive, projectPath])
+  }, [isActive, projectPath, outputFolder])
 
   // Listen for file changes to auto-detect step completion
   useEffect(() => {
@@ -91,7 +92,7 @@ export default function ProjectWizard() {
         if (status !== 'pending' && status !== 'active') continue
         if (!step.outputFile) continue
 
-        const filePath = joinPath(projectPath, '_bmad-output', 'planning-artifacts', step.outputFile)
+        const filePath = joinPath(projectPath, outputFolder, 'planning-artifacts', step.outputFile)
         const exists = await window.wizardAPI.checkFileExists(filePath)
         if (exists) {
           updateWizardStep(i, 'completed')
@@ -189,7 +190,7 @@ export default function ProjectWizard() {
     if (!projectPath) return
 
     // Delete wizard state file
-    await window.wizardAPI.deleteState(projectPath)
+    await window.wizardAPI.deleteState(projectPath, outputFolder)
     await window.wizardAPI.stopWatching()
 
     // Set the project as loaded
@@ -199,19 +200,20 @@ export default function ProjectWizard() {
     addRecentProject({
       path: projectPath,
       projectType: 'bmm',
-      name: projectName
+      name: projectName,
+      outputFolder
     })
 
     completeWizard()
-  }, [projectPath, setProjectPath, setProjectType, addRecentProject, completeWizard])
+  }, [projectPath, outputFolder, setProjectPath, setProjectType, addRecentProject, completeWizard])
 
   const handleCancel = useCallback(async () => {
     if (projectPath) {
-      await window.wizardAPI.deleteState(projectPath)
+      await window.wizardAPI.deleteState(projectPath, outputFolder)
       await window.wizardAPI.stopWatching()
     }
     cancelWizard()
-  }, [projectPath, cancelWizard])
+  }, [projectPath, outputFolder, cancelWizard])
 
   if (!isActive) return null
 

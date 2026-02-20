@@ -9,7 +9,7 @@ interface InstallStepProps {
 }
 
 export default function InstallStep({ onComplete }: InstallStepProps) {
-  const { projectWizard, appendWizardInstallLog, setWizardError, updateWizardStep } = useStore()
+  const { projectWizard, appendWizardInstallLog, setWizardError, updateWizardStep, outputFolder } = useStore()
   const logEndRef = useRef<HTMLDivElement>(null)
   const isInstalling = projectWizard.stepStatuses[0] === 'active'
   const isCompleted = projectWizard.stepStatuses[0] === 'completed'
@@ -51,12 +51,12 @@ export default function InstallStep({ onComplete }: InstallStepProps) {
     setWizardError(null)
     updateWizardStep(0, 'active')
 
-    const result = await window.wizardAPI.install(projectWizard.projectPath, false)
+    const result = await window.wizardAPI.install(projectWizard.projectPath, false, outputFolder)
     if (!result.success) {
       updateWizardStep(0, 'error')
       setWizardError(result.error || 'Failed to start installation')
     }
-  }, [projectWizard.projectPath, updateWizardStep, setWizardError])
+  }, [projectWizard.projectPath, outputFolder, updateWizardStep, setWizardError])
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, p: 2 }}>

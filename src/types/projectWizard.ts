@@ -27,6 +27,7 @@ export type WizardStepStatus = 'pending' | 'active' | 'completed' | 'skipped' | 
 export interface ProjectWizardState {
   isActive: boolean
   projectPath: string | null
+  outputFolder?: string // Custom output folder name (defaults to _bmad-output)
   currentStep: number
   stepStatuses: WizardStepStatus[]
   installProgress: string[]  // Log lines from npx install

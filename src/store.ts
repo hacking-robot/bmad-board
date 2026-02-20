@@ -13,6 +13,7 @@ export interface RecentProject {
   path: string
   projectType: ProjectType
   name: string
+  outputFolder?: string
 }
 
 const MAX_HISTORY_ENTRIES = 50
@@ -59,7 +60,7 @@ const electronStorage = {
       const parsed = JSON.parse(value)
       if (parsed.state) {
         // Only save the settings we care about
-        const { themeMode, aiTool, claudeModel, customEndpoint, projectPath, projectType, selectedEpicId, collapsedColumnsByEpic, agentHistory, recentProjects, notificationsEnabled, baseBranch, allowDirectEpicMerge, bmadInGitignore, bmadInGitignoreUserSet, storyOrder, enableHumanReviewColumn, humanReviewChecklist, humanReviewStates, humanReviewStories, maxThreadMessages, statusHistoryByStory, globalStatusHistory, lastViewedStatusHistoryAt, enableEpicBranches, disableGitBranching, fullCycleReviewCount } = parsed.state
+        const { themeMode, aiTool, claudeModel, customEndpoint, projectPath, projectType, outputFolder, selectedEpicId, collapsedColumnsByEpic, agentHistory, recentProjects, notificationsEnabled, baseBranch, allowDirectEpicMerge, bmadInGitignore, bmadInGitignoreUserSet, storyOrder, enableHumanReviewColumn, humanReviewChecklist, humanReviewStates, humanReviewStories, maxThreadMessages, statusHistoryByStory, globalStatusHistory, lastViewedStatusHistoryAt, enableEpicBranches, disableGitBranching, fullCycleReviewCount } = parsed.state
 
         // Don't persist full output - it can contain characters that break JSON
         // Just save metadata and a small summary
@@ -77,6 +78,7 @@ const electronStorage = {
           customEndpoint: customEndpoint || null,
           projectPath,
           projectType,
+          outputFolder: outputFolder || '_bmad-output',
           selectedEpicId,
           collapsedColumnsByEpic,
           agentHistory: sanitizedHistory,
@@ -112,6 +114,7 @@ const electronStorage = {
       customEndpoint: null,
       projectPath: null,
       projectType: null,
+      outputFolder: '_bmad-output',
       selectedEpicId: null,
       collapsedColumnsByEpic: {},
       agentHistory: [],
@@ -187,8 +190,10 @@ interface AppState {
   // Project
   projectPath: string | null
   projectType: ProjectType | null
+  outputFolder: string
   setProjectPath: (path: string | null) => void
   setProjectType: (type: ProjectType | null) => void
+  setOutputFolder: (folder: string) => void
 
   // BMAD Scan (NOT persisted — recalculated on each project load)
   bmadScanResult: BmadScanResult | null
@@ -257,9 +262,9 @@ interface AppState {
 
   // New Project Dialog
   newProjectDialogOpen: boolean
-  pendingNewProject: { path: string; projectType: ProjectType } | null
+  pendingNewProject: { path: string; projectType: ProjectType; outputFolder?: string } | null
   setNewProjectDialogOpen: (open: boolean) => void
-  setPendingNewProject: (project: { path: string; projectType: ProjectType } | null) => void
+  setPendingNewProject: (project: { path: string; projectType: ProjectType; outputFolder?: string } | null) => void
 
   // Agents
   agents: Record<string, Agent>
@@ -366,7 +371,7 @@ interface AppState {
 
   // Project Wizard
   projectWizard: ProjectWizardState
-  startProjectWizard: (projectPath: string) => void
+  startProjectWizard: (projectPath: string, outputFolder?: string) => void
   updateWizardStep: (stepIndex: number, status: WizardStepStatus) => void
   advanceWizardStep: () => void
   skipWizardStep: (stepIndex: number) => void
@@ -437,8 +442,10 @@ export const useStore = create<AppState>()(
       // Project
       projectPath: null,
       projectType: null,
+      outputFolder: '_bmad-output',
       setProjectPath: (path) => set({ projectPath: path }),
       setProjectType: (type) => set({ projectType: type }),
+      setOutputFolder: (folder) => set({ outputFolder: folder }),
 
       // BMAD Scan (NOT persisted)
       bmadScanResult: null,
@@ -1159,16 +1166,18 @@ export const useStore = create<AppState>()(
 
       // Project Wizard
       projectWizard: initialWizardState,
-      startProjectWizard: (projectPath) => set({
+      startProjectWizard: (projectPath, outputFolder) => set({
         projectWizard: {
           ...initialWizardState,
           isActive: true,
           projectPath,
+          outputFolder: outputFolder || '_bmad-output',
           stepStatuses: new Array(WIZARD_STEPS.length).fill('pending' as WizardStepStatus)
         },
         // Set project path/type so AgentChat can function during wizard
         projectPath,
         projectType: 'bmm' as ProjectType,
+        outputFolder: outputFolder || '_bmad-output',
         // Clear stale scan data from previous project so old agents don't show
         bmadScanResult: null,
         scannedWorkflowConfig: null

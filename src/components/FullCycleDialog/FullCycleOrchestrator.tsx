@@ -19,6 +19,7 @@ import { transformCommand } from '../../utils/commandTransform'
 export default function FullCycleOrchestrator() {
   const projectPath = useStore((state) => state.projectPath)
   const projectType = useStore((state) => state.projectType)
+  const outputFolder = useStore((state) => state.outputFolder)
   const stories = useStore((state) => state.stories)
   const aiTool = useStore((state) => state.aiTool)
   const customEndpoint = useStore((state) => state.customEndpoint)
@@ -82,7 +83,8 @@ export default function FullCycleOrchestrator() {
         agent.name,
         agent.role,
         thread.messages,
-        thread.branchName
+        thread.branchName,
+        outputFolder
       )
       appendFullCycleLog(`Saved ${agentId} chat to history`)
     }
@@ -91,7 +93,7 @@ export default function FullCycleOrchestrator() {
     clearChatThread(agentId)
     // Also clear global handler state for this agent
     clearAgentState(agentId)
-  }, [projectPath, agents, stories, clearChatThread, clearAgentState, appendFullCycleLog])
+  }, [projectPath, outputFolder, agents, stories, clearChatThread, clearAgentState, appendFullCycleLog])
 
   // Execute an agent step - uses global handler for message processing
   const executeAgentStep = useCallback(async (

@@ -32,7 +32,7 @@ export default function NewProjectDialog() {
   const handleStartWizard = () => {
     if (!pendingNewProject) return
     setNewProjectDialogOpen(false)
-    startProjectWizard(pendingNewProject.path)
+    startProjectWizard(pendingNewProject.path, pendingNewProject.outputFolder)
     setPendingNewProject(null)
   }
 

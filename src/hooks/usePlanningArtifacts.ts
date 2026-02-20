@@ -58,6 +58,7 @@ export function getArtifactTypeColor(type: PlanningArtifact['type']): string {
 export function usePlanningArtifacts() {
   const projectPath = useStore((state) => state.projectPath)
   const projectType = useStore((state) => state.projectType)
+  const outputFolder = useStore((state) => state.outputFolder)
   const [artifacts, setArtifacts] = useState<PlanningArtifact[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -76,8 +77,8 @@ export function usePlanningArtifacts() {
       // Order matters - first found wins for duplicate filenames
       const possiblePaths = [
         // Primary BMAD output locations
-        `${projectPath}/_bmad-output/planning-artifacts`,
-        `${projectPath}/_bmad-output`,
+        `${projectPath}/${outputFolder}/planning-artifacts`,
+        `${projectPath}/${outputFolder}`,
         // Alternative docs locations
         `${projectPath}/docs/planning-artifacts`,
         `${projectPath}/docs/planning`,
@@ -152,7 +153,7 @@ export function usePlanningArtifacts() {
     } finally {
       setLoading(false)
     }
-  }, [projectPath, projectType])
+  }, [projectPath, projectType, outputFolder])
 
   // Load artifacts when project changes
   useEffect(() => {
