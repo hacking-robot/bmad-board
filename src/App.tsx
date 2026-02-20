@@ -20,6 +20,7 @@ import StatusHistoryPanel from './components/StatusHistoryPanel/StatusHistoryPan
 import { FullCycleDialog, FullCycleOrchestrator, EpicCycleDialog, EpicCycleOrchestrator } from './components/FullCycleDialog'
 import GlobalChatHandler from './components/GlobalChatHandler'
 import { ProjectWizard } from './components/ProjectWizard'
+import ProjectWorkflowsDialog from './components/ProjectWorkflowsDialog/ProjectWorkflowsDialog'
 
 const AGENT_PANEL_WIDTH = 500
 
@@ -241,6 +242,7 @@ export default function App() {
             <FullCycleOrchestrator />
             <EpicCycleDialog />
             <EpicCycleOrchestrator />
+            <ProjectWorkflowsDialog />
           </GlobalChatHandler>
         )}
       </Box>

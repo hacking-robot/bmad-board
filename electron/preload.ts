@@ -73,7 +73,6 @@ export interface AppSettings {
   customEndpoint: CustomEndpointConfig | null
   projectPath: string | null
   projectType: ProjectType | null
-  bmadVersion: BmadVersion | null
   selectedEpicId: number | null
   collapsedColumnsByEpic: Record<string, string[]>
   agentHistory?: AgentHistoryEntry[]
@@ -102,8 +101,6 @@ export interface AppSettings {
   lastViewedStatusHistoryAt: number
 }
 
-export type BmadVersion = 'stable' | 'alpha'
-
 export interface FileAPI {
   selectDirectory: () => Promise<{ path?: string; projectType?: ProjectType; isNewProject?: boolean; error?: string } | null>
   readFile: (filePath: string) => Promise<{ content?: string; error?: string }>
@@ -115,7 +112,7 @@ export interface FileAPI {
   updateStoryStatus: (filePath: string, newStatus: string) => Promise<{ success: boolean; error?: string }>
   showNotification: (title: string, body: string) => Promise<void>
   checkBmadInGitignore: (projectPath: string) => Promise<{ inGitignore: boolean; error?: string }>
-  detectBmadVersion: (projectPath: string) => Promise<BmadVersion | null>
+  scanBmad: (projectPath: string) => Promise<unknown | null>
   onFilesChanged: (callback: () => void) => () => void
   onShowKeyboardShortcuts: (callback: () => void) => () => void
 }
@@ -131,7 +128,7 @@ const fileAPI: FileAPI = {
   updateStoryStatus: (filePath: string, newStatus: string) => ipcRenderer.invoke('update-story-status', filePath, newStatus),
   showNotification: (title: string, body: string) => ipcRenderer.invoke('show-notification', title, body),
   checkBmadInGitignore: (projectPath: string) => ipcRenderer.invoke('check-bmad-in-gitignore', projectPath),
-  detectBmadVersion: (projectPath: string) => ipcRenderer.invoke('detect-bmad-version', projectPath),
+  scanBmad: (projectPath: string) => ipcRenderer.invoke('scan-bmad', projectPath),
   onFilesChanged: (callback: () => void) => {
     const listener = () => callback()
     ipcRenderer.on('files-changed', listener)
@@ -405,6 +402,7 @@ export interface ChatAPI {
     tool?: AITool // AI tool to use (defaults to claude-code)
     model?: ClaudeModel // Claude model to use (only for claude-code)
     customEndpoint?: CustomEndpointConfig | null // Custom endpoint config (for custom-endpoint tool)
+    agentCommand?: string // Pre-resolved agent command from scan data
   }) => Promise<{ success: boolean; error?: string }>
   // Message sending - spawns new process per message, uses --resume for conversation continuity
   sendMessage: (options: {

@@ -256,15 +256,16 @@ class ChatAgentManager {
       tool?: AITool
       model?: ClaudeModel
       customEndpoint?: CustomEndpointConfig | null
+      agentCommand?: string // Pre-resolved agent command from scan data (preferred over hardcoded format)
     }
   ): { success: boolean; error?: string } {
     const tool = options.tool || 'claude-code'
-    
+
     // Check if tool supports headless operation
     if (!supportsHeadless(tool)) {
-      return { 
-        success: false, 
-        error: `${tool} does not support headless CLI operation. Use the IDE directly.` 
+      return {
+        success: false,
+        error: `${tool} does not support headless CLI operation. Use the IDE directly.`
       }
     }
 
@@ -273,9 +274,18 @@ class ChatAgentManager {
       return { success: false, error: `Unknown tool: ${tool}` }
     }
 
+    // Kill any existing process for this agent to prevent stale close events
+    const existingProc = this.runningProcesses.get(options.agentId)
+    if (existingProc) {
+      console.log('[ChatAgentManager] Killing existing process for agent before new load:', options.agentId)
+      try { existingProc.kill('SIGTERM') } catch { /* ignore */ }
+      this.runningProcesses.delete(options.agentId)
+    }
+
     try {
-      // Build the agent load prompt
-      const agentPrompt = `/bmad:${options.projectType}:agents:${options.agentId}`
+      // Use pre-resolved command if available, otherwise fall back to stable format
+      const agentPrompt = options.agentCommand
+        || `/bmad-agent-${options.projectType}-${options.agentId}`
       
       // Build tool-specific args
       let args: string[]
@@ -394,6 +404,14 @@ class ChatAgentManager {
       // Use 'close' instead of 'exit' to ensure all stdio streams are fully consumed
       // before processing. 'exit' can fire while stdout still has buffered data.
       proc.on('close', (code, signal) => {
+        // Guard against stale close events from old processes that were replaced.
+        // If another process has taken over this agentId, ignore this event.
+        const currentProc = this.runningProcesses.get(options.agentId)
+        if (currentProc && currentProc !== proc) {
+          console.log('[ChatAgentManager] Ignoring stale agent-load close event for:', options.agentId)
+          return
+        }
+
         // Flush any remaining data in the line buffer
         if (loadLineBuffer.trim()) {
           try {
@@ -428,6 +446,9 @@ class ChatAgentManager {
       // Handle errors
       proc.on('error', (error) => {
         console.error('[ChatAgentManager] Agent load error:', error)
+        // Only send error if this process is still the current one
+        const currentProc = this.runningProcesses.get(options.agentId)
+        if (currentProc && currentProc !== proc) return
         this.sendToRenderer('chat:agent-loaded', {
           agentId: options.agentId,
           code: -1,
@@ -472,9 +493,17 @@ class ChatAgentManager {
       return { success: false, error: `Unknown tool: ${tool}` }
     }
 
+    // Kill any existing process for this agent to prevent stale close events
+    const existingProc = this.runningProcesses.get(options.agentId)
+    if (existingProc) {
+      console.log('[ChatAgentManager] Killing existing process for agent before new message:', options.agentId)
+      try { existingProc.kill('SIGTERM') } catch { /* ignore */ }
+      this.runningProcesses.delete(options.agentId)
+    }
+
     try {
       const prompt = options.message
-      
+
       // Build tool-specific args
       let args: string[]
       let binaryName: string
@@ -593,6 +622,13 @@ class ChatAgentManager {
       // Use 'close' instead of 'exit' to ensure all stdio streams are fully consumed
       // before processing. 'exit' can fire while stdout still has buffered data.
       proc.on('close', (code, signal) => {
+        // Guard against stale close events from old processes that were replaced.
+        const currentProc = this.runningProcesses.get(options.agentId)
+        if (currentProc && currentProc !== proc) {
+          console.log('[ChatAgentManager] Ignoring stale message close event for:', options.agentId)
+          return
+        }
+
         // Flush any remaining data in the line buffer
         if (msgLineBuffer.trim()) {
           try {
@@ -628,6 +664,8 @@ class ChatAgentManager {
       // Handle errors
       proc.on('error', (error) => {
         console.error('[ChatAgentManager] Process error:', error)
+        const currentProc = this.runningProcesses.get(options.agentId)
+        if (currentProc && currentProc !== proc) return
         this.sendToRenderer('chat:exit', {
           agentId: options.agentId,
           code: -1,

@@ -104,6 +104,7 @@ export default function ProjectSwitcher() {
   }
 
   return (
+    <>
     <Box
       ref={triggerRef}
       onClick={handleClick}
@@ -290,7 +291,8 @@ export default function ProjectSwitcher() {
         </MenuItem>
       </Menu>
 
-      <NewProjectForm open={newProjectOpen} onClose={() => setNewProjectOpen(false)} />
     </Box>
+    <NewProjectForm open={newProjectOpen} onClose={() => setNewProjectOpen(false)} />
+    </>
   )
 }

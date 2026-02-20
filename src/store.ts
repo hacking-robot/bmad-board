@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import { Epic, Story, StoryContent, StoryStatus, Agent, ProjectType, BmadVersion, AgentHistoryEntry, AITool, ClaudeModel, CustomEndpointConfig, HumanReviewChecklistItem, StoryReviewState, ChatMessage, AgentThread, StatusChangeEntry, StatusChangeSource } from './types'
+import { Epic, Story, StoryContent, StoryStatus, Agent, ProjectType, AgentHistoryEntry, AITool, ClaudeModel, CustomEndpointConfig, HumanReviewChecklistItem, StoryReviewState, ChatMessage, AgentThread, StatusChangeEntry, StatusChangeSource } from './types'
+import type { BmadScanResult } from './types/bmadScan'
+import type { WorkflowConfig } from './types/flow'
 import { FullCycleState, FullCycleStepType, FullCycleStepStatus, initialFullCycleState, EpicCycleState, EpicStoryStatus, initialEpicCycleState } from './types/fullCycle'
 import { ProjectWizardState, WizardStepStatus, initialWizardState } from './types/projectWizard'
 import { WIZARD_STEPS } from './data/wizardSteps'
@@ -57,7 +59,7 @@ const electronStorage = {
       const parsed = JSON.parse(value)
       if (parsed.state) {
         // Only save the settings we care about
-        const { themeMode, aiTool, claudeModel, customEndpoint, projectPath, projectType, bmadVersion, selectedEpicId, collapsedColumnsByEpic, agentHistory, recentProjects, notificationsEnabled, baseBranch, allowDirectEpicMerge, bmadInGitignore, bmadInGitignoreUserSet, storyOrder, enableHumanReviewColumn, humanReviewChecklist, humanReviewStates, humanReviewStories, maxThreadMessages, statusHistoryByStory, globalStatusHistory, lastViewedStatusHistoryAt, enableEpicBranches, disableGitBranching, fullCycleReviewCount } = parsed.state
+        const { themeMode, aiTool, claudeModel, customEndpoint, projectPath, projectType, selectedEpicId, collapsedColumnsByEpic, agentHistory, recentProjects, notificationsEnabled, baseBranch, allowDirectEpicMerge, bmadInGitignore, bmadInGitignoreUserSet, storyOrder, enableHumanReviewColumn, humanReviewChecklist, humanReviewStates, humanReviewStories, maxThreadMessages, statusHistoryByStory, globalStatusHistory, lastViewedStatusHistoryAt, enableEpicBranches, disableGitBranching, fullCycleReviewCount } = parsed.state
 
         // Don't persist full output - it can contain characters that break JSON
         // Just save metadata and a small summary
@@ -75,7 +77,6 @@ const electronStorage = {
           customEndpoint: customEndpoint || null,
           projectPath,
           projectType,
-          bmadVersion: bmadVersion || null,
           selectedEpicId,
           collapsedColumnsByEpic,
           agentHistory: sanitizedHistory,
@@ -111,7 +112,6 @@ const electronStorage = {
       customEndpoint: null,
       projectPath: null,
       projectType: null,
-      bmadVersion: null,
       selectedEpicId: null,
       collapsedColumnsByEpic: {},
       agentHistory: [],
@@ -187,10 +187,14 @@ interface AppState {
   // Project
   projectPath: string | null
   projectType: ProjectType | null
-  bmadVersion: BmadVersion | null
   setProjectPath: (path: string | null) => void
   setProjectType: (type: ProjectType | null) => void
-  setBmadVersion: (version: BmadVersion | null) => void
+
+  // BMAD Scan (NOT persisted — recalculated on each project load)
+  bmadScanResult: BmadScanResult | null
+  scannedWorkflowConfig: WorkflowConfig | null
+  setBmadScanResult: (result: BmadScanResult | null) => void
+  setScannedWorkflowConfig: (config: WorkflowConfig | null) => void
 
   // Recent Projects
   recentProjects: RecentProject[]
@@ -356,6 +360,10 @@ interface AppState {
   resetEpicCycle: () => void
   retryEpicCycle: () => void
 
+  // Project Workflows Dialog
+  projectWorkflowsDialogOpen: boolean
+  setProjectWorkflowsDialogOpen: (open: boolean) => void
+
   // Project Wizard
   projectWizard: ProjectWizardState
   startProjectWizard: (projectPath: string) => void
@@ -429,10 +437,14 @@ export const useStore = create<AppState>()(
       // Project
       projectPath: null,
       projectType: null,
-      bmadVersion: null,
       setProjectPath: (path) => set({ projectPath: path }),
       setProjectType: (type) => set({ projectType: type }),
-      setBmadVersion: (version) => set({ bmadVersion: version }),
+
+      // BMAD Scan (NOT persisted)
+      bmadScanResult: null,
+      scannedWorkflowConfig: null,
+      setBmadScanResult: (result) => set({ bmadScanResult: result }),
+      setScannedWorkflowConfig: (config) => set({ scannedWorkflowConfig: config }),
 
       // Recent Projects
       recentProjects: [],
@@ -1141,6 +1153,10 @@ export const useStore = create<AppState>()(
         }
       }),
 
+      // Project Workflows Dialog
+      projectWorkflowsDialogOpen: false,
+      setProjectWorkflowsDialogOpen: (open) => set({ projectWorkflowsDialogOpen: open }),
+
       // Project Wizard
       projectWizard: initialWizardState,
       startProjectWizard: (projectPath) => set({
@@ -1152,7 +1168,10 @@ export const useStore = create<AppState>()(
         },
         // Set project path/type so AgentChat can function during wizard
         projectPath,
-        projectType: 'bmm' as ProjectType
+        projectType: 'bmm' as ProjectType,
+        // Clear stale scan data from previous project so old agents don't show
+        bmadScanResult: null,
+        scannedWorkflowConfig: null
       }),
       updateWizardStep: (stepIndex, status) => set((state) => {
         const newStatuses = [...state.projectWizard.stepStatuses]

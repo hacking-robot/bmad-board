@@ -7,6 +7,7 @@ import { spawn as spawnChild, spawnSync } from 'child_process'
 import { agentManager } from './agentManager'
 import { detectTool, detectAllTools, clearDetectionCache } from './cliToolManager'
 import { getAugmentedEnv } from './envUtils'
+import { scanBmadProject } from './bmadScanner'
 
 // Set app name (shows in menu bar on macOS)
 app.setName('BMad Board')
@@ -75,15 +76,12 @@ interface StatusChangeEntry {
   source: StatusChangeSource
 }
 
-type BmadVersion = 'stable' | 'alpha'
-
 interface AppSettings {
   themeMode: 'light' | 'dark'
   aiTool: AITool
   claudeModel: ClaudeModel
   projectPath: string | null
   projectType: ProjectType | null
-  bmadVersion: BmadVersion | null
   selectedEpicId: number | null
   collapsedColumnsByEpic: Record<string, string[]>
   agentHistory?: AgentHistoryEntry[]
@@ -117,7 +115,6 @@ const defaultSettings: AppSettings = {
   claudeModel: 'opus',
   projectPath: null,
   projectType: null,
-  bmadVersion: null,
   selectedEpicId: null,
   collapsedColumnsByEpic: {},
   agentHistory: [],
@@ -650,26 +647,15 @@ ipcMain.handle('get-agent-for-story', async (_, storyId: string) => {
   return agentManager.hasAgentForStory(storyId)
 })
 
-// Detect BMAD version (stable vs alpha) based on command file structure
-ipcMain.handle('detect-bmad-version', async (_, projectPath: string) => {
-  // Alpha uses nested: .claude/commands/bmad/bmm/ or .claude/commands/bmad/bmgd/
-  const nestedPath = join(projectPath, '.claude', 'commands', 'bmad')
-  if (existsSync(nestedPath)) {
-    return 'alpha'
+
+// Scan BMAD project files for agents, workflows, version info
+ipcMain.handle('scan-bmad', async (_, projectPath: string) => {
+  try {
+    return await scanBmadProject(projectPath)
+  } catch (error) {
+    console.error('Failed to scan BMAD project:', error)
+    return null
   }
-  // Stable uses flat: .claude/commands/bmad-agent-bmm-*.md
-  const flatPath = join(projectPath, '.claude', 'commands')
-  if (existsSync(flatPath)) {
-    try {
-      const files = await readdir(flatPath)
-      if (files.some(f => f.startsWith('bmad-'))) {
-        return 'stable'
-      }
-    } catch {
-      // Directory might not be readable
-    }
-  }
-  return null // No bmad detected
 })
 
 // Detect project type (bmm vs bmgd structure)
@@ -1607,6 +1593,7 @@ ipcMain.handle('chat-load-agent', async (_, options: {
   tool?: AITool
   model?: ClaudeModel
   customEndpoint?: { name: string; baseUrl: string; apiKey: string; modelName: string } | null
+  agentCommand?: string
 }) => {
   chatAgentManager.setMainWindow(mainWindow)
   return chatAgentManager.loadAgent(options)

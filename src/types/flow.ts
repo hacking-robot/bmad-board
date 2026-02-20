@@ -38,10 +38,18 @@ export interface AgentDefinition {
   examplePrompts: string[]
 }
 
+export interface ProjectWorkflowPhase {
+  label: string
+  icon: string
+  description?: string
+  workflows: NextStepAction[]
+}
+
 export interface WorkflowConfig {
   version: string
   statuses: StatusDefinition[]
   transitions: StatusTransition[]
   statusActions: Record<StoryStatus, StatusActions>
   agents: AgentDefinition[]
+  projectWorkflows?: Record<string, ProjectWorkflowPhase>
 }

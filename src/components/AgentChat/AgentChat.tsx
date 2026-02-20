@@ -70,7 +70,8 @@ export default function AgentChat() {
       }
     }
 
-    // Clear the thread
+    // Cancel any running process and clear the thread
+    window.chatAPI.cancelMessage(selectedChatAgent).catch(() => {})
     clearChatThread(selectedChatAgent)
     window.chatAPI.clearThread(selectedChatAgent)
   }, [selectedChatAgent, chatThreads, agents, projectPath, stories, clearChatThread])

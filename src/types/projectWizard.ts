@@ -11,9 +11,13 @@ export interface WizardStep {
   type: WizardStepType
   description: string
   required: boolean
+  // Dynamic command resolution (same pattern as overlay/statusActions)
+  commandRef?: string
+  commandModule?: string
+  commandType?: 'workflows' | 'agents'
+  // Fallback display values (used before scan data is available)
   agentId?: string
   agentName?: string
-  command?: string
   outputFile?: string  // File to check for completion (relative to _bmad-output/planning-artifacts/)
   outputDir?: string   // Directory to check for completion
 }

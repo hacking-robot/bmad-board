@@ -1,21 +1,16 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { Box, Button, Typography, CircularProgress, Alert, ToggleButtonGroup, ToggleButton, Stack } from '@mui/material'
+import { useEffect, useRef, useCallback } from 'react'
+import { Box, Button, Typography, CircularProgress, Alert } from '@mui/material'
 import DownloadIcon from '@mui/icons-material/Download'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
-import NewReleasesIcon from '@mui/icons-material/NewReleases'
-import VerifiedIcon from '@mui/icons-material/Verified'
 import { useStore } from '../../store'
-
-import type { BmadVersion } from '../../types'
 
 interface InstallStepProps {
   onComplete: () => void
 }
 
 export default function InstallStep({ onComplete }: InstallStepProps) {
-  const { projectWizard, appendWizardInstallLog, setWizardError, updateWizardStep, setBmadVersion } = useStore()
+  const { projectWizard, appendWizardInstallLog, setWizardError, updateWizardStep } = useStore()
   const logEndRef = useRef<HTMLDivElement>(null)
-  const [selectedVersion, setSelectedVersion] = useState<BmadVersion>('stable')
   const isInstalling = projectWizard.stepStatuses[0] === 'active'
   const isCompleted = projectWizard.stepStatuses[0] === 'completed'
   const hasError = projectWizard.stepStatuses[0] === 'error'
@@ -36,7 +31,6 @@ export default function InstallStep({ onComplete }: InstallStepProps) {
 
     const cleanupComplete = window.wizardAPI.onInstallComplete((event) => {
       if (event.success) {
-        setBmadVersion(selectedVersion)
         updateWizardStep(0, 'completed')
         onComplete()
       } else {
@@ -49,7 +43,7 @@ export default function InstallStep({ onComplete }: InstallStepProps) {
       cleanupOutput()
       cleanupComplete()
     }
-  }, [appendWizardInstallLog, updateWizardStep, setWizardError, setBmadVersion, selectedVersion, onComplete])
+  }, [appendWizardInstallLog, updateWizardStep, setWizardError, onComplete])
 
   const handleInstall = useCallback(async () => {
     if (!projectWizard.projectPath) return
@@ -57,12 +51,12 @@ export default function InstallStep({ onComplete }: InstallStepProps) {
     setWizardError(null)
     updateWizardStep(0, 'active')
 
-    const result = await window.wizardAPI.install(projectWizard.projectPath, selectedVersion === 'alpha')
+    const result = await window.wizardAPI.install(projectWizard.projectPath, false)
     if (!result.success) {
       updateWizardStep(0, 'error')
       setWizardError(result.error || 'Failed to start installation')
     }
-  }, [projectWizard.projectPath, selectedVersion, updateWizardStep, setWizardError])
+  }, [projectWizard.projectPath, updateWizardStep, setWizardError])
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, p: 2 }}>
@@ -72,75 +66,20 @@ export default function InstallStep({ onComplete }: InstallStepProps) {
       </Typography>
 
       {!isInstalling && !isCompleted && !hasError && (
-        <Stack spacing={2}>
-          {/* Version selector */}
-          <Box>
-            <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
-              Version
-            </Typography>
-            <ToggleButtonGroup
-              value={selectedVersion}
-              exclusive
-              onChange={(_, value) => { if (value) setSelectedVersion(value) }}
-              size="small"
-              fullWidth
-            >
-              <ToggleButton value="stable" sx={{ textTransform: 'none', gap: 0.5 }}>
-                <VerifiedIcon sx={{ fontSize: 16 }} />
-                Stable
-              </ToggleButton>
-              <ToggleButton value="alpha" sx={{ textTransform: 'none', gap: 0.5 }}>
-                <NewReleasesIcon sx={{ fontSize: 16 }} />
-                Alpha
-              </ToggleButton>
-            </ToggleButtonGroup>
-            <Typography variant="caption" color="text.disabled" sx={{ mt: 0.5, display: 'block' }}>
-              {selectedVersion === 'stable'
-                ? 'Production release - recommended for most projects'
-                : 'Latest pre-release - requires manual install via terminal'}
-            </Typography>
-          </Box>
-
-          {selectedVersion === 'alpha' && (
-            <Alert severity="warning" sx={{ fontSize: '0.8rem' }}>
-              The alpha version requires interactive terminal input. Run this in your terminal:
-              <Box component="code" sx={{ display: 'block', mt: 0.5, p: 0.5, bgcolor: 'action.hover', borderRadius: 0.5, fontSize: '0.75rem' }}>
-                cd {projectWizard.projectPath}<br />
-                npx bmad-method@alpha install
-              </Box>
-              Then click "Mark as Installed" below when done.
-            </Alert>
-          )}
-
-          {selectedVersion === 'alpha' ? (
-            <Button
-              variant="outlined"
-              startIcon={<CheckCircleIcon />}
-              onClick={() => {
-                setBmadVersion('alpha')
-                updateWizardStep(0, 'completed')
-                onComplete()
-              }}
-            >
-              Mark as Installed
-            </Button>
-          ) : (
-            <Button
-              variant="contained"
-              startIcon={<DownloadIcon />}
-              onClick={handleInstall}
-            >
-              Install BMAD Method
-            </Button>
-          )}
-        </Stack>
+        <Button
+          variant="contained"
+          startIcon={<DownloadIcon />}
+          onClick={handleInstall}
+        >
+          Install BMAD Method
+        </Button>
       )}
 
       {isInstalling && (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <CircularProgress size={20} />
           <Typography variant="body2" color="primary">
-            Installing{selectedVersion === 'alpha' ? ' alpha' : ''}...
+            Installing...
           </Typography>
         </Box>
       )}

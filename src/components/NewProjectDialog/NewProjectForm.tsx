@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import {
   Dialog,
   DialogTitle,
@@ -21,14 +21,23 @@ interface NewProjectFormProps {
 }
 
 export default function NewProjectForm({ open, onClose }: NewProjectFormProps) {
-  const { startProjectWizard } = useStore()
-  const [parentPath, setParentPath] = useState<string | null>(null)
+  const { startProjectWizard, projectPath } = useStore()
+  // Preselect parent folder of the currently opened project
+  const defaultParent = projectPath ? projectPath.replace(/\/[^/]+$/, '') : null
+  const [parentPath, setParentPath] = useState<string | null>(defaultParent)
   const [projectName, setProjectName] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
 
+  // When dialog opens, preselect parent of current project
+  useEffect(() => {
+    if (open && defaultParent) {
+      setParentPath(defaultParent)
+    }
+  }, [open, defaultParent])
+
   const reset = useCallback(() => {
-    setParentPath(null)
+    setParentPath(defaultParent)
     setProjectName('')
     setError(null)
     setCreating(false)

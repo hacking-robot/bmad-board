@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useMemo } from 'react'
 import { Box, Typography, Button, Stack, Divider, IconButton, Tooltip, Alert } from '@mui/material'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import CheckIcon from '@mui/icons-material/Check'
@@ -6,6 +6,10 @@ import CloseIcon from '@mui/icons-material/Close'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import { useStore } from '../../store'
 import { WIZARD_STEPS } from '../../data/wizardSteps'
+import { resolveCommand, mergeWorkflowConfig } from '../../utils/workflowMerge'
+import { useWorkflow } from '../../hooks/useWorkflow'
+import { transformCommand } from '../../utils/commandTransform'
+import type { BmadScanResult } from '../../types/bmadScan'
 import WizardStepper from './WizardStepper'
 import InstallStep from './InstallStep'
 
@@ -27,9 +31,15 @@ export default function ProjectWizard() {
     addRecentProject,
     setViewMode,
     setSelectedChatAgent,
-    setPendingChatMessage
+    setPendingChatMessage,
+    clearChatThread,
+    bmadScanResult,
+    setBmadScanResult,
+    setScannedWorkflowConfig,
+    aiTool
   } = useStore()
 
+  const { getAgentName } = useWorkflow()
   const { isActive, projectPath, currentStep, stepStatuses, error } = projectWizard
   const persistRef = useRef(false)
   const resumeChecked = useRef(false)
@@ -92,24 +102,76 @@ export default function ProjectWizard() {
     return cleanup
   }, [isActive, projectPath, stepStatuses, updateWizardStep])
 
+  // Enrich wizard steps with dynamically resolved agent names from scan data
+  const resolvedSteps = useMemo(() => {
+    return WIZARD_STEPS.map(step => {
+      if (step.type !== 'agent' || !step.commandRef || !bmadScanResult) return step
+      const resolved = resolveCommand(step.commandRef, step.commandModule || '', step.commandType || 'workflows', bmadScanResult, step.agentId)
+      if (!resolved) return step
+      return {
+        ...step,
+        agentId: resolved.agentId,
+        agentName: getAgentName(resolved.agentId)
+      }
+    })
+  }, [bmadScanResult, getAgentName])
+
   const handleInstallComplete = useCallback(() => {
     advanceWizardStep()
-  }, [advanceWizardStep])
+    // Trigger BMAD scan after install so subsequent steps can resolve dynamically
+    if (projectPath) {
+      console.log('[Wizard] Install complete, scanning:', projectPath)
+      window.fileAPI.scanBmad(projectPath).then((scanResult) => {
+        const result = scanResult as BmadScanResult | null
+        console.log('[Wizard] Scan result:', result ? `${result.agents.length} agents` : 'null')
+        setBmadScanResult(result)
+        if (result) {
+          const { projectType: currentProjectType } = useStore.getState()
+          console.log('[Wizard] Merging with projectType:', currentProjectType)
+          const merged = mergeWorkflowConfig(result, currentProjectType)
+          console.log('[Wizard] Merged config agents:', merged.agents.length)
+          setScannedWorkflowConfig(merged)
+        }
+      }).catch((err) => {
+        console.error('[Wizard] Scan failed:', err)
+      })
+    } else {
+      console.warn('[Wizard] No projectPath for scan')
+    }
+  }, [advanceWizardStep, projectPath, setBmadScanResult, setScannedWorkflowConfig])
 
   const handleStartAgentStep = useCallback((stepIndex: number) => {
     const step = WIZARD_STEPS[stepIndex]
-    if (!step || step.type !== 'agent' || !step.agentId || !step.command) return
+    if (!step || step.type !== 'agent') return
 
+    // Resolve command dynamically from scan data
+    let agentId = step.agentId
+    let command: string | undefined
+
+    if (step.commandRef && bmadScanResult) {
+      const resolved = resolveCommand(step.commandRef, step.commandModule || '', step.commandType || 'workflows', bmadScanResult, step.agentId)
+      if (resolved) {
+        agentId = resolved.agentId
+        command = transformCommand(resolved.command, aiTool)
+      }
+    }
+
+    if (!agentId) return
+
+    // If command couldn't be resolved from scan, open agent chat without a pre-filled command
     updateWizardStep(stepIndex, 'active')
-
-    // Switch to chat view with the correct agent and command
-    setSelectedChatAgent(step.agentId)
+    // Cancel any running process for this agent before clearing
+    window.chatAPI.cancelMessage(agentId).catch(() => {})
+    clearChatThread(agentId)
+    setSelectedChatAgent(agentId)
     setViewMode('chat')
-    setPendingChatMessage({
-      agentId: step.agentId,
-      message: step.command
-    })
-  }, [updateWizardStep, setSelectedChatAgent, setViewMode, setPendingChatMessage])
+    if (command) {
+      setPendingChatMessage({
+        agentId,
+        message: command
+      })
+    }
+  }, [updateWizardStep, clearChatThread, setSelectedChatAgent, setViewMode, setPendingChatMessage, bmadScanResult, aiTool])
 
   const handleMarkStepComplete = useCallback((stepIndex: number) => {
     updateWizardStep(stepIndex, 'completed')
@@ -153,7 +215,7 @@ export default function ProjectWizard() {
 
   if (!isActive) return null
 
-  const currentStepData = WIZARD_STEPS[currentStep]
+  const currentStepData = resolvedSteps[currentStep]
   const isInstallStep = currentStep === 0
   const allRequiredDone = WIZARD_STEPS.every((step, i) =>
     !step.required || stepStatuses[i] === 'completed'
@@ -196,7 +258,7 @@ export default function ProjectWizard() {
       {/* Stepper */}
       <Box sx={{ flex: 1, overflow: 'auto' }}>
         <WizardStepper
-          steps={WIZARD_STEPS}
+          steps={resolvedSteps}
           currentStep={currentStep}
           stepStatuses={stepStatuses}
           onSkipStep={handleSkipStep}

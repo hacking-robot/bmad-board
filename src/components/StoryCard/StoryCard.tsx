@@ -288,7 +288,8 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
     e.stopPropagation()
     // Close the menu
     handleMenuClose()
-    // Clear the chat thread for a fresh start
+    // Cancel any running process and clear the chat thread for a fresh start
+    window.chatAPI.cancelMessage(agentIdParam).catch(() => {})
     clearChatThread(agentIdParam)
     // Switch to chat view
     setViewMode('chat')

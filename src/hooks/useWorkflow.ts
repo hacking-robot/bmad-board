@@ -1,35 +1,30 @@
 import { useMemo } from 'react'
-import flowBmmAlpha from '../data/flow-bmm.json'
-import flowBmmStable from '../data/flow-bmm-stable.json'
+import flowBmm from '../data/flow-bmm-stable.json'
 import flowBmgd from '../data/flow-bmgd.json'
 import { useStore } from '../store'
-import type { StoryStatus, ProjectType, BmadVersion } from '../types'
-import type { WorkflowConfig, StatusDefinition, AgentDefinition, NextStepAction } from '../types/flow'
+import type { StoryStatus, ProjectType } from '../types'
+import type { WorkflowConfig, StatusDefinition, AgentDefinition, NextStepAction, ProjectWorkflowPhase } from '../types/flow'
 
 // Cast the imported JSON to our typed configs
-const workflowBmmAlpha = flowBmmAlpha as unknown as WorkflowConfig
-const workflowBmmStable = flowBmmStable as unknown as WorkflowConfig
+const workflowBmm = flowBmm as unknown as WorkflowConfig
 const workflowBmgd = flowBmgd as unknown as WorkflowConfig
 
-// Get workflow config for a specific project type and version
-function getWorkflowForType(projectType: ProjectType | null, bmadVersion: BmadVersion | null): WorkflowConfig {
+// Get workflow config for a specific project type
+function getWorkflowForType(projectType: ProjectType | null): WorkflowConfig {
   if (projectType === 'bmgd') {
-    return workflowBmgd // BMGD is alpha-only
+    return workflowBmgd
   }
-  if (bmadVersion === 'stable') {
-    return workflowBmmStable
-  }
-  // Default to alpha BMM
-  return workflowBmmAlpha
+  return workflowBmm
 }
 
 export function useWorkflow() {
   const projectType = useStore((state) => state.projectType)
-  const bmadVersion = useStore((state) => state.bmadVersion)
+  const scannedConfig = useStore((state) => state.scannedWorkflowConfig)
 
-  // Memoize the helper functions based on project type and version
+  // Memoize the helper functions based on project type
   const helpers = useMemo(() => {
-    const workflow = getWorkflowForType(projectType, bmadVersion)
+    // Prefer scanned config when available, fall back to static
+    const workflow = scannedConfig || getWorkflowForType(projectType)
 
     return {
       // Get all statuses
@@ -85,17 +80,22 @@ export function useWorkflow() {
       // Check if a transition is valid
       isValidTransition: (from: StoryStatus, to: StoryStatus): boolean => {
         return workflow.transitions.some((t) => t.from === from && t.to === to)
+      },
+
+      // Get project-level workflows grouped by phase
+      getProjectWorkflows: (): Record<string, ProjectWorkflowPhase> => {
+        return workflow.projectWorkflows || {}
       }
     }
-  }, [projectType, bmadVersion])
+  }, [projectType, scannedConfig])
 
   return helpers
 }
 
 // Export functions for direct access when needed
-export function getWorkflow(projectType: ProjectType | null, bmadVersion: BmadVersion | null = null): WorkflowConfig {
-  return getWorkflowForType(projectType, bmadVersion)
+export function getWorkflow(projectType: ProjectType | null): WorkflowConfig {
+  return getWorkflowForType(projectType)
 }
 
 // Export workflow configs for components that need direct access
-export { workflowBmmAlpha, workflowBmmStable, workflowBmgd }
+export { workflowBmm, workflowBmgd }

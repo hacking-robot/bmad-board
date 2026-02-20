@@ -1,6 +1,6 @@
 <div align="center">
   <img src="assets/banner.svg" alt="BMad Board" width="500">
-  <p><strong>Visualize your sprint progress with a clean, intuitive interface</strong></p>
+  <p><strong>Visualize and automate your BMAD sprint workflow with AI-powered agents</strong></p>
 
   ![License](https://img.shields.io/badge/license-MIT-blue) ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey) ![Electron](https://img.shields.io/badge/electron-33-47848F)
 </div>
@@ -11,28 +11,44 @@
 
 ## Features
 
-- **Sprint Board**: Visualize stories across columns (Backlog, Ready for Dev, In Progress, Review, Done)
+### Sprint Board
+- **Kanban Board**: Visualize stories across columns (Backlog, Ready for Dev, In Progress, Review, Done)
 - **Epic Organization**: Stories grouped by epic with color-coded badges
 - **Story Details**: View acceptance criteria, tasks, subtasks, and file changes
 - **Search & Filter**: Find stories by text or filter by epic
-- **Dark/Light Mode**: Toggle between themes
-- **Auto-Refresh**: File watching detects changes to story files
 - **Collapsible Columns**: Minimize columns to focus on active work
-- **Command Palette**: Quick access to actions with keyboard shortcuts
-- **AI Agent Integration**: See which AI teammates are working on stories with real-time indicators
-- **Agent Chat Sidebar**: Sliding chat panel to communicate with AI agents (`Cmd+Shift+A`)
-- **Git Integration**: View uncommitted changes, switch branches, and see git diffs for stories
+- **Status History**: Timeline of story status changes with source tracking (manual vs agent)
+
+### AI Agent Automation
+- **Full Cycle**: One-click end-to-end story processing — creates story file, branches, implements, reviews, commits, and merges
+- **Epic Cycle**: Batch-run the full cycle across all backlog stories in an epic with configurable review rounds
+- **Agent Chat**: Sliding sidebar panel to communicate with AI agents (`Cmd+Shift+A`)
+- **Project Workflows**: Browse and launch available BMAD workflows directly from the UI
+- **AI Tool Support**: Works with Claude Code, Anthropic API, or custom API endpoints
+- **Smart Auto-Response**: Orchestrator detects agent prompts and provides intelligent responses during automation
+
+### Project Management
+- **Project Wizard**: Guided new project setup with BMAD installation and configuration
 - **Project Switcher**: Quickly switch between multiple BMAD projects
+- **BMAD Scanner**: Auto-discovers agents, workflows, and version info from project files
+- **Planning Artifacts**: View epics and planning documents within the app
+
+### Developer Experience
+- **Dark/Light Mode**: Toggle between themes
+- **Command Palette**: Quick access to actions with keyboard shortcuts
+- **Git Integration**: Branch creation/switching, commits, diffs, and uncommitted changes view
+- **Auto-Refresh**: File watching detects changes to story files
 - **Keyboard Shortcuts**: Comprehensive shortcuts for efficient navigation
 
 ## Compatibility
 
 | Requirement | Supported |
 |-------------|-----------|
-| BMAD Version | **BMAD 6** |
-| Project Types | BMAD, BMAD Game |
+| BMAD Version | **BMAD 6** (alpha & stable) |
+| Project Types | BMM (BMAD Method), BMGD (BMAD Game Dev) |
+| AI Tools | Claude Code, Anthropic API, Custom Endpoints |
 
-> **Note**: BMad Board has only be tested on **BMAD 6** projects. Earlier versions of BMAD may not work. Only **BMAD** and **BMAD Game** project types have been tested.
+> **Note**: BMad Board has only been tested on **BMAD 6** projects. Earlier versions of BMAD may not work. Both **alpha** (colon-separated commands) and **stable** (hyphen-separated commands) formats are supported.
 
 ## Download
 
@@ -69,22 +85,34 @@ npm run build
 4. Click a story card to view full details
 5. Use `Cmd+P` to open the command palette for quick actions
 
-### Project Structure Requirements
+### Supported Project Structures
 
-Your BMAD project should have:
-
+**BMM (BMAD Method)** projects:
 ```
 your-project/
+├── _bmad/                    # BMAD agent & workflow definitions
 ├── docs/
-│   ├── epics/
-│   │   ├── epic-1.md
-│   │   └── epic-2.md
-│   └── stories/
-│       ├── epic-1/
-│       │   ├── 1-1-story-slug.md
-│       │   └── 1-2-another-story.md
-│       └── epic-2/
-│           └── 2-1-story-name.md
+│   ├── planning-artifacts/
+│   │   ├── epics.md          # Epic definitions
+│   │   └── stories/
+│   │       ├── story-1.md
+│   │       └── story-2.md
+│   └── implementation-artifacts/
+│       └── sprint-status.yaml  # Story status tracking
+```
+
+**BMGD (BMAD Game Dev)** projects:
+```
+your-project/
+├── _bmad/                    # BMAD agent & workflow definitions
+├── epics.md                  # Epic definitions at root
+└── docs/
+    └── stories/
+        ├── epic-1/
+        │   ├── 1-1-story-slug.md
+        │   └── 1-2-another-story.md
+        └── epic-2/
+            └── 2-1-story-name.md
 ```
 
 ### Story Status
@@ -115,6 +143,7 @@ npm run typecheck        # Type checking
 - MUI (Material UI) 6
 - Zustand for state management
 - Vite + electron-builder
+- Emotion (CSS-in-JS)
 
 ## License
 

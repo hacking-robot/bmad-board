@@ -116,26 +116,39 @@ export default function WizardStepper({ steps, currentStep, stepStatuses, onSkip
                 {getStepTypeIcon(step)}
               </Box>
 
-              {/* Step name */}
-              <Typography
-                variant="body2"
-                sx={{
-                  flex: 1,
-                  fontWeight: isActive ? 600 : 400,
-                  color: status === 'error' ? 'error.main' : status === 'skipped' ? 'text.disabled' : isActive ? 'text.primary' : isPast ? 'text.secondary' : 'text.secondary',
-                  textDecoration: status === 'skipped' ? 'line-through' : 'none',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap'
-                }}
-              >
-                {step.name}
+              {/* Step name + agent */}
+              <Box sx={{ flex: 1, overflow: 'hidden' }}>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    fontWeight: isActive ? 600 : 400,
+                    color: status === 'error' ? 'error.main' : status === 'skipped' ? 'text.disabled' : isActive ? 'text.primary' : isPast ? 'text.secondary' : 'text.secondary',
+                    textDecoration: status === 'skipped' ? 'line-through' : 'none',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    lineHeight: step.agentName ? 1.3 : 1.5
+                  }}
+                >
+                  {step.name}
+                </Typography>
                 {step.agentName && (
-                  <Typography component="span" variant="caption" sx={{ ml: 0.5, color: 'text.disabled' }}>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      display: 'block',
+                      color: isActive ? 'primary.main' : 'text.disabled',
+                      fontStyle: 'italic',
+                      lineHeight: 1.2,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
                     {step.agentName}
                   </Typography>
                 )}
-              </Typography>
+              </Box>
 
               {/* Required badge */}
               {step.required && status === 'pending' && (

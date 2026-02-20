@@ -4,6 +4,8 @@ import { parseSprintStatus } from '../utils/parseSprintStatus'
 import { parseEpicsUnified, getAllStories } from '../utils/parseEpicsUnified'
 import { parseStoryContent } from '../utils/parseStory'
 import { getEpicsFullPath, getSprintStatusFullPath } from '../utils/projectTypes'
+import { mergeWorkflowConfig } from '../utils/workflowMerge'
+import type { BmadScanResult } from '../types/bmadScan'
 
 export function useProjectData() {
   const {
@@ -24,8 +26,12 @@ export function useProjectData() {
     setNewProjectDialogOpen,
     setPendingNewProject,
     setBmadInGitignore,
-    setBmadVersion
+    setBmadScanResult,
+    setScannedWorkflowConfig,
+    projectWizard
   } = useStore()
+
+  const wizardIsActive = projectWizard.isActive
 
   const selectProject = useCallback(async () => {
     const result = await window.fileAPI.selectDirectory()
@@ -80,8 +86,7 @@ export function useProjectData() {
     if (!projectPath || !projectType) return
 
     // Skip loading if wizard is active (project artifacts don't exist yet)
-    const { projectWizard } = useStore.getState()
-    if (projectWizard.isActive) return
+    if (wizardIsActive) return
 
     // Get current state values (don't use reactive values to avoid infinite loops)
     const { stories: currentStories, notificationsEnabled, isUserDragging, setIsUserDragging } = useStore.getState()
@@ -199,7 +204,7 @@ export function useProjectData() {
         setIsUserDragging(false)
       }, 2000)
     }
-  }, [projectPath, projectType, setEpics, setStories, setLoading, setError, setLastRefreshed])
+  }, [projectPath, projectType, wizardIsActive, setEpics, setStories, setLoading, setError, setLastRefreshed])
 
   const loadStoryContent = useCallback(async (story: typeof selectedStory) => {
     if (!story?.filePath) {
@@ -233,11 +238,15 @@ export function useProjectData() {
   }, [loadProjectData, loadStoryContent])
 
   // Load project data when path changes or after hydration
+  // Also re-runs when wizard deactivates (wizardIsActive flips false → triggers scan + load)
   useEffect(() => {
+    console.log('[useProjectData] Effect triggered:', { _hasHydrated, projectPath: !!projectPath, projectType, wizardIsActive })
     if (_hasHydrated && projectPath && projectType) {
       // Skip if wizard is active (project artifacts don't exist yet)
-      const { projectWizard } = useStore.getState()
-      if (projectWizard.isActive) return
+      if (wizardIsActive) {
+        console.log('[useProjectData] Skipping — wizard is active')
+        return
+      }
 
       // Check if this is an incomplete project with a saved wizard state
       // This happens when the app restarts mid-wizard (projectPath persisted but wizard state isn't)
@@ -259,9 +268,24 @@ export function useProjectData() {
         loadProjectData()
       })
 
-      // Detect BMAD version (stable vs alpha) based on command file structure
-      window.fileAPI.detectBmadVersion(projectPath).then((version) => {
-        setBmadVersion(version)
+      // Scan BMAD project files for agents, workflows, and version info
+      console.log('[useProjectData] Scanning BMAD:', projectPath)
+      window.fileAPI.scanBmad(projectPath).then((scanResult) => {
+        const result = scanResult as BmadScanResult | null
+        console.log('[useProjectData] Scan result:', result ? `${result.agents.length} agents` : 'null')
+        setBmadScanResult(result)
+        if (result) {
+          const { projectType: currentProjectType } = useStore.getState()
+          const merged = mergeWorkflowConfig(result, currentProjectType)
+          console.log('[useProjectData] Merged config agents:', merged.agents.length)
+          setScannedWorkflowConfig(merged)
+        } else {
+          setScannedWorkflowConfig(null)
+        }
+      }).catch((err) => {
+        console.error('[useProjectData] Scan failed:', err)
+        setBmadScanResult(null)
+        setScannedWorkflowConfig(null)
       })
 
       // Check if bmad folders are in .gitignore (affects branch restrictions)
@@ -277,15 +301,14 @@ export function useProjectData() {
     }
   // Note: setBmadInGitignore is stable (Zustand setter) and intentionally omitted from deps
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [_hasHydrated, projectPath, projectType, loadProjectData])
+  }, [_hasHydrated, projectPath, projectType, wizardIsActive, loadProjectData])
 
   // File watcher setup - separate effect with minimal deps to avoid repeated start/stop
   useEffect(() => {
     if (!_hasHydrated || !projectPath || !projectType) return
 
     // Skip file watching if wizard is active (wizard has its own watcher)
-    const { projectWizard } = useStore.getState()
-    if (projectWizard.isActive) return
+    if (wizardIsActive) return
 
     // Start watching for file changes
     window.fileAPI.startWatching(projectPath, projectType)
@@ -313,7 +336,7 @@ export function useProjectData() {
       setIsWatching(false)
     }
   // Only re-run when project path/type actually changes, not on callback recreation
-  }, [_hasHydrated, projectPath, projectType, setIsWatching])
+  }, [_hasHydrated, projectPath, projectType, wizardIsActive, setIsWatching])
 
   // Load story content when selected story changes
   useEffect(() => {
