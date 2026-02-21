@@ -12,7 +12,8 @@ import {
 } from '@mui/material'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import CheckIcon from '@mui/icons-material/Check'
-import CompareArrowsIcon from '@mui/icons-material/CompareArrows'
+import CallSplitIcon from '@mui/icons-material/CallSplit'
+import CommitIcon from '@mui/icons-material/Commit'
 import { useStore } from '../../store'
 
 export default function UncommittedChanges() {
@@ -137,8 +138,8 @@ export default function UncommittedChanges() {
 
         <Chip
           size="small"
-          icon={<CompareArrowsIcon sx={{ fontSize: 14 }} />}
-          label="Uncommitted"
+          icon={<CommitIcon sx={{ fontSize: 14 }} />}
+          label="Commit Changes"
           onClick={handleClick}
           color="warning"
           variant="outlined"
@@ -175,9 +176,12 @@ export default function UncommittedChanges() {
           }
         }}
       >
-        <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
-          Commit Changes
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
+          <CommitIcon sx={{ fontSize: 18 }} />
+          <Typography variant="subtitle2" fontWeight={600}>
+            Commit Changes
+          </Typography>
+        </Box>
 
         {matchingStory ? (
           <Alert severity="info" sx={{ mb: 1.5, py: 0.5 }}>
@@ -237,7 +241,7 @@ export default function UncommittedChanges() {
               openGitDiffPanel(branchName)
               handleClose()
             }}
-            startIcon={<CompareArrowsIcon />}
+            startIcon={<CallSplitIcon />}
             sx={{ flex: 1 }}
           >
             View Diff
@@ -247,7 +251,7 @@ export default function UncommittedChanges() {
             size="small"
             onClick={handleCommit}
             disabled={committing}
-            startIcon={committing ? <CircularProgress size={14} /> : undefined}
+            startIcon={committing ? <CircularProgress size={14} /> : <CommitIcon />}
             sx={{ flex: 1 }}
           >
             {committing ? 'Committing...' : 'Commit'}

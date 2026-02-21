@@ -126,6 +126,10 @@ const electronStorage = {
           disableGitBranching,
           fullCycleReviewCount,
           developerMode,
+          bmadUserName,
+          bmadLanguage,
+          disableEnvCheck,
+          gitDiffPanelWidth,
         } = parsed.state;
 
         // Migrate git settings from app-level to per-project in recentProjects
@@ -195,6 +199,10 @@ const electronStorage = {
           globalStatusHistory: globalStatusHistory || [],
           lastViewedStatusHistoryAt: lastViewedStatusHistoryAt || 0,
           fullCycleReviewCount: fullCycleReviewCount ?? 1,
+          bmadUserName: bmadUserName || '',
+          bmadLanguage: bmadLanguage || 'en',
+          disableEnvCheck: disableEnvCheck ?? false,
+          gitDiffPanelWidth: gitDiffPanelWidth ?? 600,
         });
       }
     } catch (error) {
@@ -1766,6 +1774,7 @@ export const useStore = create<AppState>()(
         developerMode: state.developerMode,
         bmadUserName: state.bmadUserName,
         bmadLanguage: state.bmadLanguage,
+        gitDiffPanelWidth: state.gitDiffPanelWidth,
       }),
       onRehydrateStorage: () => (state) => {
         if (state) {
