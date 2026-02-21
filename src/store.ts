@@ -280,6 +280,8 @@ interface AppState {
   setEnableEpicBranches: (enabled: boolean) => void;
   disableGitBranching: boolean; // When true, bypass all branch restrictions and hide branch UI
   setDisableGitBranching: (disabled: boolean) => void;
+  disableEnvCheck: boolean; // When true, skip environment check on project open
+  setDisableEnvCheck: (disabled: boolean) => void;
   fullCycleReviewCount: number; // 0-5, how many code review rounds in full cycle
   setFullCycleReviewCount: (count: number) => void;
 
@@ -467,6 +469,14 @@ interface AppState {
     storyId: string | undefined,
     branchName: string | undefined,
   ) => void;
+
+  // Git Diff Panel (NOT persisted — transient UI state)
+  gitDiffPanelOpen: boolean;
+  gitDiffPanelBranch: string | null;
+  gitDiffPanelWidth: number;
+  openGitDiffPanel: (branchName: string) => void;
+  closeGitDiffPanel: () => void;
+  setGitDiffPanelWidth: (width: number) => void;
 
   // Status History
   statusHistoryByStory: Record<string, StatusChangeEntry[]>;
@@ -659,6 +669,8 @@ export const useStore = create<AppState>()(
               )
             : state.recentProjects,
         })),
+      disableEnvCheck: false,
+      setDisableEnvCheck: (disabled) => set({ disableEnvCheck: disabled }),
       fullCycleReviewCount: 1,
       setFullCycleReviewCount: (count) =>
         set({ fullCycleReviewCount: Math.max(0, Math.min(5, count)) }),
@@ -706,6 +718,8 @@ export const useStore = create<AppState>()(
           bmadVersionError: null,
           chatThreads: {},
           selectedChatAgent: null,
+          gitDiffPanelOpen: false,
+          gitDiffPanelBranch: null,
         });
       },
       setProjectType: (type) => set({ projectType: type }),
@@ -1217,6 +1231,17 @@ export const useStore = create<AppState>()(
             },
           };
         }),
+
+      // Git Diff Panel (NOT persisted)
+      gitDiffPanelOpen: false,
+      gitDiffPanelBranch: null,
+      gitDiffPanelWidth: 600,
+      openGitDiffPanel: (branchName) =>
+        set({ gitDiffPanelOpen: true, gitDiffPanelBranch: branchName }),
+      closeGitDiffPanel: () =>
+        set({ gitDiffPanelOpen: false, gitDiffPanelBranch: null }),
+      setGitDiffPanelWidth: (width) =>
+        set({ gitDiffPanelWidth: Math.max(400, Math.min(1500, width)) }),
 
       // Status History
       statusHistoryByStory: {},
@@ -1736,6 +1761,7 @@ export const useStore = create<AppState>()(
         lastViewedStatusHistoryAt: state.lastViewedStatusHistoryAt,
         enableEpicBranches: state.enableEpicBranches,
         disableGitBranching: state.disableGitBranching,
+        disableEnvCheck: state.disableEnvCheck,
         fullCycleReviewCount: state.fullCycleReviewCount,
         developerMode: state.developerMode,
         bmadUserName: state.bmadUserName,

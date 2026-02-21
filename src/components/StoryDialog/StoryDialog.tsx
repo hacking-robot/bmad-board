@@ -39,7 +39,6 @@ import { gruvbox } from '../../theme'
 import { EPIC_COLORS, STATUS_COLUMNS } from '../../types'
 import { useWorkflow } from '../../hooks/useWorkflow'
 import { parseStoryContent } from '../../utils/parseStory'
-import GitDiffDialog from '../GitDiffDialog'
 import ChatHistorySection from './ChatHistorySection'
 import StatusHistorySection from './StatusHistorySection'
 
@@ -106,9 +105,10 @@ export default function StoryDialog() {
   // Get agents from workflow
   const { agents } = useWorkflow()
 
+  const openGitDiffPanel = useStore((state) => state.openGitDiffPanel)
+
   // Git diff state
   const [branchExists, setBranchExists] = useState(false)
-  const [diffDialogOpen, setDiffDialogOpen] = useState(false)
 
   // Check if the story's branch exists
   useEffect(() => {
@@ -169,7 +169,6 @@ export default function StoryDialog() {
   const selectedEpic = epics.find((e) => e.id === selectedStory.epicId)
 
   return (
-    <>
     <Dialog
       open={Boolean(selectedStory)}
       onClose={handleClose}
@@ -238,7 +237,7 @@ export default function StoryDialog() {
         {branchExists && (
           <Tooltip title="View branch diff">
             <IconButton
-              onClick={() => setDiffDialogOpen(true)}
+              onClick={() => openGitDiffPanel(branchName)}
               sx={{
                 position: 'absolute',
                 right: 56,
@@ -833,13 +832,5 @@ export default function StoryDialog() {
         )}
       </DialogContent>
     </Dialog>
-
-    {/* Git Diff Dialog */}
-    <GitDiffDialog
-      open={diffDialogOpen}
-      onClose={() => setDiffDialogOpen(false)}
-      branchName={branchName}
-    />
-  </>
   )
 }

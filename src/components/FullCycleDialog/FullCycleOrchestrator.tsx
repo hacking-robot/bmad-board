@@ -392,36 +392,38 @@ export default function FullCycleOrchestrator() {
           return
         }
 
-        // Check for "what's next?" type prompts - agent has completed, just mark done.
-        // These take priority over isPromptForInput because the agent is offering
-        // follow-up suggestions (often with numbered story options) rather than
-        // asking a question that requires input to proceed.
+        // Check for "what's next?" type prompts FIRST - agent has completed,
+        // just mark done. These take priority over isPromptForInput because
+        // the agent is offering follow-up suggestions (often with numbered
+        // story options) rather than asking a question that requires input.
+        // A review output will naturally contain words like "issue"/"error" in
+        // its findings, which would falsely trigger isPromptForInput if checked
+        // first — so we must detect navigation prompts before issue prompts.
         const cleanTail = cleanOutput.slice(-1500)
         const isWhatNextPrompt = /What.?s next\??/i.test(cleanTail) ||
-          /Would you like (?:me to|to)\b/i.test(cleanTail) ||
+          /(?<!what )would you like (?:me to|to)\b/i.test(cleanTail) ||
           /Next Steps:/i.test(cleanTail) ||
           /Which (?:story|stories|task|epic)/i.test(cleanTail) ||
           /Shall I (?:continue|proceed|move on|start)/i.test(cleanTail) ||
           /Ready (?:for|to) (?:\w+ )*next/i.test(cleanTail) ||
-          /Where (?:should|shall|do) (?:we|I) go/i.test(cleanTail)
+          /Where (?:should|shall|do) (?:we|I) go/i.test(cleanTail) ||
+          /Enter your choice:/i.test(cleanTail)
 
-        // Check for issue/error prompts FIRST — if the agent found problems
-        // and is offering to fix them, auto-respond before treating as "what's next"
-        if (isPromptForInput(cleanOutput) && currentSessionId) {
-          const label = hasFixAsFirstOption(cleanOutput) ? 'fix option' : 'option 1'
-          const sent = await sendAutoResponse('1', `Detected issue prompt, auto-selecting ${label}`)
-          if (sent) return // Wait for next exit event
-          return // Error already handled
-        }
-
-        // No issues to fix — check for "what's next?" follow-up prompts and
-        // treat them as completion (don't respond to story/task suggestions)
         if (isWhatNextPrompt) {
           resolved = true
           cleanup()
           appendFullCycleLog(`${agentId} completed (step work done, skipping follow-up prompt)`)
           resolve('success')
           return
+        }
+
+        // Only after ruling out navigation prompts, check for issue/error
+        // prompts where the agent found problems and is offering fix options
+        if (isPromptForInput(cleanOutput) && currentSessionId) {
+          const label = hasFixAsFirstOption(cleanOutput) ? 'fix option' : 'option 1'
+          const sent = await sendAutoResponse('1', `Detected issue prompt, auto-selecting ${label}`)
+          if (sent) return // Wait for next exit event
+          return // Error already handled
         }
 
         // Check if output ends with a completion message (not a question/prompt)

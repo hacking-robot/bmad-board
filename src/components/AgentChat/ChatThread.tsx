@@ -1,5 +1,6 @@
-import { useEffect, useRef, useCallback } from 'react'
-import { Box } from '@mui/material'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { Box, Fab } from '@mui/material'
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso'
 import { useStore } from '../../store'
 import { useWorkflow } from '../../hooks/useWorkflow'
@@ -23,6 +24,8 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
   const setThreadContext = useStore((state) => state.setThreadContext)
   const pendingChatMessage = useStore((state) => state.pendingChatMessage)
   const clearPendingChatMessage = useStore((state) => state.clearPendingChatMessage)
+
+  const [atBottom, setAtBottom] = useState(true)
 
   const thread = chatThreads[agentId]
   const messages = thread?.messages || []
@@ -270,28 +273,53 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
             </Box>
           </Box>
         ) : (
-          <Virtuoso
-            ref={virtuosoRef}
-            data={messages}
-            followOutput={(isAtBottom) => isAtBottom ? 'smooth' : false}
-            atBottomThreshold={50}
-            itemContent={(_index, message) => (
-              <ChatMessage
-                message={message}
-                agentName={agent?.name || 'Agent'}
-                agentAvatar={agent?.avatar || 'A'}
-              />
+          <Box sx={{ position: 'relative', height: '100%' }}>
+            <Virtuoso
+              ref={virtuosoRef}
+              data={messages}
+              followOutput={(isAtBottom) => isAtBottom ? 'smooth' : false}
+              atBottomStateChange={setAtBottom}
+              atBottomThreshold={50}
+              itemContent={(_index, message) => (
+                <ChatMessage
+                  message={message}
+                  agentName={agent?.name || 'Agent'}
+                  agentAvatar={agent?.avatar || 'A'}
+                />
+              )}
+              style={{ height: '100%' }}
+              components={{
+                Footer: () =>
+                  isTyping ? (
+                    <Box sx={{ px: 2, pb: 2 }}>
+                      <TypingIndicator agentName={agent?.name || 'Agent'} activity={thinkingActivity} />
+                    </Box>
+                  ) : null
+              }}
+            />
+            {!atBottom && (
+              <Fab
+                size="small"
+                onClick={() => virtuosoRef.current?.scrollTo({ top: Number.MAX_SAFE_INTEGER, behavior: 'smooth' })}
+                sx={{
+                  position: 'absolute',
+                  bottom: 8,
+                  right: 20,
+                  width: 28,
+                  height: 28,
+                  minHeight: 'unset',
+                  bgcolor: 'background.paper',
+                  color: 'text.secondary',
+                  boxShadow: 1,
+                  opacity: 0.5,
+                  '&:hover': { opacity: 0.85, bgcolor: 'background.paper' },
+                  zIndex: 1
+                }}
+              >
+                <KeyboardArrowDownIcon sx={{ fontSize: 18 }} />
+              </Fab>
             )}
-            style={{ height: '100%' }}
-            components={{
-              Footer: () =>
-                isTyping ? (
-                  <Box sx={{ px: 2, pb: 2 }}>
-                    <TypingIndicator agentName={agent?.name || 'Agent'} activity={thinkingActivity} />
-                  </Box>
-                ) : null
-            }}
-          />
+          </Box>
         )}
       </Box>
 

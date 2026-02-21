@@ -43,6 +43,7 @@ import DesktopWindowsIcon from '@mui/icons-material/DesktopWindows'
 import SystemUpdateIcon from '@mui/icons-material/SystemUpdate'
 import DownloadIcon from '@mui/icons-material/Download'
 import InstallDesktopIcon from '@mui/icons-material/InstallDesktop'
+import SettingsSuggestIcon from '@mui/icons-material/SettingsSuggest'
 import { useStore } from '../../store'
 import { useProjectData } from '../../hooks/useProjectData'
 import { AI_TOOLS, AITool, CLIDetectionResult, CLAUDE_MODELS, CustomEndpointConfig } from '../../types'
@@ -103,6 +104,8 @@ export default function SettingsMenu({ compact = false }: SettingsMenuProps) {
   const setEnableEpicBranches = useStore((state) => state.setEnableEpicBranches)
   const disableGitBranching = useStore((state) => state.disableGitBranching)
   const setDisableGitBranching = useStore((state) => state.setDisableGitBranching)
+  const disableEnvCheck = useStore((state) => state.disableEnvCheck)
+  const setDisableEnvCheck = useStore((state) => state.setDisableEnvCheck)
   const fullCycleReviewCount = useStore((state) => state.fullCycleReviewCount)
   const setFullCycleReviewCount = useStore((state) => state.setFullCycleReviewCount)
   const projectPath = useStore((state) => state.projectPath)
@@ -427,6 +430,21 @@ export default function SettingsMenu({ compact = false }: SettingsMenuProps) {
                 />
               </MenuItem>
             )}
+            <MenuItem onClick={() => setDisableEnvCheck(!disableEnvCheck)}>
+              <ListItemIcon>
+                <SettingsSuggestIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText
+                primary="Disable Env Check"
+                secondary="Skip startup environment check"
+                secondaryTypographyProps={{ variant: 'caption' }}
+              />
+              <Switch
+                edge="end"
+                checked={disableEnvCheck}
+                size="small"
+              />
+            </MenuItem>
             <MenuItem onClick={() => setDisableGitBranching(!disableGitBranching)}>
               <ListItemIcon>
                 <GitIcon fontSize="small" />

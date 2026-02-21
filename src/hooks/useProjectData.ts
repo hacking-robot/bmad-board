@@ -123,7 +123,9 @@ export function useProjectData() {
       selectedEpicId: null,
       recentProjects: updatedRecent,
       chatThreads: {},
-      selectedChatAgent: null
+      selectedChatAgent: null,
+      gitDiffPanelOpen: false,
+      gitDiffPanelBranch: null
     })
   }, [])
 

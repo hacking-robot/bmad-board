@@ -14,14 +14,12 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import CheckIcon from '@mui/icons-material/Check'
 import CompareArrowsIcon from '@mui/icons-material/CompareArrows'
 import { useStore } from '../../store'
-import GitDiffDialog from '../GitDiffDialog'
 
 export default function UncommittedChanges() {
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
   const [copiedCommand, setCopiedCommand] = useState<string | null>(null)
   const [committing, setCommitting] = useState(false)
   const [commitError, setCommitError] = useState<string | null>(null)
-  const [diffDialogOpen, setDiffDialogOpen] = useState(false)
 
   const projectPath = useStore((state) => state.projectPath)
   const stories = useStore((state) => state.stories)
@@ -29,6 +27,7 @@ export default function UncommittedChanges() {
   const hasChanges = useStore((state) => state.hasUncommittedChanges)
   const setCurrentBranch = useStore((state) => state.setCurrentBranch)
   const setHasUncommittedChanges = useStore((state) => state.setHasUncommittedChanges)
+  const openGitDiffPanel = useStore((state) => state.openGitDiffPanel)
 
   // Parse branch name to find matching story
   // Branch format: epicId-storyId (e.g., "1-1-6-load-built-in-chips")
@@ -135,6 +134,7 @@ export default function UncommittedChanges() {
   return (
     <>
       <Tooltip title="Uncommitted changes - click to view diff or commit">
+
         <Chip
           size="small"
           icon={<CompareArrowsIcon sx={{ fontSize: 14 }} />}
@@ -234,7 +234,7 @@ export default function UncommittedChanges() {
             variant="outlined"
             size="small"
             onClick={() => {
-              setDiffDialogOpen(true)
+              openGitDiffPanel(branchName)
               handleClose()
             }}
             startIcon={<CompareArrowsIcon />}
@@ -254,13 +254,6 @@ export default function UncommittedChanges() {
           </Button>
         </Box>
       </Popover>
-
-      {/* Git Diff Dialog */}
-      <GitDiffDialog
-        open={diffDialogOpen}
-        onClose={() => setDiffDialogOpen(false)}
-        branchName={branchName}
-      />
     </>
   )
 }
