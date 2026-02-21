@@ -15,6 +15,10 @@ export interface RecentProject {
   name: string
   outputFolder?: string
   developerMode?: 'ai' | 'human'
+  baseBranch?: string
+  enableEpicBranches?: boolean
+  allowDirectEpicMerge?: boolean
+  disableGitBranching?: boolean
 }
 
 const MAX_HISTORY_ENTRIES = 50
@@ -63,6 +67,20 @@ const electronStorage = {
         // Only save the settings we care about
         const { themeMode, aiTool, claudeModel, customEndpoint, projectPath, projectType, outputFolder, selectedEpicId, collapsedColumnsByEpic, agentHistory, recentProjects, notificationsEnabled, baseBranch, allowDirectEpicMerge, bmadInGitignore, bmadInGitignoreUserSet, storyOrder, enableHumanReviewColumn, humanReviewChecklist, humanReviewStates, humanReviewStories, maxThreadMessages, statusHistoryByStory, globalStatusHistory, lastViewedStatusHistoryAt, enableEpicBranches, disableGitBranching, fullCycleReviewCount, developerMode } = parsed.state
 
+        // Migrate git settings from app-level to per-project in recentProjects
+        const migratedRecentProjects = (recentProjects || []).map((p: RecentProject) => {
+          if (p.path === projectPath) {
+            const updates: Partial<RecentProject> = {}
+            if (p.baseBranch === undefined && baseBranch) updates.baseBranch = baseBranch
+            if (p.enableEpicBranches === undefined && enableEpicBranches !== undefined) updates.enableEpicBranches = enableEpicBranches
+            if (p.allowDirectEpicMerge === undefined && allowDirectEpicMerge !== undefined) updates.allowDirectEpicMerge = allowDirectEpicMerge
+            if (p.disableGitBranching === undefined && disableGitBranching !== undefined) updates.disableGitBranching = disableGitBranching
+            if (p.developerMode === undefined && developerMode) updates.developerMode = developerMode
+            if (Object.keys(updates).length > 0) return { ...p, ...updates }
+          }
+          return p
+        })
+
         // Don't persist full output - it can contain characters that break JSON
         // Just save metadata and a small summary
         const sanitizedHistory = (agentHistory || []).map((entry: AgentHistoryEntry) => ({
@@ -83,10 +101,8 @@ const electronStorage = {
           selectedEpicId,
           collapsedColumnsByEpic,
           agentHistory: sanitizedHistory,
-          recentProjects: recentProjects || [],
+          recentProjects: migratedRecentProjects,
           notificationsEnabled: notificationsEnabled ?? false,
-          baseBranch: baseBranch || 'main',
-          allowDirectEpicMerge: allowDirectEpicMerge ?? false,
           bmadInGitignore: bmadInGitignore ?? false,
           bmadInGitignoreUserSet: bmadInGitignoreUserSet ?? false,
           storyOrder: storyOrder || {},
@@ -98,10 +114,7 @@ const electronStorage = {
           statusHistoryByStory: statusHistoryByStory || {},
           globalStatusHistory: globalStatusHistory || [],
           lastViewedStatusHistoryAt: lastViewedStatusHistoryAt || 0,
-          enableEpicBranches: enableEpicBranches ?? false,
-          disableGitBranching: disableGitBranching ?? true,
-          fullCycleReviewCount: fullCycleReviewCount ?? 1,
-          developerMode: developerMode || 'ai'
+          fullCycleReviewCount: fullCycleReviewCount ?? 1
         })
       }
     } catch (error) {
@@ -122,8 +135,6 @@ const electronStorage = {
       agentHistory: [],
       recentProjects: [],
       notificationsEnabled: false,
-      baseBranch: 'main',
-      allowDirectEpicMerge: false,
       bmadInGitignore: false,
       bmadInGitignoreUserSet: false,
       storyOrder: {},
@@ -135,10 +146,7 @@ const electronStorage = {
       statusHistoryByStory: {},
       globalStatusHistory: [],
       lastViewedStatusHistoryAt: 0,
-      enableEpicBranches: false,
-      disableGitBranching: true,
-      fullCycleReviewCount: 1,
-      developerMode: 'ai'
+      fullCycleReviewCount: 1
     })
   }
 }
@@ -447,9 +455,19 @@ export const useStore = create<AppState>()(
 
       // Git settings
       baseBranch: 'main',
-      setBaseBranch: (branch) => set({ baseBranch: branch }),
+      setBaseBranch: (branch) => set((state) => ({
+        baseBranch: branch,
+        recentProjects: state.projectPath
+          ? state.recentProjects.map((p) => p.path === state.projectPath ? { ...p, baseBranch: branch } : p)
+          : state.recentProjects
+      })),
       allowDirectEpicMerge: false,
-      setAllowDirectEpicMerge: (allow) => set({ allowDirectEpicMerge: allow }),
+      setAllowDirectEpicMerge: (allow) => set((state) => ({
+        allowDirectEpicMerge: allow,
+        recentProjects: state.projectPath
+          ? state.recentProjects.map((p) => p.path === state.projectPath ? { ...p, allowDirectEpicMerge: allow } : p)
+          : state.recentProjects
+      })),
       bmadInGitignore: false,
       setBmadInGitignore: (inGitignore, userSet) => set({
         bmadInGitignore: inGitignore,
@@ -457,15 +475,30 @@ export const useStore = create<AppState>()(
       }),
       bmadInGitignoreUserSet: false,
       enableEpicBranches: false,
-      setEnableEpicBranches: (enabled) => set({ enableEpicBranches: enabled }),
+      setEnableEpicBranches: (enabled) => set((state) => ({
+        enableEpicBranches: enabled,
+        recentProjects: state.projectPath
+          ? state.recentProjects.map((p) => p.path === state.projectPath ? { ...p, enableEpicBranches: enabled } : p)
+          : state.recentProjects
+      })),
       disableGitBranching: true,
-      setDisableGitBranching: (disabled) => set({ disableGitBranching: disabled }),
+      setDisableGitBranching: (disabled) => set((state) => ({
+        disableGitBranching: disabled,
+        recentProjects: state.projectPath
+          ? state.recentProjects.map((p) => p.path === state.projectPath ? { ...p, disableGitBranching: disabled } : p)
+          : state.recentProjects
+      })),
       fullCycleReviewCount: 1,
       setFullCycleReviewCount: (count) => set({ fullCycleReviewCount: Math.max(0, Math.min(5, count)) }),
 
       // Developer Mode
       developerMode: 'ai',
-      setDeveloperMode: (mode) => set({ developerMode: mode }),
+      setDeveloperMode: (mode) => set((state) => ({
+        developerMode: mode,
+        recentProjects: state.projectPath
+          ? state.recentProjects.map((p) => p.path === state.projectPath ? { ...p, developerMode: mode } : p)
+          : state.recentProjects
+      })),
 
       // Project
       projectPath: null,
@@ -1315,11 +1348,11 @@ export const useStore = create<AppState>()(
 
       // Computed
       getFilteredStories: () => {
-        const { stories, selectedEpicId, searchQuery } = get()
+        const { stories, selectedEpicId, epics, searchQuery } = get()
         let filtered = stories
 
-        // Filter by epic
-        if (selectedEpicId !== null) {
+        // Filter by epic (skip if selected epic doesn't exist in current project)
+        if (selectedEpicId !== null && epics.some((e) => e.id === selectedEpicId)) {
           filtered = filtered.filter((s) => s.epicId === selectedEpicId)
         }
 
@@ -1338,6 +1371,37 @@ export const useStore = create<AppState>()(
     {
       name: 'bmadboard-storage',
       storage: createJSONStorage(() => electronStorage),
+      partialize: (state) => ({
+        themeMode: state.themeMode,
+        aiTool: state.aiTool,
+        claudeModel: state.claudeModel,
+        customEndpoint: state.customEndpoint,
+        projectPath: state.projectPath,
+        projectType: state.projectType,
+        outputFolder: state.outputFolder,
+        selectedEpicId: state.selectedEpicId,
+        collapsedColumnsByEpic: state.collapsedColumnsByEpic,
+        agentHistory: state.agentHistory,
+        recentProjects: state.recentProjects,
+        notificationsEnabled: state.notificationsEnabled,
+        baseBranch: state.baseBranch,
+        allowDirectEpicMerge: state.allowDirectEpicMerge,
+        bmadInGitignore: state.bmadInGitignore,
+        bmadInGitignoreUserSet: state.bmadInGitignoreUserSet,
+        storyOrder: state.storyOrder,
+        enableHumanReviewColumn: state.enableHumanReviewColumn,
+        humanReviewChecklist: state.humanReviewChecklist,
+        humanReviewStates: state.humanReviewStates,
+        humanReviewStories: state.humanReviewStories,
+        maxThreadMessages: state.maxThreadMessages,
+        statusHistoryByStory: state.statusHistoryByStory,
+        globalStatusHistory: state.globalStatusHistory,
+        lastViewedStatusHistoryAt: state.lastViewedStatusHistoryAt,
+        enableEpicBranches: state.enableEpicBranches,
+        disableGitBranching: state.disableGitBranching,
+        fullCycleReviewCount: state.fullCycleReviewCount,
+        developerMode: state.developerMode
+      }),
       onRehydrateStorage: () => (state) => {
         if (state) {
           // Mark any "running" agents in history as "interrupted" since the app restarted
@@ -1349,6 +1413,17 @@ export const useStore = create<AppState>()(
           })
           if (updatedHistory.some((h, i) => h !== state.agentHistory[i])) {
             state.agentHistory = updatedHistory
+          }
+          // Restore per-project git settings from recentProjects
+          if (state.projectPath && state.recentProjects.length > 0) {
+            const current = state.recentProjects.find((p) => p.path === state.projectPath)
+            if (current) {
+              if (current.baseBranch) state.baseBranch = current.baseBranch
+              if (current.enableEpicBranches !== undefined) state.enableEpicBranches = current.enableEpicBranches
+              if (current.allowDirectEpicMerge !== undefined) state.allowDirectEpicMerge = current.allowDirectEpicMerge
+              if (current.disableGitBranching !== undefined) state.disableGitBranching = current.disableGitBranching
+              if (current.developerMode) state.developerMode = current.developerMode
+            }
           }
           state.setHasHydrated(true)
         }

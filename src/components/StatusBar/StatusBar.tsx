@@ -56,6 +56,7 @@ export default function StatusBar() {
   const setFullCycleDialogOpen = useStore((state) => state.setFullCycleDialogOpen)
   const setFullCycleMinimized = useStore((state) => state.setFullCycleMinimized)
   const projectCostTotal = useStore((state) => state.projectCostTotal)
+  const developerMode = useStore((state) => state.developerMode)
 
   // Count stories by status
   const statusCounts = useMemo(() => {
@@ -134,6 +135,13 @@ export default function StatusBar() {
           <BranchSwitcher />
           <UncommittedChanges />
         </Box>
+
+        {/* Developer mode indicator */}
+        <Tooltip title={developerMode === 'human' ? 'Manual Development mode' : 'AI Driven Development mode'}>
+          <Typography variant="caption" color="text.secondary" sx={{ cursor: 'help' }}>
+            {developerMode === 'human' ? 'Manual Dev' : 'AI Driven'}
+          </Typography>
+        </Tooltip>
 
         {/* Full Cycle Progress Indicator (when minimized) */}
         {fullCycle.isRunning && fullCycle.minimized && (

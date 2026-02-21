@@ -315,6 +315,8 @@ export default function ProjectWizard() {
     skipWizardStep(stepIndex)
   }, [skipWizardStep])
 
+  const setBaseBranch = useStore((state) => state.setBaseBranch)
+
   const handleFinishSetup = useCallback(async () => {
     if (!projectPath) return
 
@@ -322,16 +324,27 @@ export default function ProjectWizard() {
     await window.wizardAPI.deleteState(projectPath, outputFolder)
     await window.wizardAPI.stopWatching()
 
+    // Detect the default branch name from git (could be 'main' or 'master' depending on config)
+    let detectedBaseBranch = 'main'
+    try {
+      const branchResult = await window.gitAPI.getCurrentBranch(projectPath)
+      if (branchResult.branch) {
+        detectedBaseBranch = branchResult.branch
+      }
+    } catch { /* fallback to 'main' */ }
+
     // Set the project as loaded
     const projectName = projectPath.split('/').pop() || 'Unknown'
     setProjectPath(projectPath)
     setProjectType('bmm')
+    setBaseBranch(detectedBaseBranch)
     addRecentProject({
       path: projectPath,
       projectType: 'bmm',
       name: projectName,
       outputFolder,
-      developerMode: projectWizard.developerMode
+      developerMode: projectWizard.developerMode,
+      baseBranch: detectedBaseBranch
     })
 
     // Switch to board view and reset epic filter so all stories are visible
@@ -339,7 +352,7 @@ export default function ProjectWizard() {
     setSelectedEpicId(null)
 
     completeWizard()
-  }, [projectPath, outputFolder, setProjectPath, setProjectType, addRecentProject, setViewMode, setSelectedEpicId, completeWizard])
+  }, [projectPath, outputFolder, setProjectPath, setProjectType, setBaseBranch, addRecentProject, setViewMode, setSelectedEpicId, completeWizard])
 
   const handleCancel = useCallback(async () => {
     if (projectPath) {

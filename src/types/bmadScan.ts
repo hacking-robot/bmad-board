@@ -31,5 +31,6 @@ export interface BmadScanResult {
   modules: string[]             // ['core', 'bmm'] or ['core', 'bmm', 'bmgd']
   agents: ScannedAgent[]
   workflows: ScannedWorkflow[]
+  detectedDeveloperMode: 'ai' | 'human' | null  // detected from workflow file content
   scannedAt: string             // ISO timestamp
 }

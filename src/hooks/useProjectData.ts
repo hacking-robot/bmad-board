@@ -91,21 +91,26 @@ export function useProjectData() {
 
   const setDeveloperMode = useStore((state) => state.setDeveloperMode)
 
-  const switchToProject = useCallback((path: string, type: typeof projectType, recentOutputFolder?: string, recentDeveloperMode?: 'ai' | 'human') => {
-    if (!type) return
-    const projectName = path.split('/').pop() || 'Unknown'
-    setProjectPath(path)
-    setProjectType(type)
-    setOutputFolder(recentOutputFolder || '_bmad-output')
-    setDeveloperMode(recentDeveloperMode || 'ai')
-    addRecentProject({
-      path,
-      projectType: type,
-      name: projectName,
-      outputFolder: recentOutputFolder,
-      developerMode: recentDeveloperMode
+  const switchToProject = useCallback((project: import('../store').RecentProject) => {
+    if (!project.projectType) return
+    // Batch all state updates into a single set() to avoid 9 separate persist cycles
+    // Each persist cycle reads/writes the 645KB settings file via IPC
+    const state = useStore.getState()
+    const filtered = state.recentProjects.filter((p) => p.path !== project.path)
+    const updatedRecent = [project, ...filtered].slice(0, 10)
+    useStore.setState({
+      projectPath: project.path,
+      projectType: project.projectType,
+      outputFolder: project.outputFolder || '_bmad-output',
+      developerMode: project.developerMode || 'ai',
+      baseBranch: project.baseBranch || 'main',
+      enableEpicBranches: project.enableEpicBranches ?? false,
+      allowDirectEpicMerge: project.allowDirectEpicMerge ?? false,
+      disableGitBranching: project.disableGitBranching ?? true,
+      selectedEpicId: null,
+      recentProjects: updatedRecent
     })
-  }, [setProjectPath, setProjectType, setOutputFolder, setDeveloperMode, addRecentProject])
+  }, [])
 
   const loadProjectData = useCallback(async () => {
     if (!projectPath || !projectType) return
@@ -300,6 +305,14 @@ export function useProjectData() {
         console.log('[useProjectData] Scan result:', result ? `${result.agents.length} agents` : 'null')
         setBmadScanResult(result)
         if (result) {
+          // Auto-detect developer mode if not already set for this project
+          const { recentProjects } = useStore.getState()
+          const currentProject = recentProjects.find(p => p.path === projectPath)
+          if (!currentProject?.developerMode) {
+            const detected = result.detectedDeveloperMode || 'ai'
+            console.log(`[useProjectData] Auto-detected developer mode: ${detected}`)
+            setDeveloperMode(detected)
+          }
           // Version compatibility check: require BMAD v6+ stable (reject alpha builds)
           const version = result.version
           if (version) {

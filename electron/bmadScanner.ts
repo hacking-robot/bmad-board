@@ -37,6 +37,7 @@ export interface BmadScanResult {
   modules: string[]
   agents: ScannedAgent[]
   workflows: ScannedWorkflow[]
+  detectedDeveloperMode: 'ai' | 'human' | null
   scannedAt: string
 }
 
@@ -308,6 +309,26 @@ async function scanWorkflows(projectPath: string, modules: string[]): Promise<Sc
 }
 
 /**
+ * Detect developer mode by checking workflow file content.
+ * Human mode uses "Development Record" while AI mode uses "Dev Agent Record".
+ */
+async function detectDeveloperMode(bmadPath: string, modules: string[]): Promise<'ai' | 'human' | null> {
+  // Check bmm module first (most common), then others
+  const modulesToCheck = modules.includes('bmm') ? ['bmm', ...modules.filter(m => m !== 'bmm')] : modules
+  for (const module of modulesToCheck) {
+    const checklistPath = join(bmadPath, module, 'workflows', '4-implementation', 'dev-story', 'checklist.md')
+    try {
+      const content = await readFile(checklistPath, 'utf-8')
+      if (content.includes('Development Record')) return 'human'
+      if (content.includes('Dev Agent Record')) return 'ai'
+    } catch {
+      // File doesn't exist for this module, try next
+    }
+  }
+  return null
+}
+
+/**
  * Main scan function. Scans a project directory for BMAD data.
  * Returns null if no _bmad/ directory exists.
  */
@@ -341,11 +362,15 @@ export async function scanBmadProject(projectPath: string): Promise<BmadScanResu
   // Scan workflows
   const workflows = await scanWorkflows(projectPath, modules)
 
+  // Detect developer mode from workflow content
+  const detectedDeveloperMode = await detectDeveloperMode(bmadPath, modules)
+
   return {
     version: manifest.version,
     modules,
     agents: allAgents,
     workflows,
+    detectedDeveloperMode,
     scannedAt: new Date().toISOString()
   }
 }

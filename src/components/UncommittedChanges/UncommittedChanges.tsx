@@ -7,6 +7,7 @@ import {
   Popover,
   Alert,
   Button,
+  Chip,
   CircularProgress
 } from '@mui/material'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
@@ -133,18 +134,23 @@ export default function UncommittedChanges() {
 
   return (
     <>
-      <Tooltip title="Uncommitted changes - click to commit">
-        <IconButton
+      <Tooltip title="Uncommitted changes - click to view diff or commit">
+        <Chip
           size="small"
+          icon={<CompareArrowsIcon sx={{ fontSize: 14 }} />}
+          label="Uncommitted"
           onClick={handleClick}
+          color="warning"
+          variant="outlined"
           sx={{
-            p: 0.25,
-            color: 'warning.main',
-            '&:hover': { bgcolor: 'action.hover' }
+            height: 20,
+            cursor: 'pointer',
+            fontWeight: 600,
+            fontSize: '0.65rem',
+            '& .MuiChip-icon': { ml: 0.5, mr: -0.25 },
+            '& .MuiChip-label': { px: 0.5 }
           }}
-        >
-          <CompareArrowsIcon sx={{ fontSize: 16 }} />
-        </IconButton>
+        />
       </Tooltip>
 
       <Popover

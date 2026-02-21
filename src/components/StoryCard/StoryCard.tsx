@@ -604,8 +604,8 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
           </Box>
         )}
 
-        {/* Step 1: Git Branch Command - Only for ready-for-dev when branch doesn't exist yet */}
-        {effectiveStatus === 'ready-for-dev' && !branchExists && !isOnStoryBranch && (
+        {/* Step 1: Git Branch Command - Only for ready-for-dev when branch doesn't exist yet (hidden when git branching disabled) */}
+        {!disableGitBranching && effectiveStatus === 'ready-for-dev' && !branchExists && !isOnStoryBranch && (
           <Box sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: 'divider', bgcolor: 'action.hover' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
               <Chip label="Step 1" size="small" sx={{ height: 18, fontSize: '0.65rem', fontWeight: 600, bgcolor: 'primary.main', color: 'white' }} />
@@ -665,8 +665,8 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
           </Box>
         )}
 
-        {/* Step 1: Git Commit Command - For review (commit implementation) and done (complete) - only when on story branch with uncommitted changes */}
-        {(effectiveStatus === 'review' || effectiveStatus === 'done') && canExecuteStoryActions && hasUncommittedChanges && (
+        {/* Step 1: Git Commit Command - For review (commit implementation) and done (complete) - only when on story branch with uncommitted changes (hidden when git branching disabled) */}
+        {!disableGitBranching && (effectiveStatus === 'review' || effectiveStatus === 'done') && canExecuteStoryActions && hasUncommittedChanges && (
           <Box sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: 'divider', bgcolor: 'action.hover' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
               <Chip label="Step 1" size="small" sx={{ height: 18, fontSize: '0.65rem', fontWeight: 600, bgcolor: 'primary.main', color: 'white' }} />
@@ -721,7 +721,7 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
         {nextSteps.length > 0 && (
           <Box sx={{ px: 2, py: 1, borderBottom: 1, borderColor: 'divider', bgcolor: 'action.selected' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              {((effectiveStatus === 'ready-for-dev' && !branchExists && !isOnStoryBranch) || ((effectiveStatus === 'review' || effectiveStatus === 'done') && canExecuteStoryActions && hasUncommittedChanges)) && (
+              {!disableGitBranching && ((effectiveStatus === 'ready-for-dev' && !branchExists && !isOnStoryBranch) || ((effectiveStatus === 'review' || effectiveStatus === 'done') && canExecuteStoryActions && hasUncommittedChanges)) && (
                 <Chip
                   label="Step 2"
                   size="small"
@@ -730,7 +730,7 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
               )}
               <GroupsIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
               <Typography variant="body2" fontWeight={500}>
-                {developerMode === 'human' ? 'Next Steps' : `Talk to Agents (${selectedToolInfo?.name || aiTool})`}
+                {`Talk to Agents (${selectedToolInfo?.name || aiTool})`}
               </Typography>
             </Box>
           </Box>
@@ -749,7 +749,7 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
                 <Typography variant="body2" fontWeight={500}>
                   {step.label}
                 </Typography>
-                {step.command && toolSupportsHeadless && developerMode !== 'human' && (() => {
+                {step.command && toolSupportsHeadless && (() => {
                   const agentThread = chatThreads[step.agentId]
                   const isAgentWorking = agentThread?.isTyping || false
                   // Backlog/ready-for-dev stories can be worked on from epic branch (or base branch when epic branches disabled)
@@ -794,14 +794,12 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
                   </Tooltip>
                 )}
               </Box>
-              {developerMode !== 'human' && (
-                <Typography variant="caption" color="text.secondary" component="div" sx={{ mb: 1, ml: 3.25 }}>
-                  {agent?.role} ({agent?.name})
-                </Typography>
-              )}
+              <Typography variant="caption" color="text.secondary" component="div" sx={{ mb: 1, ml: 3.25 }}>
+                {agent?.role} ({agent?.name})
+              </Typography>
 
-              {/* Agent invocation command - hidden in human mode */}
-              {agent?.commands?.[0] && developerMode !== 'human' && (
+              {/* Agent invocation command */}
+              {agent?.commands?.[0] && (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, ml: 3.25 }}>
                   <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.65rem', minWidth: 16 }}>
                     1.

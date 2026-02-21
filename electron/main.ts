@@ -1043,8 +1043,16 @@ ipcMain.handle('git-create-branch', async (_, projectPath: string, branchName: s
   }
 
   // If fromBranch is specified, create from that branch; otherwise create from current branch
-  const args = fromBranch ? ['checkout', '-b', branchName, fromBranch] : ['checkout', '-b', branchName]
-  const result = runGitCommand(args, projectPath)
+  let args = fromBranch ? ['checkout', '-b', branchName, fromBranch] : ['checkout', '-b', branchName]
+  let result = runGitCommand(args, projectPath)
+  if (result.error) {
+    // If fromBranch was specified but is not a valid commit (e.g. empty repo with no commits),
+    // retry without specifying the source branch
+    if (fromBranch && (result.error.includes('not a commit') || result.error.includes('not a valid'))) {
+      args = ['checkout', '-b', branchName]
+      result = runGitCommand(args, projectPath)
+    }
+  }
   if (result.error) {
     // Parse common git checkout -b errors for better messages
     if (result.error.includes('already exists')) {
@@ -2277,6 +2285,8 @@ ipcMain.handle('create-project-directory', async (_, parentPath: string, project
     if (gitInit.status !== 0) {
       return { success: false, error: 'Created folder but git init failed: ' + (gitInit.stderr?.toString() || 'unknown error') }
     }
+    // Create an initial empty commit so the default branch is a valid ref for branching
+    spawnSync('git', ['commit', '--allow-empty', '-m', 'Initial commit'], { cwd: projectPath })
     return { success: true, path: projectPath }
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Failed to create directory' }
