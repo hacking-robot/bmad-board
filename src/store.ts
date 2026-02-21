@@ -542,6 +542,14 @@ interface AppState {
   resetEpicCycle: () => void;
   retryEpicCycle: () => void;
 
+  // Auto-Update (NOT persisted — transient state from electron-updater)
+  updateStatus: 'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'error' | 'up-to-date';
+  updateVersion: string;
+  updateDownloadPercent: number;
+  setUpdateStatus: (status: AppState['updateStatus']) => void;
+  setUpdateVersion: (version: string) => void;
+  setUpdateDownloadPercent: (percent: number) => void;
+
   // Environment Check Dialog
   envCheckDialogOpen: boolean;
   envCheckResults: import("../electron/preload").EnvCheckItem[] | null;
@@ -1557,6 +1565,14 @@ export const useStore = create<AppState>()(
         }),
 
       // Environment Check Dialog (NOT persisted)
+      // Auto-Update
+      updateStatus: 'idle',
+      updateVersion: '',
+      updateDownloadPercent: 0,
+      setUpdateStatus: (status) => set({ updateStatus: status }),
+      setUpdateVersion: (version) => set({ updateVersion: version }),
+      setUpdateDownloadPercent: (percent) => set({ updateDownloadPercent: percent }),
+
       envCheckDialogOpen: false,
       envCheckResults: null,
       envCheckLoading: false,

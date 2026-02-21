@@ -4,6 +4,8 @@ import CircleIcon from '@mui/icons-material/Circle'
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
 import RocketLaunchIcon from '@mui/icons-material/RocketLaunch'
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney'
+import DownloadIcon from '@mui/icons-material/Download'
+import InstallDesktopIcon from '@mui/icons-material/InstallDesktop'
 import { useStore } from '../../store'
 import { STATUS_COLUMNS, StoryStatus } from '../../types'
 import BranchSwitcher from '../BranchSwitcher'
@@ -57,6 +59,19 @@ export default function StatusBar() {
   const setFullCycleMinimized = useStore((state) => state.setFullCycleMinimized)
   const projectCostTotal = useStore((state) => state.projectCostTotal)
   const developerMode = useStore((state) => state.developerMode)
+
+  // Auto-update state from global store
+  const updateStatus = useStore((state) => state.updateStatus)
+  const updateVersion = useStore((state) => state.updateVersion)
+  const updateDownloadPercent = useStore((state) => state.updateDownloadPercent)
+
+  const handleUpdateClick = () => {
+    if (updateStatus === 'available') {
+      window.updaterAPI.downloadUpdate()
+    } else if (updateStatus === 'ready') {
+      window.updaterAPI.installUpdate()
+    }
+  }
 
   // Count stories by status
   const statusCounts = useMemo(() => {
@@ -207,6 +222,60 @@ export default function StatusBar() {
 
       {/* Right section - Last refreshed & keyboard hint */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+        {/* Update available / downloading / ready indicator */}
+        {updateStatus === 'available' && (
+          <Tooltip title={`Update v${updateVersion} available - click to download`}>
+            <Chip
+              size="small"
+              icon={<DownloadIcon sx={{ fontSize: 14 }} />}
+              label={`v${updateVersion}`}
+              onClick={handleUpdateClick}
+              color="info"
+              sx={{
+                cursor: 'pointer',
+                height: 20,
+                fontSize: '0.65rem',
+                '& .MuiChip-icon': { fontSize: 14 },
+                '& .MuiChip-label': { px: 0.5 }
+              }}
+            />
+          </Tooltip>
+        )}
+        {updateStatus === 'downloading' && (
+          <Tooltip title={`Downloading update... ${updateDownloadPercent}%`}>
+            <Chip
+              size="small"
+              icon={<CircularProgress size={12} variant="determinate" value={updateDownloadPercent} />}
+              label={`${updateDownloadPercent}%`}
+              color="info"
+              sx={{
+                height: 20,
+                fontSize: '0.65rem',
+                '& .MuiChip-icon': { ml: 0.5 },
+                '& .MuiChip-label': { px: 0.5 }
+              }}
+            />
+          </Tooltip>
+        )}
+        {updateStatus === 'ready' && (
+          <Tooltip title={`Update v${updateVersion} ready - click to install & restart`}>
+            <Chip
+              size="small"
+              icon={<InstallDesktopIcon sx={{ fontSize: 14 }} />}
+              label={`Install v${updateVersion}`}
+              onClick={handleUpdateClick}
+              color="success"
+              sx={{
+                cursor: 'pointer',
+                height: 20,
+                fontSize: '0.65rem',
+                '& .MuiChip-icon': { fontSize: 14 },
+                '& .MuiChip-label': { px: 0.5 }
+              }}
+            />
+          </Tooltip>
+        )}
+
         {/* Project LLM cost total */}
         {projectCostTotal > 0 && (
           <Tooltip title={`Total LLM cost for this project: $${projectCostTotal.toFixed(4)}`}>

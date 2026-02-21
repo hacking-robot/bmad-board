@@ -38,9 +38,12 @@ export default function WelcomeDialog() {
         alignItems: 'center',
         justifyContent: 'center',
         minHeight: '100vh',
-        p: 3
+        p: 3,
+        position: 'relative'
       }}
     >
+      {/* Drag region at top for window movement */}
+      <Box sx={{ position: 'absolute', top: 0, left: 0, right: 0, height: 40, WebkitAppRegion: 'drag' }} />
       <Paper
         elevation={0}
         sx={{

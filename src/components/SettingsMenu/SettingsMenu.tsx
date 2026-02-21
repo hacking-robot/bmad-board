@@ -64,11 +64,12 @@ export default function SettingsMenu({ compact = false }: SettingsMenuProps) {
   const [loadingBranches, setLoadingBranches] = useState(false)
   const open = Boolean(anchorEl)
 
-  // Auto-update state
+  // Auto-update state (from global store, listener in App.tsx)
   const [appVersion, setAppVersion] = useState<string>('')
-  const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'error' | 'up-to-date'>('idle')
-  const [updateVersion, setUpdateVersion] = useState<string>('')
-  const [downloadPercent, setDownloadPercent] = useState<number>(0)
+  const updateStatus = useStore((state) => state.updateStatus)
+  const setUpdateStatus = useStore((state) => state.setUpdateStatus)
+  const updateVersion = useStore((state) => state.updateVersion)
+  const downloadPercent = useStore((state) => state.updateDownloadPercent)
 
   const aiTool = useStore((state) => state.aiTool)
   const setAITool = useStore((state) => state.setAITool)
@@ -117,15 +118,9 @@ export default function SettingsMenu({ compact = false }: SettingsMenuProps) {
 
   const selectedTool = AI_TOOLS.find((t) => t.id === aiTool) || AI_TOOLS[0]
 
-  // Fetch app version and listen for update status
+  // Fetch app version
   useEffect(() => {
     window.updaterAPI.getAppVersion().then(setAppVersion)
-    const cleanup = window.updaterAPI.onUpdateStatus((event) => {
-      setUpdateStatus(event.status === 'dev-mode' ? 'idle' : event.status as typeof updateStatus)
-      if (event.version) setUpdateVersion(event.version)
-      if (event.percent !== undefined) setDownloadPercent(event.percent)
-    })
-    return cleanup
   }, [])
 
   // Detect CLI tools when dialog opens

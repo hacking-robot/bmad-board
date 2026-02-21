@@ -18,5 +18,8 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
+| #19636 | 3:52 PM | 🔵 | UpdaterAPI Interface Definition and Event Structure | ~363 |
+| #19634 | " | 🔵 | Preload Script Exposes Update API But No Listeners Configured | ~345 |
+| #19630 | 3:51 PM | 🔵 | Auto-updater Check Timing Investigation | ~366 |
 | #18639 | 9:06 AM | 🔵 | BMadBoard scanner dynamically discovers agents and workflows using file naming conventions | ~467 |
 </claude-mem-context>
