@@ -8,6 +8,7 @@ import NavigateNextIcon from '@mui/icons-material/NavigateNext'
 import ReplayIcon from '@mui/icons-material/Replay'
 import SkipNextIcon from '@mui/icons-material/SkipNext'
 import DescriptionIcon from '@mui/icons-material/Description'
+import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined'
 import { useStore } from '../../store'
 import { getWizardSteps } from '../../data/wizardSteps'
 import { HUMAN_DEV_FILES, HUMAN_DEV_FILES_VERSION } from '../../data/humanDevFiles'
@@ -132,6 +133,8 @@ export default function ProjectWizard() {
   const [docsAnchor, setDocsAnchor] = useState<null | HTMLElement>(null)
   const [selectedArtifact, setSelectedArtifact] = useState<PlanningArtifact | null>(null)
   const { artifacts, refresh: refreshArtifacts } = usePlanningArtifacts()
+  const [artifactWarnings, setArtifactWarnings] = useState<Set<string>>(new Set())
+  const [stepWarnings, setStepWarnings] = useState<Set<number>>(new Set())
   const resumeChecked = useRef(false)
 
   // On mount, check for saved wizard state and resume if found
@@ -248,7 +251,7 @@ export default function ProjectWizard() {
           // For active steps with template content, warn instead of auto-completing
           if (status === 'active' && templateWarning) {
             const { setWizardError } = useStore.getState()
-            setWizardError(`⚠ ${step.name}: ${templateWarning}. Re-run this step or mark it complete manually.`)
+            setWizardError(`⚠ ${step.name}: ${templateWarning}. Complete conversation with agent, re-run this step, or mark it complete manually.`)
             continue
           }
           updateWizardStep(i, 'completed')
@@ -280,7 +283,7 @@ export default function ProjectWizard() {
         if (!exists) {
           warnings.push(`⚠ ${step.name}: Output file not found.`)
         } else if (templateWarning) {
-          warnings.push(`⚠ ${step.name}: ${templateWarning}. Re-run this step or mark it complete manually.`)
+          warnings.push(`⚠ ${step.name}: ${templateWarning}. Complete conversation with agent, re-run this step, or mark it complete manually.`)
         }
       }
       const { setWizardError } = useStore.getState()
@@ -291,6 +294,40 @@ export default function ProjectWizard() {
       }
     })()
   }, [isActive, projectPath, outputFolder, currentStep, stepStatuses, ACTIVE_STEPS])
+
+  // Check artifacts for template content — mirrors the bottom warning logic:
+  // only flag artifacts whose corresponding step is before the current step
+  useEffect(() => {
+    if (!isActive || !projectPath) {
+      setArtifactWarnings(new Set())
+      setStepWarnings(new Set())
+      return
+    }
+    let cancelled = false
+    const folder = outputFolder || '_bmad-output'
+    ;(async () => {
+      const artWarnings = new Set<string>()
+      const sWarnings = new Set<number>()
+      for (let i = 0; i < ACTIVE_STEPS.length && i < currentStep; i++) {
+        const step = ACTIVE_STEPS[i]
+        const status = stepStatuses[i]
+        if (status !== 'active' && status !== 'completed') continue
+        if (!step.outputFile) continue
+
+        const { exists, templateWarning } = await checkStepOutput(step, projectPath, folder)
+        if (exists && templateWarning) {
+          sWarnings.add(i)
+          const match = artifacts.find(a => a.path.endsWith('/' + step.outputFile))
+          if (match) artWarnings.add(match.path)
+        }
+      }
+      if (!cancelled) {
+        setArtifactWarnings(artWarnings)
+        setStepWarnings(sWarnings)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [isActive, projectPath, outputFolder, currentStep, stepStatuses, ACTIVE_STEPS, artifacts])
 
   // Enrich wizard steps with dynamically resolved agent names from scan data
   const resolvedSteps = useMemo(() => {
@@ -479,7 +516,7 @@ export default function ProjectWizard() {
           // Output file exists but looks like an unfilled template — warn user
           console.log(`[WizardProgress] Template warning for step ${stepIndex} (${step.name}): ${templateWarning}`)
           const { setWizardError } = useStore.getState()
-          setWizardError(`⚠ ${step.name}: ${templateWarning}. Re-run this step or mark it complete manually if the content is correct.`)
+          setWizardError(`⚠ ${step.name}: ${templateWarning}. Complete conversation with agent, re-run this step, or mark it complete manually.`)
           return
         }
         console.log(`[WizardProgress] Auto-completing step ${stepIndex} (${step.name}) — agent exited + output exists`)
@@ -520,6 +557,14 @@ export default function ProjectWizard() {
     setWizardActiveSubStep(0)
     skipWizardStep(stepIndex)
   }, [skipWizardStep, setWizardActiveSubStep])
+
+  const handleGoToStep = useCallback((stepIndex: number) => {
+    goToWizardStep(stepIndex)
+    const step = ACTIVE_STEPS[stepIndex]
+    if (step?.agentId) {
+      setSelectedChatAgent(step.agentId)
+    }
+  }, [goToWizardStep, ACTIVE_STEPS, setSelectedChatAgent])
 
   const setBaseBranch = useStore((state) => state.setBaseBranch)
 
@@ -640,7 +685,12 @@ export default function ProjectWizard() {
               <Tooltip title="Planning Documents">
                 <IconButton size="small" onClick={(e) => setDocsAnchor(e.currentTarget)}>
                   <Badge badgeContent={artifacts.length} color="primary" max={99}>
-                    <DescriptionIcon fontSize="small" />
+                    <Box sx={{ position: 'relative', display: 'flex' }}>
+                      <DescriptionIcon fontSize="small" />
+                      {artifactWarnings.size > 0 && (
+                        <ReportProblemOutlinedIcon sx={{ position: 'absolute', bottom: -4, right: -4, fontSize: 12, color: 'error.main' }} />
+                      )}
+                    </Box>
                   </Badge>
                 </IconButton>
               </Tooltip>
@@ -694,8 +744,9 @@ export default function ProjectWizard() {
             commandRef: currentStepData.commandRef,
             current: wizardActiveSubStep
           } : undefined}
+          stepWarnings={stepWarnings}
           onStartStep={handleStartAgentStep}
-          onGoToStep={goToWizardStep}
+          onGoToStep={handleGoToStep}
         />
 
         {/* Current step detail area */}
@@ -881,6 +932,11 @@ export default function ProjectWizard() {
                 '&:hover': { bgcolor: 'action.selected' }
               }}
             >
+              {artifactWarnings.has(artifact.path) && (
+                <Tooltip title="File appears to be an unfilled template" arrow>
+                  <ReportProblemOutlinedIcon sx={{ fontSize: 14, color: 'error.main' }} />
+                </Tooltip>
+              )}
               <DescriptionIcon sx={{ fontSize: 16, color: getArtifactTypeColor(artifact.type) }} />
               <Typography variant="body2" sx={{ flex: 1 }}>
                 {artifact.displayName}

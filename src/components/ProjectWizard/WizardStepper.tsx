@@ -7,6 +7,7 @@ import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked'
 import SmartToyIcon from '@mui/icons-material/SmartToy'
 import TerminalIcon from '@mui/icons-material/Terminal'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
+import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined'
 import { WizardStep, WizardStepStatus, WizardPhase } from '../../types/projectWizard'
 import { PHASE_LABELS } from '../../data/wizardSteps'
 
@@ -17,6 +18,7 @@ interface WizardStepperProps {
   stepCounts?: Record<string, number>
   stepNames?: Record<string, string[]>
   activeSubStep?: { commandRef: string; current: number }
+  stepWarnings?: Set<number>
   onStartStep?: (stepIndex: number) => void
   onGoToStep?: (stepIndex: number) => void
 }
@@ -58,7 +60,7 @@ function getPhaseColor(phase: WizardPhase): string {
   }
 }
 
-export default function WizardStepper({ steps, currentStep, stepStatuses, stepCounts, stepNames, activeSubStep, onStartStep, onGoToStep }: WizardStepperProps) {
+export default function WizardStepper({ steps, currentStep, stepStatuses, stepCounts, stepNames, activeSubStep, stepWarnings, onStartStep, onGoToStep }: WizardStepperProps) {
   let lastPhase: WizardPhase | null = null
 
   return (
@@ -99,7 +101,7 @@ export default function WizardStepper({ steps, currentStep, stepStatuses, stepCo
               onClick={() => {
                 if (isActive && status === 'pending' && onStartStep) {
                   onStartStep(index)
-                } else if (isPast && index > 0 && onGoToStep) {
+                } else if ((isPast || isActive) && index > 0 && onGoToStep) {
                   onGoToStep(index)
                 }
               }}
@@ -113,8 +115,8 @@ export default function WizardStepper({ steps, currentStep, stepStatuses, stepCo
                 bgcolor: isActive ? 'action.selected' : 'transparent',
                 opacity: isFuture ? 0.5 : 1,
                 transition: 'all 0.2s',
-                cursor: (isActive && status === 'pending') || (isPast && index > 0) ? 'pointer' : 'default',
-                '&:hover': (isActive && status === 'pending') || (isPast && index > 0) ? { bgcolor: 'action.hover' } : {}
+                cursor: (isActive && status === 'pending') || ((isPast || isActive) && index > 0) ? 'pointer' : 'default',
+                '&:hover': (isActive && status === 'pending') || ((isPast || isActive) && index > 0) ? { bgcolor: 'action.hover' } : {}
               }}
             >
               {/* Status icon */}
@@ -144,6 +146,11 @@ export default function WizardStepper({ steps, currentStep, stepStatuses, stepCo
                   >
                     {step.name}
                   </Typography>
+                  {stepWarnings?.has(index) && (
+                    <Tooltip title="Output appears to be an unfilled template" arrow>
+                      <ReportProblemOutlinedIcon sx={{ fontSize: 14, color: 'error.main', flexShrink: 0 }} />
+                    </Tooltip>
+                  )}
                   {(step.tooltip || step.subSteps?.length || (step.commandRef && stepNames?.[step.commandRef]?.length)) && (
                     <Tooltip
                       title={
