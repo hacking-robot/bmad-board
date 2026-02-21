@@ -26,6 +26,7 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
   const clearPendingChatMessage = useStore((state) => state.clearPendingChatMessage)
 
   const [atBottom, setAtBottom] = useState(true)
+  const prevIsTypingRef = useRef(false)
 
   const thread = chatThreads[agentId]
   const messages = thread?.messages || []
@@ -212,6 +213,16 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
     }
   }, [agentId, setChatTyping, updateChatMessage, clearAgentState])
 
+  // Scroll to bottom when typing starts (handles wizard flow where thread is freshly created)
+  useEffect(() => {
+    if (isTyping && !prevIsTypingRef.current && messages.length > 0) {
+      setTimeout(() => {
+        virtuosoRef.current?.scrollToIndex({ index: messages.length - 1, align: 'end', behavior: 'smooth' })
+      }, 50)
+    }
+    prevIsTypingRef.current = isTyping
+  }, [isTyping, messages.length])
+
   // Guard against concurrent pending message processing
   const isSendingRef = useRef(false)
 
@@ -277,7 +288,8 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
             <Virtuoso
               ref={virtuosoRef}
               data={messages}
-              followOutput={(isAtBottom) => isAtBottom ? 'smooth' : false}
+              initialTopMostItemIndex={messages.length > 0 ? messages.length - 1 : 0}
+              followOutput={(isAtBottom) => (isAtBottom || isTyping) ? 'smooth' : false}
               atBottomStateChange={setAtBottom}
               atBottomThreshold={50}
               itemContent={(_index, message) => (

@@ -1674,7 +1674,7 @@ export const useStore = create<AppState>()(
         }),
       resumeWizard: (wizardState) =>
         set({
-          projectWizard: wizardState,
+          projectWizard: { ...wizardState, error: null },
           projectPath: wizardState.projectPath,
           projectType: (wizardState.selectedModules?.includes("gds")
             ? "gds"
