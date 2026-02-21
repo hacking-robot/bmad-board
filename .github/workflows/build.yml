@@ -98,3 +98,14 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+  publish:
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publish release
+        run: gh release edit "v${{ needs.version.outputs.new_version }}" --repo "${{ github.repository }}" --draft=false --title "BMad Board v${{ needs.version.outputs.new_version }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
