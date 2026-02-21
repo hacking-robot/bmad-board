@@ -37,7 +37,7 @@ export default function NewProjectDialog() {
   }
 
   const projectName = pendingNewProject?.path.split('/').pop() || 'Unknown'
-  const projectTypeName = pendingNewProject?.projectType === 'bmgd' ? 'BMAD Game Dev' : 'BMAD Method'
+  const projectTypeName = pendingNewProject?.projectType === 'gds' ? 'Game Dev Studio' : 'BMAD Method'
 
   return (
     <Dialog
@@ -84,7 +84,8 @@ export default function NewProjectDialog() {
           <Typography variant="body2" color="text.secondary">
             The Project Wizard will guide you through setting up your BMAD project step by step.
             It will install the BMAD method, then walk you through creating a PRD, architecture,
-            and epics using AI agents.
+            and epics using AI agents. Uses standard (BMM) development. For game dev or add-on
+            modules, use File &gt; New Project.
           </Typography>
 
           <Typography variant="caption" color="text.secondary">

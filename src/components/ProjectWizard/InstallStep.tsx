@@ -45,24 +45,31 @@ export default function InstallStep({ onComplete }: InstallStepProps) {
     }
   }, [appendWizardInstallLog, updateWizardStep, setWizardError, onComplete])
 
+  const modules = projectWizard.selectedModules || ['bmm']
+  const hasGds = modules.includes('gds')
+
   const handleInstall = useCallback(async () => {
     if (!projectWizard.projectPath) return
 
     setWizardError(null)
     updateWizardStep(0, 'active')
 
-    const result = await window.wizardAPI.install(projectWizard.projectPath, false, outputFolder)
+    const result = await window.wizardAPI.install(projectWizard.projectPath, false, outputFolder, modules)
     if (!result.success) {
       updateWizardStep(0, 'error')
       setWizardError(result.error || 'Failed to start installation')
     }
-  }, [projectWizard.projectPath, outputFolder, updateWizardStep, setWizardError])
+  }, [projectWizard.projectPath, outputFolder, modules, updateWizardStep, setWizardError])
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, p: 2 }}>
       <Typography variant="body2" color="text.secondary">
-        This will run <code>npx bmad-method install</code> to set up BMAD in your project folder.
+        This will run <code>npx bmad-method install</code> to set up BMAD in your project folder
+        {hasGds ? ' with the Game Dev Studio module' : ''}.
         It installs the necessary configuration files and templates.
+        {modules.length > 1 && (
+          <> Modules: <strong>{modules.join(', ')}</strong></>
+        )}
       </Typography>
 
       {!isInstalling && !isCompleted && !hasError && (

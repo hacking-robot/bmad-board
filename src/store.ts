@@ -5,7 +5,8 @@ import type { BmadScanResult } from './types/bmadScan'
 import type { WorkflowConfig } from './types/flow'
 import { FullCycleState, FullCycleStepType, FullCycleStepStatus, initialFullCycleState, EpicCycleState, EpicStoryStatus, initialEpicCycleState } from './types/fullCycle'
 import { ProjectWizardState, WizardStepStatus, initialWizardState } from './types/projectWizard'
-import { WIZARD_STEPS } from './data/wizardSteps'
+import { getWizardSteps } from './data/wizardSteps'
+import { flushPendingThreadSave } from './utils/chatUtils'
 
 export type ViewMode = 'board' | 'chat'
 
@@ -401,7 +402,7 @@ interface AppState {
 
   // Project Wizard
   projectWizard: ProjectWizardState
-  startProjectWizard: (projectPath: string, outputFolder?: string, developerMode?: 'ai' | 'human') => void
+  startProjectWizard: (projectPath: string, outputFolder?: string, developerMode?: 'ai' | 'human', selectedModules?: string[]) => void
   updateWizardStep: (stepIndex: number, status: WizardStepStatus) => void
   advanceWizardStep: () => void
   skipWizardStep: (stepIndex: number) => void
@@ -504,7 +505,18 @@ export const useStore = create<AppState>()(
       projectPath: null,
       projectType: null,
       outputFolder: '_bmad-output',
-      setProjectPath: (path) => set({ projectPath: path, bmadVersionError: null }),
+      setProjectPath: (path) => {
+        const state = get()
+        if (state.projectPath && path !== state.projectPath) {
+          flushPendingThreadSave()
+          for (const [agentId, thread] of Object.entries(state.chatThreads)) {
+            if (thread && (thread as AgentThread).messages.length > 0) {
+              window.chatAPI?.saveThread(state.projectPath, agentId, thread as AgentThread)
+            }
+          }
+        }
+        set({ projectPath: path, bmadVersionError: null, chatThreads: {}, selectedChatAgent: null })
+      },
       setProjectType: (type) => set({ projectType: type }),
       setOutputFolder: (folder) => set({ outputFolder: folder }),
 
@@ -1242,24 +1254,30 @@ export const useStore = create<AppState>()(
 
       // Project Wizard
       projectWizard: initialWizardState,
-      startProjectWizard: (projectPath, outputFolder, developerMode) => set({
-        projectWizard: {
-          ...initialWizardState,
-          isActive: true,
+      startProjectWizard: (projectPath, outputFolder, developerMode, selectedModules) => {
+        const modules = selectedModules?.length ? selectedModules : ['bmm']
+        const primary = modules.includes('gds') ? 'gds' : 'bmm'
+        const steps = getWizardSteps(primary as 'bmm' | 'gds')
+        set({
+          projectWizard: {
+            ...initialWizardState,
+            isActive: true,
+            projectPath,
+            outputFolder: outputFolder || '_bmad-output',
+            developerMode,
+            selectedModules: modules,
+            stepStatuses: new Array(steps.length).fill('pending' as WizardStepStatus)
+          },
+          // Set project path/type so AgentChat can function during wizard
           projectPath,
+          projectType: primary as ProjectType,
           outputFolder: outputFolder || '_bmad-output',
-          developerMode,
-          stepStatuses: new Array(WIZARD_STEPS.length).fill('pending' as WizardStepStatus)
-        },
-        // Set project path/type so AgentChat can function during wizard
-        projectPath,
-        projectType: 'bmm' as ProjectType,
-        outputFolder: outputFolder || '_bmad-output',
-        developerMode: developerMode || 'ai',
-        // Clear stale scan data from previous project so old agents don't show
-        bmadScanResult: null,
-        scannedWorkflowConfig: null
-      }),
+          developerMode: developerMode || 'ai',
+          // Clear stale scan data from previous project so old agents don't show
+          bmadScanResult: null,
+          scannedWorkflowConfig: null
+        })
+      },
       updateWizardStep: (stepIndex, status) => set((state) => {
         const newStatuses = [...state.projectWizard.stepStatuses]
         newStatuses[stepIndex] = status
@@ -1322,7 +1340,7 @@ export const useStore = create<AppState>()(
       resumeWizard: (wizardState) => set({
         projectWizard: wizardState,
         projectPath: wizardState.projectPath,
-        projectType: 'bmm' as ProjectType,
+        projectType: (wizardState.selectedModules?.includes('gds') ? 'gds' : 'bmm') as ProjectType,
         outputFolder: wizardState.outputFolder || '_bmad-output',
         developerMode: wizardState.developerMode || 'ai',
         bmadScanResult: null,

@@ -346,7 +346,7 @@ export async function scanBmadProject(projectPath: string): Promise<BmadScanResu
   let modules = await discoverModules(bmadPath)
   if (modules.length === 0) {
     // Fallback: check for common module directories
-    const common = ['core', 'bmm', 'bmgd']
+    const common = ['core', 'bmm', 'gds']
     modules = common.filter(m => existsSync(join(bmadPath, m)))
   }
   console.log(`[Scanner] Discovered modules: ${JSON.stringify(modules)}`)

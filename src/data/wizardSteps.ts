@@ -1,6 +1,6 @@
 import { WizardStep } from '../types/projectWizard'
 
-export const WIZARD_STEPS: WizardStep[] = [
+export const BMM_WIZARD_STEPS: WizardStep[] = [
   {
     id: 'install',
     name: 'Install BMAD',
@@ -196,12 +196,129 @@ export const WIZARD_STEPS: WizardStep[] = [
   }
 ]
 
+// Backward-compatible alias
+export const WIZARD_STEPS = BMM_WIZARD_STEPS
+
+export const GDS_WIZARD_STEPS: WizardStep[] = [
+  {
+    id: 'install',
+    name: 'Install BMAD',
+    phase: 'install',
+    type: 'system',
+    description: 'Install the bmad-method package with Game Dev Studio module into this project via npx',
+    required: true,
+    outputDir: '_bmad',
+    tooltip: 'Runs npx to install the BMAD method framework with the Game Dev Studio module into your project. This creates the _bmad folder with game-specific agents, workflows, and configuration files.'
+  },
+  {
+    id: 'brainstorm-game',
+    name: 'Brainstorm Game',
+    phase: 'analysis',
+    type: 'agent',
+    description: 'Brainstorm game concepts, mechanics, and themes with the Game Designer',
+    required: false,
+    commandRef: 'brainstorm-game',
+    commandModule: 'gds',
+    commandType: 'workflows',
+    agentId: 'game-designer',
+    agentName: 'Game Designer',
+    outputDir: 'brainstorming',
+    outputDirPrefix: 'brainstorming-session-',
+    tooltip: 'An interactive brainstorming session with the Game Designer to explore game concepts, mechanics, themes, and player experiences. Helps crystallize your game idea before committing to a full design document.'
+  },
+  {
+    id: 'game-brief',
+    name: 'Game Brief',
+    phase: 'analysis',
+    type: 'agent',
+    description: 'Create a high-level game brief summarizing the concept',
+    required: false,
+    commandRef: 'game-brief',
+    commandModule: 'gds',
+    commandType: 'workflows',
+    agentId: 'game-designer',
+    agentName: 'Game Designer',
+    outputFile: 'game-brief.md',
+    tooltip: 'Creates a concise game brief capturing the core concept, target audience, platform, genre, and key mechanics. Serves as the foundation document that aligns all subsequent game design and development work.'
+  },
+  {
+    id: 'create-gdd',
+    name: 'Create GDD',
+    phase: 'planning',
+    type: 'agent',
+    description: 'Create the Game Design Document with the Game Designer',
+    required: true,
+    commandRef: 'gdd',
+    commandModule: 'gds',
+    commandType: 'workflows',
+    agentId: 'game-designer',
+    agentName: 'Game Designer',
+    outputFile: 'GDD.md',
+    tooltip: 'The Game Designer creates a comprehensive Game Design Document (GDD) defining gameplay mechanics, systems, progression, UI/UX, and technical requirements. This is a required step — the GDD drives all downstream architecture and story creation.'
+  },
+  {
+    id: 'narrative',
+    name: 'Narrative Design',
+    phase: 'planning',
+    type: 'agent',
+    description: 'Design the game narrative, story, and dialogue systems',
+    required: false,
+    commandRef: 'narrative',
+    commandModule: 'gds',
+    commandType: 'workflows',
+    agentId: 'game-designer',
+    agentName: 'Game Designer',
+    outputFile: 'narrative-design.md',
+    tooltip: 'The Game Designer creates a narrative design document covering story arcs, characters, dialogue systems, and lore. Skip this if your game has minimal narrative elements.'
+  },
+  {
+    id: 'game-architecture',
+    name: 'Game Architecture',
+    phase: 'solutioning',
+    type: 'agent',
+    description: 'Design the game system architecture',
+    required: true,
+    commandRef: 'game-architecture',
+    commandModule: 'gds',
+    commandType: 'workflows',
+    agentId: 'game-architect',
+    agentName: 'Game Architect',
+    outputFile: 'architecture.md',
+    tooltip: 'The Game Architect designs the technical architecture: game engine integration, rendering pipeline, physics systems, networking, asset pipeline, and component structure. This required step ensures the game is built on a solid technical foundation.'
+  },
+  {
+    id: 'sprint-planning',
+    name: 'Sprint Planning',
+    phase: 'implementation',
+    type: 'agent',
+    description: 'Initialize sprint planning to create story tracking',
+    required: true,
+    commandRef: 'sprint-planning',
+    commandModule: 'gds',
+    commandType: 'workflows',
+    agentId: 'game-scrum-master',
+    agentName: 'Game Scrum Master',
+    outputFile: 'sprint-status.yaml',
+    tooltip: 'The Game Scrum Master initializes sprint planning by creating sprint-status.yaml, which tracks all epics and stories with their statuses. This file is what populates the sprint board.'
+  }
+]
+
+// Get the appropriate wizard steps for a primary module
+export function getWizardSteps(primaryModule: 'bmm' | 'gds'): WizardStep[] {
+  return primaryModule === 'gds' ? GDS_WIZARD_STEPS : BMM_WIZARD_STEPS
+}
+
+// Get the indices of required steps for a given step list
+export function getRequiredStepIndices(steps: WizardStep[]): number[] {
+  return steps
+    .map((step, index) => step.required ? index : -1)
+    .filter(i => i >= 0)
+}
+
 export const WIZARD_TOTAL_STEPS = WIZARD_STEPS.length
 
-// Get the indices of required steps
-export const REQUIRED_STEP_INDICES = WIZARD_STEPS
-  .map((step, index) => step.required ? index : -1)
-  .filter(i => i >= 0)
+// Get the indices of required steps (backward compat for BMM)
+export const REQUIRED_STEP_INDICES = getRequiredStepIndices(BMM_WIZARD_STEPS)
 
 // Phase labels for grouping in the stepper
 export const PHASE_LABELS: Record<string, string> = {

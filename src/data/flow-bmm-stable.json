@@ -361,5 +361,161 @@
         "Explain the authentication architecture"
       ]
     }
-  ]
+  ],
+  "projectWorkflows": {
+    "analysis": {
+      "label": "Analysis",
+      "icon": "🔍",
+      "description": "Research, brainstorming, and understanding requirements. Document existing projects and explore market context.",
+      "workflows": [
+        {
+          "label": "Brainstorming",
+          "agentId": "analyst",
+          "command": "/bmad-brainstorming",
+          "description": "Brainstorm ideas and features",
+          "tooltip": "Interactive session with the Analyst to explore ideas, features, and possibilities. Produces a brainstorming report that feeds into later planning steps."
+        },
+        {
+          "label": "Market Research",
+          "agentId": "analyst",
+          "command": "/bmad-bmm-market-research",
+          "description": "Market size, growth, competition, and customer insights",
+          "tooltip": "Researches market size, growth potential, competitive landscape, and target customer insights. Helps validate your product idea against real market conditions."
+        },
+        {
+          "label": "Domain Research",
+          "agentId": "analyst",
+          "command": "/bmad-bmm-domain-research",
+          "description": "Industry analysis, regulations, and ecosystem dynamics",
+          "tooltip": "Deep dive into your project's industry domain: regulatory requirements, technology trends, ecosystem dynamics, and domain-specific constraints."
+        },
+        {
+          "label": "Technical Research",
+          "agentId": "analyst",
+          "command": "/bmad-bmm-technical-research",
+          "description": "Technology evaluation and implementation approaches",
+          "tooltip": "Evaluates technology options, compares frameworks and tools, and analyzes implementation approaches to inform tech stack decisions."
+        },
+        {
+          "label": "Create Product Brief",
+          "agentId": "analyst",
+          "command": "/bmad-bmm-create-product-brief",
+          "description": "Create or update product brief",
+          "tooltip": "Creates a concise product brief capturing the project vision, target users, core value proposition, and high-level goals. Serves as the foundation for all subsequent planning."
+        }
+      ]
+    },
+    "planning": {
+      "label": "Planning",
+      "icon": "📋",
+      "description": "Define product requirements, create epics and stories, and plan the project structure.",
+      "workflows": [
+        {
+          "label": "Create PRD",
+          "agentId": "pm",
+          "command": "/bmad-bmm-create-prd",
+          "description": "Create product requirements document",
+          "tooltip": "The PM creates a detailed Product Requirements Document defining features, user flows, functional and non-functional requirements. The PRD drives all downstream architecture and story creation."
+        },
+        {
+          "label": "Edit PRD",
+          "agentId": "pm",
+          "command": "/bmad-bmm-edit-prd",
+          "description": "Edit and update existing PRD",
+          "tooltip": "Opens the existing PRD for guided editing with the PM agent. Use this to refine requirements, add new features, or update scope after initial creation."
+        },
+        {
+          "label": "Validate PRD",
+          "agentId": "pm",
+          "command": "/bmad-bmm-validate-prd",
+          "description": "Validate PRD completeness and quality",
+          "tooltip": "Reviews the PRD for completeness, consistency, and quality. Checks that all required sections are present, requirements are testable, and there are no contradictions."
+        },
+        {
+          "label": "Create UX Design",
+          "agentId": "ux-designer",
+          "command": "/bmad-bmm-create-ux-design",
+          "description": "Design user experience",
+          "tooltip": "Creates a UX specification with user flows, wireframe descriptions, and interface guidelines. Produces ux-spec.md that developers reference during implementation."
+        }
+      ]
+    },
+    "solutioning": {
+      "label": "Solutioning",
+      "icon": "🏗️",
+      "description": "Design system architecture, create epics and stories, and verify implementation readiness.",
+      "workflows": [
+        {
+          "label": "Create Architecture",
+          "agentId": "architect",
+          "command": "/bmad-bmm-create-architecture",
+          "description": "Design system architecture",
+          "tooltip": "Designs the system architecture: tech stack, component structure, data models, APIs, and integration patterns. Produces architecture.md that guides all implementation work."
+        },
+        {
+          "label": "Create Epics & Stories",
+          "agentId": "pm",
+          "command": "/bmad-bmm-create-epics-and-stories",
+          "description": "Break work into epics and stories",
+          "tooltip": "Breaks the PRD and architecture into epics (major feature groups) and individual stories with acceptance criteria. Creates the work items that populate the sprint board."
+        },
+        {
+          "label": "Check Implementation Readiness",
+          "agentId": "pm",
+          "command": "/bmad-bmm-check-implementation-readiness",
+          "description": "Verify project is ready for development",
+          "tooltip": "Reviews all planning artifacts (PRD, architecture, stories) to verify consistency, completeness, and readiness for implementation. Catches gaps before development begins."
+        }
+      ]
+    },
+    "management": {
+      "label": "Management",
+      "icon": "📊",
+      "description": "Sprint planning, progress tracking, retrospectives, and project documentation.",
+      "workflows": [
+        {
+          "label": "Sprint Planning",
+          "agentId": "sm",
+          "command": "/bmad-bmm-sprint-planning",
+          "description": "Plan sprint work",
+          "tooltip": "The Scrum Master helps prioritize stories, estimate effort, and organize the next sprint. Selects which backlog stories to move into the sprint based on capacity and dependencies."
+        },
+        {
+          "label": "Sprint Status",
+          "agentId": "sm",
+          "command": "/bmad-bmm-sprint-status",
+          "description": "Check sprint progress",
+          "tooltip": "Generates a progress report of the current sprint: which stories are in progress, completed, or blocked. Updates the sprint-status.yaml tracking file."
+        },
+        {
+          "label": "Retrospective",
+          "agentId": "sm",
+          "command": "/bmad-bmm-retrospective",
+          "description": "Run sprint retrospective",
+          "tooltip": "Facilitates a sprint retrospective to review what went well, what didn't, and what to improve. Documents learnings and action items for the next sprint."
+        },
+        {
+          "label": "Correct Course",
+          "agentId": "pm",
+          "command": "/bmad-bmm-correct-course",
+          "description": "Adjust direction based on findings",
+          "tooltip": "When a story or implementation has gone off-track, this workflow helps diagnose the issue and plan corrections. Use when code review reveals problems or requirements have changed."
+        },
+        {
+          "label": "Generate Project Context",
+          "agentId": "analyst",
+          "command": "/bmad-bmm-generate-project-context",
+          "description": "Generate project context document",
+          "tooltip": "Generates a comprehensive project-context.md summarizing all planning artifacts into a single reference. AI agents use this during development to understand the full project scope."
+        },
+        {
+          "label": "Document Project",
+          "agentId": "tech-writer",
+          "command": "/bmad-bmm-document-project",
+          "description": "Create project documentation",
+          "tooltip": "The Tech Writer creates or updates project documentation including README, API docs, architecture overviews, and developer guides based on the current codebase state."
+        }
+      ]
+    }
+  }
 }

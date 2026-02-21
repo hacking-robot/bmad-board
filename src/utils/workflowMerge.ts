@@ -4,7 +4,7 @@ import type { BmadScanResult, ScannedAgent } from '../types/bmadScan'
 import type { WorkflowConfig, AgentDefinition, NextStepAction, StatusActions, StatusDefinition, StatusTransition, ProjectWorkflowPhase } from '../types/flow'
 import type { ProjectType, StoryStatus } from '../types'
 import overlayBmm from '../data/board-overlay-bmm.json'
-import overlayBmgd from '../data/board-overlay-bmgd.json'
+import overlayGds from '../data/board-overlay-gds.json'
 
 // Board overlay types (from JSON)
 // Note: agentId is NOT in the overlay — it's auto-discovered from scan data
@@ -53,8 +53,8 @@ interface BoardOverlay {
 }
 
 function selectOverlay(projectType: ProjectType | null): BoardOverlay {
-  if (projectType === 'bmgd') {
-    return overlayBmgd as unknown as BoardOverlay
+  if (projectType === 'gds') {
+    return overlayGds as unknown as BoardOverlay
   }
   return overlayBmm as unknown as BoardOverlay
 }

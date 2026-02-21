@@ -88,9 +88,10 @@ export function useChatMessageHandler() {
   const saveThreadForAgent = useCallback((agentId: string) => {
     const thread = useStore.getState().chatThreads[agentId]
     if (!thread || thread.messages.length === 0) return
+    if (!projectPath) return
 
     // Save thread to disk
-    debouncedSaveThread(agentId, thread)
+    debouncedSaveThread(projectPath, agentId, thread)
 
     // Also save to story chat history if linked to a story
     if (thread.storyId && projectPath) {

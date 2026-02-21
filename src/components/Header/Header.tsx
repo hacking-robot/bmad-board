@@ -68,7 +68,7 @@ export default function Header() {
     : 0
   const showRunEpic = selectedEpicId !== null && toolSupportsHeadless && viewMode === 'board' && developerMode !== 'human'
 
-  const isGameProject = projectType === 'bmgd'
+  const isGameProject = projectType === 'gds'
   const logoSrc = themeMode === 'dark' ? logoDark : logoLight
 
   const runningAgentsCount = enableAgents

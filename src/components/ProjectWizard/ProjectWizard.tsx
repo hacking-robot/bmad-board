@@ -9,8 +9,9 @@ import ReplayIcon from '@mui/icons-material/Replay'
 import SkipNextIcon from '@mui/icons-material/SkipNext'
 import DescriptionIcon from '@mui/icons-material/Description'
 import { useStore } from '../../store'
-import { WIZARD_STEPS } from '../../data/wizardSteps'
+import { getWizardSteps } from '../../data/wizardSteps'
 import { HUMAN_DEV_FILES, HUMAN_DEV_FILES_VERSION } from '../../data/humanDevFiles'
+import { HUMAN_DEV_FILES_GDS } from '../../data/humanDevFilesGds'
 import { resolveCommand, mergeWorkflowConfig } from '../../utils/workflowMerge'
 import { useWorkflow } from '../../hooks/useWorkflow'
 import { transformCommand } from '../../utils/commandTransform'
@@ -81,6 +82,9 @@ export default function ProjectWizard() {
 
   const { getAgentName } = useWorkflow()
   const { isActive, projectPath, currentStep, stepStatuses, error } = projectWizard
+  const modules = projectWizard.selectedModules || ['bmm']
+  const primaryModule = modules.includes('gds') ? 'gds' : 'bmm'
+  const ACTIVE_STEPS = useMemo(() => getWizardSteps(primaryModule as 'bmm' | 'gds'), [primaryModule])
   const persistRef = useRef(false)
   const [docsAnchor, setDocsAnchor] = useState<null | HTMLElement>(null)
   const [selectedArtifact, setSelectedArtifact] = useState<PlanningArtifact | null>(null)
@@ -133,10 +137,10 @@ export default function ProjectWizard() {
     const timer = setTimeout(async () => {
       initialFileCheckDone.current = true
       const { projectWizard: wiz } = useStore.getState()
-      for (let i = 0; i < WIZARD_STEPS.length; i++) {
+      for (let i = 0; i < ACTIVE_STEPS.length; i++) {
         const status = wiz.stepStatuses[i]
         if (status !== 'pending' && status !== 'active') continue
-        const step = WIZARD_STEPS[i]
+        const step = ACTIVE_STEPS[i]
         if (!step.outputFile && !step.outputDir) continue
         const exists = await checkStepOutput(step, projectPath, outputFolder)
         if (exists) {
@@ -181,8 +185,8 @@ export default function ProjectWizard() {
       // Active steps are excluded — the agent may still be building the file,
       // so the user should decide when it's done via "Mark Complete".
       const { projectWizard: wiz } = useStore.getState()
-      for (let i = 0; i < WIZARD_STEPS.length; i++) {
-        const step = WIZARD_STEPS[i]
+      for (let i = 0; i < ACTIVE_STEPS.length; i++) {
+        const step = ACTIVE_STEPS[i]
         const status = wiz.stepStatuses[i]
         if (status !== 'pending') continue
         // Skip the current step — the user may have navigated back to re-run it,
@@ -202,7 +206,7 @@ export default function ProjectWizard() {
 
   // Enrich wizard steps with dynamically resolved agent names from scan data
   const resolvedSteps = useMemo(() => {
-    return WIZARD_STEPS.map(step => {
+    return ACTIVE_STEPS.map(step => {
       if (step.type !== 'agent' || !step.commandRef || !bmadScanResult) return step
       const resolved = resolveCommand(step.commandRef, step.commandModule || '', step.commandType || 'workflows', bmadScanResult, step.agentId)
       if (!resolved) return step
@@ -212,7 +216,7 @@ export default function ProjectWizard() {
         agentName: getAgentName(resolved.agentId)
       }
     })
-  }, [bmadScanResult, getAgentName])
+  }, [ACTIVE_STEPS, bmadScanResult, getAgentName])
 
   const { appendWizardInstallLog, setWizardError } = useStore()
 
@@ -239,7 +243,10 @@ export default function ProjectWizard() {
         // Scan failure is non-fatal for this check
       }
 
-      const result = await window.wizardAPI.writeProjectFiles(projectPath, HUMAN_DEV_FILES)
+      // Use GDS-specific human dev files when GDS module is selected
+      const isGds = wizState.selectedModules?.includes('gds')
+      const humanDevFiles = isGds ? HUMAN_DEV_FILES_GDS : HUMAN_DEV_FILES
+      const result = await window.wizardAPI.writeProjectFiles(projectPath, humanDevFiles)
       if (!result.success) {
         setWizardError(`Human dev mode setup failed: ${result.error}`)
         return
@@ -271,7 +278,7 @@ export default function ProjectWizard() {
   }, [advanceWizardStep, projectPath, setBmadScanResult, setScannedWorkflowConfig, appendWizardInstallLog, setWizardError])
 
   const handleStartAgentStep = useCallback((stepIndex: number) => {
-    const step = WIZARD_STEPS[stepIndex]
+    const step = ACTIVE_STEPS[stepIndex]
     if (!step || step.type !== 'agent') return
 
     // Resolve command dynamically from scan data
@@ -335,12 +342,13 @@ export default function ProjectWizard() {
 
     // Set the project as loaded
     const projectName = projectPath.split('/').pop() || 'Unknown'
+    const finalProjectType = modules.includes('gds') ? 'gds' : 'bmm'
     setProjectPath(projectPath)
-    setProjectType('bmm')
+    setProjectType(finalProjectType)
     setBaseBranch(detectedBaseBranch)
     addRecentProject({
       path: projectPath,
-      projectType: 'bmm',
+      projectType: finalProjectType,
       name: projectName,
       outputFolder,
       developerMode: projectWizard.developerMode,
@@ -352,7 +360,7 @@ export default function ProjectWizard() {
     setSelectedEpicId(null)
 
     completeWizard()
-  }, [projectPath, outputFolder, setProjectPath, setProjectType, setBaseBranch, addRecentProject, setViewMode, setSelectedEpicId, completeWizard])
+  }, [projectPath, outputFolder, modules, setProjectPath, setProjectType, setBaseBranch, addRecentProject, setViewMode, setSelectedEpicId, completeWizard])
 
   const handleCancel = useCallback(async () => {
     if (projectPath) {
@@ -366,10 +374,10 @@ export default function ProjectWizard() {
 
   const currentStepData = resolvedSteps[currentStep]
   const isInstallStep = currentStep === 0
-  const allRequiredDone = WIZARD_STEPS.every((step, i) =>
+  const allRequiredDone = ACTIVE_STEPS.every((step, i) =>
     !step.required || stepStatuses[i] === 'completed'
   )
-  const isFinished = currentStep >= WIZARD_STEPS.length
+  const isFinished = currentStep >= ACTIVE_STEPS.length
 
   return (
     <Box

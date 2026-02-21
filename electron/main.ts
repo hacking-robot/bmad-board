@@ -20,7 +20,7 @@ let watchDebounceTimer: NodeJS.Timeout | null = null
 // Settings file path in user data directory
 const getSettingsPath = () => join(app.getPath('userData'), 'settings.json')
 
-type ProjectType = 'bmm' | 'bmgd'
+type ProjectType = 'bmm' | 'gds'
 
 interface AgentHistoryEntry {
   id: string
@@ -617,18 +617,18 @@ ipcMain.handle('select-directory', async () => {
 
   // Check for required files
   const sprintStatusPath = join(bmadOutputPath, 'implementation-artifacts', 'sprint-status.yaml')
-  const bmgdEpicsPath = join(bmadOutputPath, 'epics.md')
   const bmmEpicsPath = join(bmadOutputPath, 'planning-artifacts', 'epics.md')
 
   const hasSprintStatus = existsSync(sprintStatusPath)
-  const hasBmgdEpics = existsSync(bmgdEpicsPath)
   const hasBmmEpics = existsSync(bmmEpicsPath)
 
-  // Detect project type: BMGD if epics.md at root, otherwise BMM (default)
-  let projectType: ProjectType = hasBmgdEpics ? 'bmgd' : 'bmm'
+  // Detect project type: GDS if gds module directory exists, otherwise BMM (default)
+  const bmadPath = join(bmadOutputPath, '_bmad')
+  const hasGdsModule = existsSync(join(bmadPath, 'gds'))
+  let projectType: ProjectType = hasGdsModule ? 'gds' : 'bmm'
 
   // Check if this is a new/empty project
-  const isNewProject = !hasSprintStatus || (!hasBmgdEpics && !hasBmmEpics)
+  const isNewProject = !hasSprintStatus || !hasBmmEpics
 
   return { path: projectPath, projectType, isNewProject, outputFolder }
 })
@@ -803,14 +803,14 @@ ipcMain.handle('scan-bmad', async (_, projectPath: string) => {
   }
 })
 
-// Detect project type (bmm vs bmgd structure)
+// Detect project type (bmm vs gds)
 ipcMain.handle('detect-project-type', async (_, projectPath: string, outputFolder?: string) => {
   const folder = outputFolder || '_bmad-output'
-  // Check for BMGD structure (epics.md at root of output folder)
-  const bmgdEpicsPath = join(projectPath, folder, 'epics.md')
+  // Check for GDS module directory
+  const gdsModulePath = join(projectPath, folder, '_bmad', 'gds')
 
-  if (existsSync(bmgdEpicsPath)) {
-    return 'bmgd'
+  if (existsSync(gdsModulePath)) {
+    return 'gds'
   }
 
   // Default to BMM (standard BMAD Method)
@@ -1615,22 +1615,28 @@ ipcMain.handle('show-notification', async (_, title: string, body: string) => {
   }
 })
 
-// Chat thread storage
-const getChatThreadsDir = () => join(app.getPath('userData'), 'chat-threads')
-const getChatThreadPath = (agentId: string) => join(getChatThreadsDir(), `${agentId}.json`)
+// Chat thread storage (project-scoped via path hash)
+import { createHash } from 'crypto'
 
-// Ensure chat threads directory exists
-async function ensureChatThreadsDir() {
-  const dir = getChatThreadsDir()
+function hashProjectPath(projectPath: string): string {
+  return createHash('md5').update(projectPath).digest('hex').slice(0, 12)
+}
+const getChatThreadsDir = (projectPath: string) =>
+  join(app.getPath('userData'), 'chat-threads', hashProjectPath(projectPath))
+const getChatThreadPath = (projectPath: string, agentId: string) =>
+  join(getChatThreadsDir(projectPath), `${agentId}.json`)
+
+async function ensureChatThreadsDir(projectPath: string) {
+  const dir = getChatThreadsDir(projectPath)
   if (!existsSync(dir)) {
     await mkdir(dir, { recursive: true })
   }
 }
 
 // Chat thread IPC handlers
-ipcMain.handle('load-chat-thread', async (_, agentId: string) => {
+ipcMain.handle('load-chat-thread', async (_, projectPath: string, agentId: string) => {
   try {
-    const filePath = getChatThreadPath(agentId)
+    const filePath = getChatThreadPath(projectPath, agentId)
     if (!existsSync(filePath)) {
       return null
     }
@@ -1642,10 +1648,10 @@ ipcMain.handle('load-chat-thread', async (_, agentId: string) => {
   }
 })
 
-ipcMain.handle('save-chat-thread', async (_, agentId: string, thread: unknown) => {
+ipcMain.handle('save-chat-thread', async (_, projectPath: string, agentId: string, thread: unknown) => {
   try {
-    await ensureChatThreadsDir()
-    const filePath = getChatThreadPath(agentId)
+    await ensureChatThreadsDir(projectPath)
+    const filePath = getChatThreadPath(projectPath, agentId)
     await writeFile(filePath, JSON.stringify(thread, null, 2))
     return true
   } catch (error) {
@@ -1654,9 +1660,9 @@ ipcMain.handle('save-chat-thread', async (_, agentId: string, thread: unknown) =
   }
 })
 
-ipcMain.handle('clear-chat-thread', async (_, agentId: string) => {
+ipcMain.handle('clear-chat-thread', async (_, projectPath: string, agentId: string) => {
   try {
-    const filePath = getChatThreadPath(agentId)
+    const filePath = getChatThreadPath(projectPath, agentId)
     if (existsSync(filePath)) {
       const { unlink } = await import('fs/promises')
       await unlink(filePath)
@@ -1668,9 +1674,9 @@ ipcMain.handle('clear-chat-thread', async (_, agentId: string) => {
   }
 })
 
-ipcMain.handle('list-chat-threads', async () => {
+ipcMain.handle('list-chat-threads', async (_, projectPath: string) => {
   try {
-    const dir = getChatThreadsDir()
+    const dir = getChatThreadsDir(projectPath)
     if (!existsSync(dir)) {
       return []
     }
@@ -1859,7 +1865,7 @@ app.whenReady().then(() => {
 ipcMain.handle('chat-load-agent', async (_, options: {
   agentId: string
   projectPath: string
-  projectType: 'bmm' | 'bmgd'
+  projectType: 'bmm' | 'gds'
   tool?: AITool
   model?: ClaudeModel
   customEndpoint?: { name: string; baseUrl: string; apiKey: string; modelName: string } | null
@@ -2047,7 +2053,7 @@ ipcMain.handle('check-environment', async () => {
 // BMAD Install handler - runs npx bmad-method install
 let bmadInstallProcess: ReturnType<typeof spawnChild> | null = null
 
-ipcMain.handle('bmad-install', async (_, projectPath: string, useAlpha?: boolean, outputFolder?: string) => {
+ipcMain.handle('bmad-install', async (_, projectPath: string, useAlpha?: boolean, outputFolder?: string, modules?: string[]) => {
   if (bmadInstallProcess) {
     return { success: false, error: 'Installation already in progress' }
   }
@@ -2055,13 +2061,14 @@ ipcMain.handle('bmad-install', async (_, projectPath: string, useAlpha?: boolean
   try {
     const folder = outputFolder || '_bmad-output'
     const packageName = useAlpha ? 'bmad-method@alpha' : 'bmad-method'
+    const moduleList = (modules?.length) ? modules.join(',') : 'bmm'
     // Stable v6 supports non-interactive flags; alpha does not
     const args = useAlpha
       ? [packageName, 'install']
       : [
           packageName, 'install',
           '--directory', projectPath,
-          '--modules', 'bmm',
+          '--modules', moduleList,
           '--tools', 'claude-code',
           '--output-folder', folder,
           '--yes'

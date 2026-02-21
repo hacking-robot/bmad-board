@@ -75,21 +75,21 @@
         {
           "label": "Create Story",
           "commandRef": "create-story",
-          "commandModule": "bmgd",
+          "commandModule": "gds",
           "commandType": "workflows",
           "description": "Draft story for development"
         },
         {
           "label": "Create GDD",
           "commandRef": "create-gdd",
-          "commandModule": "bmgd",
+          "commandModule": "gds",
           "commandType": "workflows",
           "description": "Create Game Design Document"
         },
         {
           "label": "Brainstorm Game",
           "commandRef": "brainstorm-game",
-          "commandModule": "bmgd",
+          "commandModule": "gds",
           "commandType": "workflows",
           "description": "Brainstorm game features"
         }
@@ -100,7 +100,7 @@
         {
           "label": "Implement Story",
           "commandRef": "dev-story",
-          "commandModule": "bmgd",
+          "commandModule": "gds",
           "commandType": "workflows",
           "description": "Implement the game feature",
           "primary": true
@@ -108,14 +108,14 @@
         {
           "label": "Quick Prototype",
           "commandRef": "quick-prototype",
-          "commandModule": "bmgd",
+          "commandModule": "gds",
           "commandType": "workflows",
           "description": "Rapid prototyping"
         },
         {
           "label": "Game Architecture",
           "commandRef": "game-architecture",
-          "commandModule": "bmgd",
+          "commandModule": "gds",
           "commandType": "workflows",
           "description": "Design technical approach first"
         }
@@ -126,7 +126,7 @@
         {
           "label": "Continue Development",
           "commandRef": "game-dev",
-          "commandModule": "bmgd",
+          "commandModule": "gds",
           "commandType": "agents",
           "description": "Continue working with Game Dev agent",
           "primary": true
@@ -134,21 +134,21 @@
         {
           "label": "Sprint Status",
           "commandRef": "sprint-status",
-          "commandModule": "bmgd",
+          "commandModule": "gds",
           "commandType": "workflows",
           "description": "Check sprint progress"
         },
         {
           "label": "Quick Dev",
           "commandRef": "quick-dev",
-          "commandModule": "bmgd",
+          "commandModule": "gds",
           "commandType": "workflows",
           "description": "Flexible development"
         },
         {
           "label": "Code Review",
           "commandRef": "code-review",
-          "commandModule": "bmgd",
+          "commandModule": "gds",
           "commandType": "workflows",
           "description": "Request code review when ready"
         }
@@ -159,7 +159,7 @@
         {
           "label": "Code Review",
           "commandRef": "code-review",
-          "commandModule": "bmgd",
+          "commandModule": "gds",
           "commandType": "workflows",
           "description": "Review code changes",
           "primary": true
@@ -167,21 +167,21 @@
         {
           "label": "Test Review",
           "commandRef": "gametest-test-review",
-          "commandModule": "bmgd",
+          "commandModule": "gds",
           "commandType": "workflows",
           "description": "Review test coverage"
         },
         {
           "label": "Playtest Plan",
           "commandRef": "gametest-playtest-plan",
-          "commandModule": "bmgd",
+          "commandModule": "gds",
           "commandType": "workflows",
           "description": "Create playtest plan"
         },
         {
           "label": "Correct Course",
           "commandRef": "correct-course",
-          "commandModule": "bmgd",
+          "commandModule": "gds",
           "commandType": "workflows",
           "description": "Send back with corrections needed"
         }
@@ -192,7 +192,7 @@
         {
           "label": "Code Review",
           "commandRef": "code-review",
-          "commandModule": "bmgd",
+          "commandModule": "gds",
           "commandType": "workflows",
           "description": "Review code changes",
           "primary": true
@@ -200,21 +200,21 @@
         {
           "label": "Test Review",
           "commandRef": "gametest-test-review",
-          "commandModule": "bmgd",
+          "commandModule": "gds",
           "commandType": "workflows",
           "description": "Review test coverage"
         },
         {
           "label": "Playtest Plan",
           "commandRef": "gametest-playtest-plan",
-          "commandModule": "bmgd",
+          "commandModule": "gds",
           "commandType": "workflows",
           "description": "Create playtest plan"
         },
         {
           "label": "Correct Course",
           "commandRef": "correct-course",
-          "commandModule": "bmgd",
+          "commandModule": "gds",
           "commandType": "workflows",
           "description": "Send back with corrections needed"
         }
@@ -225,14 +225,14 @@
         {
           "label": "Retrospective",
           "commandRef": "retrospective",
-          "commandModule": "bmgd",
+          "commandModule": "gds",
           "commandType": "workflows",
           "description": "Run retrospective"
         },
         {
           "label": "Performance Test",
           "commandRef": "gametest-performance",
-          "commandModule": "bmgd",
+          "commandModule": "gds",
           "commandType": "workflows",
           "description": "Validate performance"
         }
@@ -243,14 +243,14 @@
         {
           "label": "Create Story",
           "commandRef": "create-story",
-          "commandModule": "bmgd",
+          "commandModule": "gds",
           "commandType": "workflows",
           "description": "Prioritize and refine story"
         },
         {
           "label": "Quick Prototype",
           "commandRef": "quick-prototype",
-          "commandModule": "bmgd",
+          "commandModule": "gds",
           "commandType": "workflows",
           "description": "Quick implementation"
         }
@@ -328,7 +328,7 @@
         {
           "label": "Brainstorm Game",
           "commandRef": "brainstorm-game",
-          "commandModule": "bmgd",
+          "commandModule": "gds",
           "commandType": "workflows",
           "description": "Brainstorm game ideas and features",
           "tooltip": "Interactive brainstorming session to explore game concepts, mechanics, art direction, and core gameplay loops. Produces a brainstorming report to guide game design decisions."
@@ -336,7 +336,7 @@
         {
           "label": "Create Game Brief",
           "commandRef": "create-game-brief",
-          "commandModule": "bmgd",
+          "commandModule": "gds",
           "commandType": "workflows",
           "description": "Create or update game brief",
           "tooltip": "Creates a game brief capturing the core concept, genre, target audience, unique selling points, and high-level design pillars. The foundation document for all game development."
@@ -344,7 +344,7 @@
         {
           "label": "Narrative",
           "commandRef": "narrative",
-          "commandModule": "bmgd",
+          "commandModule": "gds",
           "commandType": "workflows",
           "description": "Develop game narrative and story",
           "tooltip": "Develops the game's narrative elements: world-building, character backgrounds, story arcs, dialogue systems, and lore. Creates a narrative document that informs level and quest design."
@@ -359,7 +359,7 @@
         {
           "label": "Create GDD",
           "commandRef": "create-gdd",
-          "commandModule": "bmgd",
+          "commandModule": "gds",
           "commandType": "workflows",
           "description": "Create or update Game Design Document",
           "tooltip": "Creates a comprehensive Game Design Document (GDD) covering gameplay mechanics, systems design, progression, controls, and technical requirements. The primary reference for all game development work."
@@ -367,7 +367,7 @@
         {
           "label": "Create Story",
           "commandRef": "create-story",
-          "commandModule": "bmgd",
+          "commandModule": "gds",
           "commandType": "workflows",
           "description": "Create a new development story",
           "tooltip": "Creates an individual development story with detailed acceptance criteria, technical requirements, and implementation notes. Stories become the work items on your sprint board."
@@ -382,7 +382,7 @@
         {
           "label": "Game Architecture",
           "commandRef": "game-architecture",
-          "commandModule": "bmgd",
+          "commandModule": "gds",
           "commandType": "workflows",
           "description": "Design game technical architecture",
           "tooltip": "Designs the game's technical architecture: engine systems, rendering pipeline, physics, networking, asset pipeline, and component structure. Produces an architecture document guiding all implementation."
@@ -397,7 +397,7 @@
         {
           "label": "Sprint Planning",
           "commandRef": "sprint-planning",
-          "commandModule": "bmgd",
+          "commandModule": "gds",
           "commandType": "workflows",
           "description": "Plan sprint work",
           "tooltip": "Helps prioritize stories, estimate effort, and organize the next sprint. Selects which backlog stories to move into the sprint based on capacity and dependencies."
@@ -405,7 +405,7 @@
         {
           "label": "Sprint Status",
           "commandRef": "sprint-status",
-          "commandModule": "bmgd",
+          "commandModule": "gds",
           "commandType": "workflows",
           "description": "Check sprint progress",
           "tooltip": "Generates a progress report of the current sprint: which stories are in progress, completed, or blocked. Updates the sprint-status tracking file."
@@ -413,7 +413,7 @@
         {
           "label": "Retrospective",
           "commandRef": "retrospective",
-          "commandModule": "bmgd",
+          "commandModule": "gds",
           "commandType": "workflows",
           "description": "Run sprint retrospective",
           "tooltip": "Facilitates a sprint retrospective to review what went well, what didn't, and what to improve. Documents learnings and action items for the next sprint."
@@ -421,7 +421,7 @@
         {
           "label": "Correct Course",
           "commandRef": "correct-course",
-          "commandModule": "bmgd",
+          "commandModule": "gds",
           "commandType": "workflows",
           "description": "Adjust direction based on findings",
           "tooltip": "When a story or implementation has gone off-track, this workflow helps diagnose the issue and plan corrections. Use when code review reveals problems or requirements have changed."
@@ -429,7 +429,7 @@
         {
           "label": "Generate Project Context",
           "commandRef": "generate-project-context",
-          "commandModule": "bmgd",
+          "commandModule": "gds",
           "commandType": "workflows",
           "description": "Generate project context document",
           "tooltip": "Generates a comprehensive project context summary of all planning artifacts. AI agents use this during development to understand the full project scope."

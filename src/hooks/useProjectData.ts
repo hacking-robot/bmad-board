@@ -5,6 +5,7 @@ import { parseEpicsUnified, getAllStories } from '../utils/parseEpicsUnified'
 import { parseStoryContent } from '../utils/parseStory'
 import { getEpicsFullPath, getSprintStatusFullPath } from '../utils/projectTypes'
 import { mergeWorkflowConfig } from '../utils/workflowMerge'
+import { flushPendingThreadSave } from '../utils/chatUtils'
 import type { BmadScanResult } from '../types/bmadScan'
 
 export function useProjectData() {
@@ -93,9 +94,21 @@ export function useProjectData() {
 
   const switchToProject = useCallback((project: import('../store').RecentProject) => {
     if (!project.projectType) return
+
+    // Flush any pending debounced thread save and persist all in-memory threads
+    // before clearing state, so switching back restores them from disk
+    const state = useStore.getState()
+    flushPendingThreadSave()
+    if (state.projectPath) {
+      for (const [agentId, thread] of Object.entries(state.chatThreads)) {
+        if (thread && thread.messages.length > 0) {
+          window.chatAPI.saveThread(state.projectPath, agentId, thread)
+        }
+      }
+    }
+
     // Batch all state updates into a single set() to avoid 9 separate persist cycles
     // Each persist cycle reads/writes the 645KB settings file via IPC
-    const state = useStore.getState()
     const filtered = state.recentProjects.filter((p) => p.path !== project.path)
     const updatedRecent = [project, ...filtered].slice(0, 10)
     useStore.setState({
@@ -108,7 +121,9 @@ export function useProjectData() {
       allowDirectEpicMerge: project.allowDirectEpicMerge ?? false,
       disableGitBranching: project.disableGitBranching ?? true,
       selectedEpicId: null,
-      recentProjects: updatedRecent
+      recentProjects: updatedRecent,
+      chatThreads: {},
+      selectedChatAgent: null
     })
   }, [])
 

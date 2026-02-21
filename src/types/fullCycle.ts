@@ -85,16 +85,16 @@ function buildCommand(module: string, type: 'workflows' | 'agents', name: string
 }
 
 // Build full cycle steps dynamically based on project type and review count
-export function buildFullCycleSteps(projectType: 'bmm' | 'bmgd', reviewCount: number): FullCycleStep[] {
-  const isBmgd = projectType === 'bmgd'
-  const module = isBmgd ? 'bmgd' : 'bmm'
-  const devAgentId = isBmgd ? 'game-dev' : 'dev'
-  const smAgentId = isBmgd ? 'game-scrum-master' : 'sm'
+export function buildFullCycleSteps(projectType: 'bmm' | 'gds', reviewCount: number): FullCycleStep[] {
+  const isGds = projectType === 'gds'
+  const module = isGds ? 'gds' : 'bmm'
+  const devAgentId = isGds ? 'game-dev' : 'dev'
+  const smAgentId = isGds ? 'game-scrum-master' : 'sm'
   const createStoryCommand = buildCommand(module, 'workflows', 'create-story')
   const devStoryCommand = buildCommand(module, 'workflows', 'dev-story')
   const codeReviewCommand = buildCommand(module, 'workflows', 'code-review')
-  const smDesc = isBmgd ? 'Game Scrum Master' : 'SM'
-  const devDesc = isBmgd ? 'Game DEV' : 'DEV'
+  const smDesc = isGds ? 'Game Scrum Master' : 'SM'
+  const devDesc = isGds ? 'Game DEV' : 'DEV'
 
   const steps: FullCycleStep[] = [
     {

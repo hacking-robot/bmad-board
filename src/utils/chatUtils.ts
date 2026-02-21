@@ -56,11 +56,28 @@ export function showChatNotification(agent: AgentDefinition, messageContent: str
 
 // Debounce utility for saving threads
 let saveTimeout: NodeJS.Timeout | null = null
-export function debouncedSaveThread(agentId: string, thread: unknown) {
+let pendingSave: { projectPath: string; agentId: string; thread: unknown } | null = null
+
+export function debouncedSaveThread(projectPath: string, agentId: string, thread: unknown) {
   if (saveTimeout) clearTimeout(saveTimeout)
+  pendingSave = { projectPath, agentId, thread }
   saveTimeout = setTimeout(() => {
-    window.chatAPI.saveThread(agentId, thread as Parameters<typeof window.chatAPI.saveThread>[1])
+    pendingSave = null
+    window.chatAPI.saveThread(projectPath, agentId, thread as Parameters<typeof window.chatAPI.saveThread>[2])
   }, 1000)
+}
+
+// Flush any pending debounced thread save immediately
+export function flushPendingThreadSave() {
+  if (saveTimeout) {
+    clearTimeout(saveTimeout)
+    saveTimeout = null
+  }
+  if (pendingSave) {
+    const { projectPath, agentId, thread } = pendingSave
+    pendingSave = null
+    window.chatAPI.saveThread(projectPath, agentId, thread as Parameters<typeof window.chatAPI.saveThread>[2])
+  }
 }
 
 // Debounce utility for saving story chat history (2s debounce)

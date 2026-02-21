@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
-export type ProjectType = 'bmm' | 'bmgd'
+export type ProjectType = 'bmm' | 'gds'
 
 export interface AgentHistoryEntry {
   id: string
@@ -391,11 +391,11 @@ export interface StoryChatHistory {
 }
 
 export interface ChatAPI {
-  // Thread persistence
-  loadThread: (agentId: string) => Promise<AgentThread | null>
-  saveThread: (agentId: string, thread: AgentThread) => Promise<boolean>
-  clearThread: (agentId: string) => Promise<boolean>
-  listThreads: () => Promise<string[]>
+  // Thread persistence (project-scoped)
+  loadThread: (projectPath: string, agentId: string) => Promise<AgentThread | null>
+  saveThread: (projectPath: string, agentId: string, thread: AgentThread) => Promise<boolean>
+  clearThread: (projectPath: string, agentId: string) => Promise<boolean>
+  listThreads: (projectPath: string) => Promise<string[]>
   // Story chat history (persisted to project and user directories)
   saveStoryChatHistory: (projectPath: string, storyId: string, history: StoryChatHistory, outputFolder?: string) => Promise<boolean>
   loadStoryChatHistory: (projectPath: string, storyId: string, outputFolder?: string) => Promise<StoryChatHistory | null>
@@ -404,7 +404,7 @@ export interface ChatAPI {
   loadAgent: (options: {
     agentId: string
     projectPath: string
-    projectType: 'bmm' | 'bmgd'
+    projectType: 'bmm' | 'gds'
     tool?: AITool // AI tool to use (defaults to claude-code)
     model?: ClaudeModel // Claude model to use (only for claude-code)
     customEndpoint?: CustomEndpointConfig | null // Custom endpoint config (for custom-endpoint tool)
@@ -431,10 +431,10 @@ export interface ChatAPI {
 }
 
 const chatAPI: ChatAPI = {
-  loadThread: (agentId) => ipcRenderer.invoke('load-chat-thread', agentId),
-  saveThread: (agentId, thread) => ipcRenderer.invoke('save-chat-thread', agentId, thread),
-  clearThread: (agentId) => ipcRenderer.invoke('clear-chat-thread', agentId),
-  listThreads: () => ipcRenderer.invoke('list-chat-threads'),
+  loadThread: (projectPath, agentId) => ipcRenderer.invoke('load-chat-thread', projectPath, agentId),
+  saveThread: (projectPath, agentId, thread) => ipcRenderer.invoke('save-chat-thread', projectPath, agentId, thread),
+  clearThread: (projectPath, agentId) => ipcRenderer.invoke('clear-chat-thread', projectPath, agentId),
+  listThreads: (projectPath) => ipcRenderer.invoke('list-chat-threads', projectPath),
   // Story chat history
   saveStoryChatHistory: (projectPath, storyId, history, outputFolder) => ipcRenderer.invoke('save-story-chat-history', projectPath, storyId, history, outputFolder),
   loadStoryChatHistory: (projectPath, storyId, outputFolder) => ipcRenderer.invoke('load-story-chat-history', projectPath, storyId, outputFolder),
@@ -523,7 +523,7 @@ export interface WizardFileChangedEvent {
 }
 
 export interface WizardAPI {
-  install: (projectPath: string, useAlpha?: boolean, outputFolder?: string) => Promise<{ success: boolean; error?: string }>
+  install: (projectPath: string, useAlpha?: boolean, outputFolder?: string, modules?: string[]) => Promise<{ success: boolean; error?: string }>
   onInstallOutput: (callback: (event: WizardInstallOutputEvent) => void) => () => void
   onInstallComplete: (callback: (event: WizardInstallCompleteEvent) => void) => () => void
   startWatching: (projectPath: string, outputFolder?: string) => Promise<boolean>
@@ -540,7 +540,7 @@ export interface WizardAPI {
 }
 
 const wizardAPI: WizardAPI = {
-  install: (projectPath, useAlpha, outputFolder) => ipcRenderer.invoke('bmad-install', projectPath, useAlpha, outputFolder),
+  install: (projectPath, useAlpha, outputFolder, modules) => ipcRenderer.invoke('bmad-install', projectPath, useAlpha, outputFolder, modules),
   onInstallOutput: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, data: WizardInstallOutputEvent) => callback(data)
     ipcRenderer.on('bmad:install-output', listener)

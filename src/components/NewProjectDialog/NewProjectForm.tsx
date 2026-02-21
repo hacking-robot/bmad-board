@@ -10,12 +10,14 @@ import {
   Stack,
   TextField,
   Alert,
-  Autocomplete,
-  Chip,
   FormControl,
   InputLabel,
   Select,
-  MenuItem
+  MenuItem,
+  FormControlLabel,
+  Checkbox,
+  ToggleButtonGroup,
+  ToggleButton
 } from '@mui/material'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import AddIcon from '@mui/icons-material/Add'
@@ -23,9 +25,10 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import Tooltip from '@mui/material/Tooltip'
 import { useStore } from '../../store'
 
-const BMAD_MODULES = [
-  { id: 'bmad-core', label: 'BMad Core Module', required: true },
-  { id: 'bmad-method', label: 'BMad Method Agile-AI Driven-Development', required: true }
+const ADDON_MODULES = [
+  { id: 'bmb', label: 'BMad Builder', description: 'Create custom agents and workflows' },
+  { id: 'cis', label: 'Creative Intelligence', description: 'Brainstorming and ideation agents' },
+  { id: 'tea', label: 'Test Architect', description: 'Test strategy and automation' }
 ]
 
 interface NewProjectFormProps {
@@ -41,7 +44,8 @@ export default function NewProjectForm({ open, onClose }: NewProjectFormProps) {
   const [projectName, setProjectName] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
-  const [selectedModules, setSelectedModules] = useState(BMAD_MODULES)
+  const [primaryType, setPrimaryType] = useState<'bmm' | 'gds'>('bmm')
+  const [addonModules, setAddonModules] = useState<string[]>([])
   const [developerType, setDeveloperType] = useState<'ai' | 'human'>('ai')
   const [outputFolder, setOutputFolderLocal] = useState('_bmad-output')
 
@@ -57,7 +61,8 @@ export default function NewProjectForm({ open, onClose }: NewProjectFormProps) {
     setProjectName('')
     setError(null)
     setCreating(false)
-    setSelectedModules(BMAD_MODULES)
+    setPrimaryType('bmm')
+    setAddonModules([])
     setDeveloperType('ai')
     setOutputFolderLocal('_bmad-output')
   }, [])
@@ -73,6 +78,14 @@ export default function NewProjectForm({ open, onClose }: NewProjectFormProps) {
       setParentPath(result.path)
       setError(null)
     }
+  }, [])
+
+  const handleToggleAddon = useCallback((moduleId: string) => {
+    setAddonModules(prev =>
+      prev.includes(moduleId)
+        ? prev.filter(m => m !== moduleId)
+        : [...prev, moduleId]
+    )
   }, [])
 
   const handleCreate = useCallback(async () => {
@@ -94,11 +107,14 @@ export default function NewProjectForm({ open, onClose }: NewProjectFormProps) {
       return
     }
 
-    startProjectWizard(result.path, outputFolder, developerType)
+    // Build final module list: primary type plus add-ons (GDS doesn't need BMM explicitly)
+    const modules = [primaryType, ...addonModules]
+
+    startProjectWizard(result.path, outputFolder, developerType, modules)
     setCreating(false)
     reset()
     onClose()
-  }, [parentPath, projectName, outputFolder, developerType, startProjectWizard, reset, onClose])
+  }, [parentPath, projectName, outputFolder, developerType, primaryType, addonModules, startProjectWizard, reset, onClose])
 
   return (
     <Dialog
@@ -165,45 +181,57 @@ export default function NewProjectForm({ open, onClose }: NewProjectFormProps) {
             }
           />
 
-          <Autocomplete
-            multiple
-            options={BMAD_MODULES}
-            value={selectedModules}
-            onChange={(_, value) => {
-              const required = BMAD_MODULES.filter(m => m.required)
-              const merged = [...required]
-              for (const v of value) {
-                if (!merged.some(m => m.id === v.id)) merged.push(v)
+          {/* Primary project type selector */}
+          <Box>
+            <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+              Project Type
+            </Typography>
+            <ToggleButtonGroup
+              value={primaryType}
+              exclusive
+              onChange={(_, value) => { if (value) setPrimaryType(value) }}
+              fullWidth
+              size="small"
+            >
+              <ToggleButton value="bmm" sx={{ textTransform: 'none' }}>
+                Standard Development
+              </ToggleButton>
+              <ToggleButton value="gds" sx={{ textTransform: 'none' }}>
+                Game Development
+              </ToggleButton>
+            </ToggleButtonGroup>
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+              {primaryType === 'bmm'
+                ? 'Full-stack software development with PRD, Architecture, and Epics'
+                : 'Game development with Game Brief, GDD, Game Architecture, and Epics'
               }
-              setSelectedModules(merged)
-            }}
-            getOptionLabel={(option) => option.label}
-            isOptionEqualToValue={(option, value) => option.id === value.id}
-            disableCloseOnSelect
-            getOptionDisabled={(option) => option.required}
-            renderTags={(value, getTagProps) =>
-              value.map((option, index) => {
-                const { onDelete, ...tagProps } = getTagProps({ index })
-                return (
-                  <Chip
-                    label={option.label}
+            </Typography>
+          </Box>
+
+          {/* Add-on modules */}
+          <Box>
+            <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+              Add-on Modules (Optional)
+            </Typography>
+            {ADDON_MODULES.map((mod) => (
+              <FormControlLabel
+                key={mod.id}
+                control={
+                  <Checkbox
                     size="small"
-                    {...tagProps}
-                    {...(option.required ? {} : { onDelete })}
-                    key={option.id}
+                    checked={addonModules.includes(mod.id)}
+                    onChange={() => handleToggleAddon(mod.id)}
                   />
-                )
-              })
-            }
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label="BMAD Modules"
-                size="small"
-                helperText="Modules to install in the new project"
+                }
+                label={
+                  <Typography variant="body2">
+                    {mod.label} <Typography component="span" variant="caption" color="text.secondary">— {mod.description}</Typography>
+                  </Typography>
+                }
+                sx={{ display: 'flex', ml: 0 }}
               />
-            )}
-          />
+            ))}
+          </Box>
 
           <Stack direction="row" alignItems="center" spacing={0.5}>
             <FormControl size="small" fullWidth>

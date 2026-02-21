@@ -111,7 +111,7 @@ export const EPIC_COLORS: string[] = [
 
 // Agent types
 export type AgentStatus = 'running' | 'completed' | 'error' | 'interrupted'
-export type ProjectType = 'bmm' | 'bmgd'
+export type ProjectType = 'bmm' | 'gds'
 export type BmadVersion = 'stable'
 
 // AI Tool types - determines command syntax
@@ -307,6 +307,6 @@ export interface StatusChangeEntry {
   source: StatusChangeSource    // 'user' (drag-drop) or 'external' (file watcher)
 }
 
-// NOTE: BMAD agent definitions are now in src/data/flow-bmm.json and src/data/flow-bmgd.json
+// NOTE: BMAD agent definitions are now in src/data/flow-bmm.json and src/data/flow-gds.json
 // Use the useWorkflow hook to access agent data
 
