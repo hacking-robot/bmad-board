@@ -45,6 +45,8 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
   const clearChatThread = useStore((state) => state.clearChatThread)
   const chatThreads = useStore((state) => state.chatThreads)
 
+  const developerMode = useStore((state) => state.developerMode)
+
   // Check if selected AI tool supports headless CLI operation
   const selectedToolInfo = AI_TOOLS.find(t => t.id === aiTool)
   const toolSupportsHeadless = selectedToolInfo?.cli.supportsHeadless ?? false
@@ -313,7 +315,7 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
   }
 
   // Check if full cycle can be started (available from any status except done)
-  const canStartFullCycle = toolSupportsHeadless && effectiveStatus !== 'done'
+  const canStartFullCycle = toolSupportsHeadless && effectiveStatus !== 'done' && developerMode !== 'human'
   const isFullCycleRunning = fullCycle.isRunning && fullCycle.storyId === story.id
 
   return (
@@ -602,8 +604,8 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
           </Box>
         )}
 
-        {/* Step 1: Git Branch Command - Only for ready-for-dev when branch doesn't exist yet */}
-        {effectiveStatus === 'ready-for-dev' && !branchExists && !isOnStoryBranch && (
+        {/* Step 1: Git Branch Command - Only for ready-for-dev when branch doesn't exist yet (hidden when git branching disabled) */}
+        {!disableGitBranching && effectiveStatus === 'ready-for-dev' && !branchExists && !isOnStoryBranch && (
           <Box sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: 'divider', bgcolor: 'action.hover' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
               <Chip label="Step 1" size="small" sx={{ height: 18, fontSize: '0.65rem', fontWeight: 600, bgcolor: 'primary.main', color: 'white' }} />
@@ -663,8 +665,8 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
           </Box>
         )}
 
-        {/* Step 1: Git Commit Command - For review (commit implementation) and done (complete) - only when on story branch with uncommitted changes */}
-        {(effectiveStatus === 'review' || effectiveStatus === 'done') && canExecuteStoryActions && hasUncommittedChanges && (
+        {/* Step 1: Git Commit Command - For review (commit implementation) and done (complete) - only when on story branch with uncommitted changes (hidden when git branching disabled) */}
+        {!disableGitBranching && (effectiveStatus === 'review' || effectiveStatus === 'done') && canExecuteStoryActions && hasUncommittedChanges && (
           <Box sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: 'divider', bgcolor: 'action.hover' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
               <Chip label="Step 1" size="small" sx={{ height: 18, fontSize: '0.65rem', fontWeight: 600, bgcolor: 'primary.main', color: 'white' }} />
@@ -719,7 +721,7 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
         {nextSteps.length > 0 && (
           <Box sx={{ px: 2, py: 1, borderBottom: 1, borderColor: 'divider', bgcolor: 'action.selected' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              {((effectiveStatus === 'ready-for-dev' && !branchExists && !isOnStoryBranch) || ((effectiveStatus === 'review' || effectiveStatus === 'done') && canExecuteStoryActions && hasUncommittedChanges)) && (
+              {!disableGitBranching && ((effectiveStatus === 'ready-for-dev' && !branchExists && !isOnStoryBranch) || ((effectiveStatus === 'review' || effectiveStatus === 'done') && canExecuteStoryActions && hasUncommittedChanges)) && (
                 <Chip
                   label="Step 2"
                   size="small"
@@ -728,7 +730,7 @@ export default function StoryCard({ story, isDragging = false, disableDrag = fal
               )}
               <GroupsIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
               <Typography variant="body2" fontWeight={500}>
-                Talk to Agents ({selectedToolInfo?.name || aiTool})
+                {`Talk to Agents (${selectedToolInfo?.name || aiTool})`}
               </Typography>
             </Box>
           </Box>

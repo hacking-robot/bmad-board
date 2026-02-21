@@ -73,7 +73,9 @@ export default function AgentChat() {
     // Cancel any running process and clear the thread
     window.chatAPI.cancelMessage(selectedChatAgent).catch(() => {})
     clearChatThread(selectedChatAgent)
-    window.chatAPI.clearThread(selectedChatAgent)
+    if (projectPath) {
+      window.chatAPI.clearThread(projectPath, selectedChatAgent)
+    }
   }, [selectedChatAgent, chatThreads, agents, projectPath, stories, clearChatThread])
 
   // Select first agent if none selected or current selection invalid for project type
@@ -89,8 +91,8 @@ export default function AgentChat() {
     if (selectedChatAgent) {
       // Load persisted thread if not already loaded
       const thread = chatThreads[selectedChatAgent]
-      if (!thread) {
-        window.chatAPI.loadThread(selectedChatAgent).then((loadedThread) => {
+      if (!thread && projectPath) {
+        window.chatAPI.loadThread(projectPath, selectedChatAgent).then((loadedThread) => {
           if (loadedThread && loadedThread.messages.length > 0) {
             // Restore thread from storage
             for (const msg of loadedThread.messages) {
@@ -100,7 +102,7 @@ export default function AgentChat() {
         })
       }
     }
-  }, [selectedChatAgent, chatThreads])
+  }, [selectedChatAgent, chatThreads, projectPath])
 
   const selectedAgent = agents.find((a) => a.id === selectedChatAgent)
 

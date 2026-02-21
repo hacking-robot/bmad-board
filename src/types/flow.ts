@@ -20,6 +20,7 @@ export interface NextStepAction {
   command: string
   description: string
   primary?: boolean
+  tooltip?: string
 }
 
 export interface StatusActions {

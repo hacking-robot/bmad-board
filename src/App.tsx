@@ -17,10 +17,13 @@ import HelpPanel from './components/HelpPanel'
 import StatusBar from './components/StatusBar'
 import { AgentChat } from './components/AgentChat'
 import StatusHistoryPanel from './components/StatusHistoryPanel/StatusHistoryPanel'
+import { GitDiffPanel } from './components/GitDiffDialog'
 import { FullCycleDialog, FullCycleOrchestrator, EpicCycleDialog, EpicCycleOrchestrator } from './components/FullCycleDialog'
 import GlobalChatHandler from './components/GlobalChatHandler'
 import { ProjectWizard } from './components/ProjectWizard'
 import ProjectWorkflowsDialog from './components/ProjectWorkflowsDialog/ProjectWorkflowsDialog'
+import IncompatibleVersionDialog from './components/IncompatibleVersionDialog'
+import { EnvCheckDialog } from './components/EnvCheckDialog'
 
 const AGENT_PANEL_WIDTH = 500
 
@@ -37,6 +40,11 @@ export default function App() {
   const toggleViewMode = useStore((state) => state.toggleViewMode)
   const aiTool = useStore((state) => state.aiTool)
   const wizardActive = useStore((state) => state.projectWizard.isActive)
+  const envCheckResults = useStore((state) => state.envCheckResults)
+  const setEnvCheckDialogOpen = useStore((state) => state.setEnvCheckDialogOpen)
+  const setEnvCheckResults = useStore((state) => state.setEnvCheckResults)
+  const setEnvCheckLoading = useStore((state) => state.setEnvCheckLoading)
+  const disableEnvCheck = useStore((state) => state.disableEnvCheck)
 
   // Agent features available for tools with headless CLI support
   const selectedToolInfo = AI_TOOLS.find(t => t.id === aiTool)
@@ -55,6 +63,23 @@ export default function App() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [toggleViewMode])
+
+  // Run environment check in background; only show dialog if something fails
+  useEffect(() => {
+    if (hasHydrated && projectPath && envCheckResults === null && !disableEnvCheck) {
+      setEnvCheckLoading(true)
+      window.cliAPI.checkEnvironment().then((result) => {
+        setEnvCheckResults(result.items)
+        setEnvCheckLoading(false)
+        const hasIssues = result.items.some((i: { status: string }) => i.status === 'error' || i.status === 'warning')
+        if (hasIssues) {
+          setEnvCheckDialogOpen(true)
+        }
+      }).catch(() => {
+        setEnvCheckLoading(false)
+      })
+    }
+  }, [hasHydrated, projectPath, envCheckResults, disableEnvCheck, setEnvCheckDialogOpen, setEnvCheckResults, setEnvCheckLoading])
 
   // Listen for custom event to open help panel
   useEffect(() => {
@@ -94,6 +119,8 @@ export default function App() {
       <CommandPalette />
       <KeyboardShortcuts />
       <NewProjectDialog />
+      <IncompatibleVersionDialog />
+      <EnvCheckDialog />
       <HelpPanel
         open={helpPanelOpen}
         onClose={() => setHelpPanelOpen(false)}
@@ -236,6 +263,7 @@ export default function App() {
               </Box>
             </Box>
             {enableAgents && !showChatView && toolSupportsHeadless && <AgentPanel />}
+            <GitDiffPanel />
             <StoryDialog />
             <StatusHistoryPanel />
             <FullCycleDialog />

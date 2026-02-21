@@ -11,17 +11,19 @@ import {
 } from '@mui/material'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import AddIcon from '@mui/icons-material/Add'
-import DashboardIcon from '@mui/icons-material/Dashboard'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import ExpandLessIcon from '@mui/icons-material/ExpandLess'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import { useProjectData } from '../../hooks/useProjectData'
 import { useStore } from '../../store'
+import logoDark from '../../assets/logo-dark.svg'
+import logoLight from '../../assets/logo-light.svg'
 import { NewProjectForm } from '../NewProjectDialog'
 
 export default function WelcomeDialog() {
   const { selectProject } = useProjectData()
   const error = useStore((state) => state.error)
+  const themeMode = useStore((state) => state.themeMode)
   const [showInfo, setShowInfo] = useState(false)
   const [newProjectOpen, setNewProjectOpen] = useState(false)
 
@@ -52,25 +54,21 @@ export default function WelcomeDialog() {
       >
         <Stack spacing={3} alignItems="center">
           <Box
+            component="img"
+            src={themeMode === 'dark' ? logoDark : logoLight}
+            alt="BMad Board"
             sx={{
               width: 80,
               height: 80,
-              borderRadius: 3,
-              bgcolor: 'primary.main',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
+              borderRadius: 3
             }}
-          >
-            <DashboardIcon sx={{ fontSize: 40, color: 'white' }} />
-          </Box>
+          />
 
           <Box>
             <Typography variant="h4" fontWeight={700} gutterBottom>
               BMad Board
             </Typography>
             <Typography variant="body1" color="text.secondary">
-              A beautiful story board for your BMAD projects.
               Select a project folder to get started.
             </Typography>
           </Box>

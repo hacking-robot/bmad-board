@@ -19,6 +19,7 @@ import { transformCommand } from '../../utils/commandTransform'
 export default function FullCycleOrchestrator() {
   const projectPath = useStore((state) => state.projectPath)
   const projectType = useStore((state) => state.projectType)
+  const outputFolder = useStore((state) => state.outputFolder)
   const stories = useStore((state) => state.stories)
   const aiTool = useStore((state) => state.aiTool)
   const customEndpoint = useStore((state) => state.customEndpoint)
@@ -82,7 +83,8 @@ export default function FullCycleOrchestrator() {
         agent.name,
         agent.role,
         thread.messages,
-        thread.branchName
+        thread.branchName,
+        outputFolder
       )
       appendFullCycleLog(`Saved ${agentId} chat to history`)
     }
@@ -91,7 +93,7 @@ export default function FullCycleOrchestrator() {
     clearChatThread(agentId)
     // Also clear global handler state for this agent
     clearAgentState(agentId)
-  }, [projectPath, agents, stories, clearChatThread, clearAgentState, appendFullCycleLog])
+  }, [projectPath, outputFolder, agents, stories, clearChatThread, clearAgentState, appendFullCycleLog])
 
   // Execute an agent step - uses global handler for message processing
   const executeAgentStep = useCallback(async (
@@ -154,30 +156,37 @@ export default function FullCycleOrchestrator() {
       const stripAnsi = (text: string): string =>
         text.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').replace(/\x1b\][\s\S]*?\x07/g, '')
 
-      // Detect if output contains a prompt expecting user input
-      // Strategy: if numbered/lettered options exist AND any question/prompt
-      // signal appears anywhere in the tail, it's a prompt. Intentionally
-      // permissive — a false positive (sending "1" to a summary) is far
-      // less costly than a false negative (cycle dies).
+      // Detect BMAD agent menus — these are interactive menus the agent
+      // displays (e.g. "[MH] Redisplay Menu", "[DS] Dev Story") that should
+      // always be treated as step completion, never auto-responded to.
+      const isBmadMenu = (text: string): boolean => {
+        const clean = stripAnsi(text.slice(-2000))
+        // BMAD menus use [XX] two-letter code format for options
+        return /\[[A-Z]{2}\]\s+\S/m.test(clean)
+      }
+
+      // Detect if output contains a prompt about an issue/error that needs
+      // a fix selection. Only auto-respond to prompts where the agent has
+      // encountered a problem and is offering resolution options — NOT to
+      // conversational "what should I do next?" or BMAD agent menu prompts.
       const isPromptForInput = (text: string): boolean => {
         const clean = stripAnsi(text.slice(-2000))
+
+        // Never auto-respond to BMAD agent menus
+        if (isBmadMenu(clean)) return false
+
         // Has numbered options: "1." "2." or "[1]" "[2]" style
         const hasNumberedOptions = /(?:^|\n)\s*(?:\d+\.|[\[(]\d+[\])])\s*\S/m.test(clean)
-        // Has lettered options: "[a]" "[c]" style
+        // Has lettered options: "[a]" "[c]" style (but NOT [XX] BMAD codes)
         const hasLetteredOptions = /[\[(][a-z][\])]\s*\S/i.test(clean)
         if (!hasNumberedOptions && !hasLetteredOptions) return false
 
-        // With numbered options, look for ANY prompt signal anywhere in the tail
-        // (not just at the very end — prompt wording varies)
-        if (/\?/.test(clean)) return true
-        if (/(?:choose|select|pick|specify|enter|which)\b/i.test(clean)) return true
-        if (/\[\d+\]/.test(clean)) return true
-        if (/your (?:choice|selection|input|response|preference)/i.test(clean)) return true
-        if (/:\s*\n\s*(?:\d+\.|[\[(])/m.test(clean)) return true
+        // Only match prompts that indicate an issue/error/conflict needing resolution
+        if (/(?:fix|resolve|repair|correct|error|issue|conflict|problem|fail|broken|invalid|mismatch|bug|violation)/i.test(clean)) return true
+        if (/(?:how (?:should|do you want) (?:me to|I)|which (?:approach|fix|solution|option))/i.test(clean)) return true
+        if (/(?:linting|type|build|test|compilation) (?:error|issue|failure)/i.test(clean)) return true
 
-        // Numbered options alone (without explicit prompt signal) — still
-        // likely a prompt since the process exited after showing options
-        return true
+        return false
       }
 
       // Detect if output asks about committing
@@ -374,12 +383,33 @@ export default function FullCycleOrchestrator() {
           return
         }
 
-        // Check for "what's next?" type prompts - agent has completed, just mark done
-        const cleanTail = cleanOutput.slice(-1500)
-        const isWhatNextPrompt = /What.?s next\?/i.test(cleanTail) ||
-          /Would you like me to:/i.test(cleanTail)
+        // Check for BMAD agent menus — always treat as step completion
+        if (isBmadMenu(cleanOutput)) {
+          resolved = true
+          cleanup()
+          appendFullCycleLog(`${agentId} completed (BMAD menu detected, step done)`)
+          resolve('success')
+          return
+        }
 
-        if (isWhatNextPrompt && !isPromptForInput(cleanOutput)) {
+        // Check for "what's next?" type prompts FIRST - agent has completed,
+        // just mark done. These take priority over isPromptForInput because
+        // the agent is offering follow-up suggestions (often with numbered
+        // story options) rather than asking a question that requires input.
+        // A review output will naturally contain words like "issue"/"error" in
+        // its findings, which would falsely trigger isPromptForInput if checked
+        // first — so we must detect navigation prompts before issue prompts.
+        const cleanTail = cleanOutput.slice(-1500)
+        const isWhatNextPrompt = /What.?s next\??/i.test(cleanTail) ||
+          /(?<!what )would you like (?:me to|to)\b/i.test(cleanTail) ||
+          /Next Steps:/i.test(cleanTail) ||
+          /Which (?:story|stories|task|epic)/i.test(cleanTail) ||
+          /Shall I (?:continue|proceed|move on|start)/i.test(cleanTail) ||
+          /Ready (?:for|to) (?:\w+ )*next/i.test(cleanTail) ||
+          /Where (?:should|shall|do) (?:we|I) go/i.test(cleanTail) ||
+          /Enter your choice:/i.test(cleanTail)
+
+        if (isWhatNextPrompt) {
           resolved = true
           cleanup()
           appendFullCycleLog(`${agentId} completed (step work done, skipping follow-up prompt)`)
@@ -387,10 +417,11 @@ export default function FullCycleOrchestrator() {
           return
         }
 
-        // Check if agent is asking for input (numbered/lettered options + prompt)
+        // Only after ruling out navigation prompts, check for issue/error
+        // prompts where the agent found problems and is offering fix options
         if (isPromptForInput(cleanOutput) && currentSessionId) {
           const label = hasFixAsFirstOption(cleanOutput) ? 'fix option' : 'option 1'
-          const sent = await sendAutoResponse('1', `Detected prompt, auto-selecting ${label}`)
+          const sent = await sendAutoResponse('1', `Detected issue prompt, auto-selecting ${label}`)
           if (sent) return // Wait for next exit event
           return // Error already handled
         }

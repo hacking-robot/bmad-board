@@ -111,7 +111,7 @@ export const EPIC_COLORS: string[] = [
 
 // Agent types
 export type AgentStatus = 'running' | 'completed' | 'error' | 'interrupted'
-export type ProjectType = 'bmm' | 'bmgd'
+export type ProjectType = 'bmm' | 'gds'
 export type BmadVersion = 'stable'
 
 // AI Tool types - determines command syntax
@@ -129,8 +129,8 @@ export interface CustomEndpointConfig {
 }
 
 export const CLAUDE_MODELS: { id: ClaudeModel; name: string; description: string }[] = [
-  { id: 'sonnet', name: 'Sonnet', description: 'Fast and capable (default)' },
   { id: 'opus', name: 'Opus', description: 'Most intelligent, best for complex tasks' },
+  { id: 'sonnet', name: 'Sonnet', description: 'Fast and capable' },
   { id: 'haiku', name: 'Haiku', description: 'Fastest, best for simple tasks' }
 ]
 
@@ -234,6 +234,29 @@ export interface LLMStats {
   apiDurationMs?: number
 }
 
+// Per-project LLM cost tracking
+export interface ProjectCostEntry {
+  id: string
+  timestamp: number
+  agentId: string
+  storyId?: string
+  messageId: string
+  model: string
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens?: number
+  cacheWriteTokens?: number
+  totalCostUsd: number
+  durationMs?: number
+}
+
+// Tool call tracking for verbose chat mode
+export interface ToolCall {
+  name: string                      // "Read", "Edit", "Bash", etc.
+  summary: string                   // From getToolActivity(): "Reading store.ts"
+  input?: Record<string, unknown>   // Raw input for expanded detail
+}
+
 // Chat interface types
 export interface ChatMessage {
   id: string
@@ -242,6 +265,7 @@ export interface ChatMessage {
   timestamp: number
   status: 'pending' | 'streaming' | 'complete' | 'error'
   stats?: LLMStats // LLM usage stats for assistant messages
+  toolCalls?: ToolCall[] // Tool calls made during this message (always captured, displayed in verbose mode)
 }
 
 export interface AgentThread {
@@ -291,6 +315,6 @@ export interface StatusChangeEntry {
   source: StatusChangeSource    // 'user' (drag-drop) or 'external' (file watcher)
 }
 
-// NOTE: BMAD agent definitions are now in src/data/flow-bmm.json and src/data/flow-bmgd.json
+// NOTE: BMAD agent definitions are now in src/data/flow-bmm.json and src/data/flow-gds.json
 // Use the useWorkflow hook to access agent data
 

@@ -15,4 +15,17 @@
 | #2647 | 2:51 PM | 🔴 | Corrected Story Creation Agent Assignment in BMGD Workflow | ~403 |
 | #2646 | " | 🔵 | BMM Workflow Configuration and Agent-Status Mapping System | ~573 |
 | #2642 | " | 🔵 | BMGD workflow configuration assigns Game Designer to create-story workflow | ~462 |
+
+### Feb 20, 2026
+
+| ID | Time | T | Title | Read |
+|----|------|---|-------|------|
+| #17467 | 6:22 PM | 🔵 | Human Developer Mode files exist as alternative to AI-focused BMAD workflows | ~354 |
+
+### Feb 21, 2026
+
+| ID | Time | T | Title | Read |
+|----|------|---|-------|------|
+| #18633 | 9:04 AM | 🔵 | Board overlay configuration uses commandRef system with module and type metadata | ~439 |
+| #18630 | 9:03 AM | 🔵 | BMadBoard UI references non-existent /bmad-gds-quick-prototype command | ~413 |
 </claude-mem-context>

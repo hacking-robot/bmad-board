@@ -1,12 +1,14 @@
 import { app, BrowserWindow, ipcMain, dialog, Menu, screen, Notification, nativeImage } from 'electron'
 import { join, dirname, basename, resolve } from 'path'
 import { readFile, readdir, stat, writeFile, mkdir } from 'fs/promises'
-import { existsSync, watch, FSWatcher } from 'fs'
+import { existsSync, watch, FSWatcher, readdirSync, readFileSync, appendFileSync } from 'fs'
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
-import { spawn as spawnChild, spawnSync } from 'child_process'
+import { spawn as spawnChild, spawnSync, execFile } from 'child_process'
+import { promisify } from 'util'
+import { autoUpdater } from 'electron-updater'
 import { agentManager } from './agentManager'
 import { detectTool, detectAllTools, clearDetectionCache } from './cliToolManager'
-import { getAugmentedEnv } from './envUtils'
+import { getAugmentedEnv, findBinary } from './envUtils'
 import { scanBmadProject } from './bmadScanner'
 
 // Set app name (shows in menu bar on macOS)
@@ -18,7 +20,7 @@ let watchDebounceTimer: NodeJS.Timeout | null = null
 // Settings file path in user data directory
 const getSettingsPath = () => join(app.getPath('userData'), 'settings.json')
 
-type ProjectType = 'bmm' | 'bmgd'
+type ProjectType = 'bmm' | 'gds'
 
 interface AgentHistoryEntry {
   id: string
@@ -36,6 +38,7 @@ interface RecentProject {
   path: string
   projectType: ProjectType
   name: string
+  outputFolder?: string
 }
 
 type AITool = 'claude-code' | 'cursor' | 'windsurf' | 'roo-code' | 'aider'
@@ -82,12 +85,14 @@ interface AppSettings {
   claudeModel: ClaudeModel
   projectPath: string | null
   projectType: ProjectType | null
+  outputFolder: string
   selectedEpicId: number | null
   collapsedColumnsByEpic: Record<string, string[]>
   agentHistory?: AgentHistoryEntry[]
   recentProjects: RecentProject[]
   windowBounds?: WindowBounds
   storyOrder: Record<string, Record<string, string[]>> // { [epicId]: { [status]: [storyIds...] } }
+  verboseMode: boolean
   // Git settings
   baseBranch: 'main' | 'master' | 'develop'
   allowDirectEpicMerge: boolean // Allow merging epic branches to base without PR
@@ -115,11 +120,13 @@ const defaultSettings: AppSettings = {
   claudeModel: 'opus',
   projectPath: null,
   projectType: null,
+  outputFolder: '_bmad-output',
   selectedEpicId: null,
   collapsedColumnsByEpic: {},
   agentHistory: [],
   recentProjects: [],
   storyOrder: {},
+  verboseMode: false,
   // Git defaults
   baseBranch: 'main',
   allowDirectEpicMerge: false,
@@ -445,9 +452,90 @@ function createMenu() {
   Menu.setApplicationMenu(menu)
 }
 
+// Auto-updater setup
+function setupAutoUpdater() {
+  // Skip in dev mode
+  if (process.env.VITE_DEV_SERVER_URL) {
+    console.log('[AutoUpdater] Skipping in dev mode')
+    return
+  }
+
+  autoUpdater.autoDownload = false
+  autoUpdater.autoInstallOnAppQuit = true
+
+  const sendStatus = (data: { status: string; [key: string]: unknown }) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('updater:status', data)
+    }
+  }
+
+  autoUpdater.on('checking-for-update', () => {
+    sendStatus({ status: 'checking' })
+  })
+
+  autoUpdater.on('update-available', (info) => {
+    sendStatus({ status: 'available', version: info.version })
+  })
+
+  autoUpdater.on('update-not-available', () => {
+    sendStatus({ status: 'up-to-date' })
+  })
+
+  autoUpdater.on('download-progress', (progress) => {
+    sendStatus({ status: 'downloading', percent: Math.round(progress.percent) })
+  })
+
+  autoUpdater.on('update-downloaded', (info) => {
+    sendStatus({ status: 'ready', version: info.version })
+  })
+
+  autoUpdater.on('error', (err) => {
+    console.error('[AutoUpdater] Error:', err.message)
+    sendStatus({ status: 'error', message: err.message })
+  })
+
+  // Check for updates 5 seconds after startup
+  setTimeout(() => {
+    autoUpdater.checkForUpdates().catch((err) => {
+      console.error('[AutoUpdater] Initial check failed:', err.message)
+    })
+  }, 5000)
+}
+
+// Auto-updater IPC handlers
+ipcMain.handle('updater-check', async () => {
+  if (process.env.VITE_DEV_SERVER_URL) {
+    return { status: 'dev-mode' }
+  }
+  try {
+    await autoUpdater.checkForUpdates()
+    return { success: true }
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Check failed' }
+  }
+})
+
+ipcMain.handle('updater-download', async () => {
+  try {
+    await autoUpdater.downloadUpdate()
+    return { success: true }
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Download failed' }
+  }
+})
+
+ipcMain.handle('updater-install', () => {
+  autoUpdater.quitAndInstall()
+})
+
+ipcMain.handle('get-app-version', () => {
+  return app.getVersion()
+})
+
 app.whenReady().then(() => {
   createWindow()
   createMenu()
+  setupAutoUpdater()
 })
 
 app.on('window-all-closed', () => {
@@ -462,6 +550,24 @@ app.on('activate', () => {
   }
 })
 
+// Read BMAD config to discover the output folder name
+async function readBmadOutputFolder(projectPath: string): Promise<string> {
+  try {
+    const configPath = join(projectPath, '_bmad', '_memory', 'config.yaml')
+    if (!existsSync(configPath)) return '_bmad-output'
+    const content = await readFile(configPath, 'utf-8')
+    const config = parseYaml(content)
+    if (config?.output_folder) {
+      // Strip {project-root}/ prefix if present
+      const folder = String(config.output_folder).replace(/^\{project-root\}\//, '')
+      if (folder) return folder
+    }
+  } catch {
+    // Fall back to default
+  }
+  return '_bmad-output'
+}
+
 // IPC Handlers for file operations
 
 ipcMain.handle('select-directory', async () => {
@@ -475,29 +581,67 @@ ipcMain.handle('select-directory', async () => {
   }
 
   const projectPath = result.filePaths[0]
-  const bmadOutputPath = join(projectPath, '_bmad-output')
 
-  // Check if _bmad-output directory exists - if not, it's a new project for the wizard
+  // Discover the actual output folder name from BMAD config
+  let outputFolder = await readBmadOutputFolder(projectPath)
+  let bmadOutputPath = join(projectPath, outputFolder)
+
+  // Check if output directory exists - if not, scan for BMAD output folders
+  // (handles custom output folder names when config.yaml is missing or unreadable)
   if (!existsSync(bmadOutputPath)) {
-    return { path: projectPath, projectType: 'bmm' as ProjectType, isNewProject: true }
+    try {
+      const entries = await readdir(projectPath)
+      for (const entry of entries) {
+        if (entry === '_bmad' || entry === 'node_modules' || entry === '.git') continue
+        const candidatePath = join(projectPath, entry)
+        const stats2 = await stat(candidatePath)
+        if (stats2.isDirectory()) {
+          // Check for wizard state file (interrupted install) or BMAD output structure (completed install)
+          const hasWizardState = existsSync(join(candidatePath, '.bmadboard-wizard.json'))
+          const hasBmadStructure = existsSync(join(candidatePath, 'implementation-artifacts'))
+            || existsSync(join(candidatePath, 'planning-artifacts'))
+          if (hasWizardState || hasBmadStructure) {
+            outputFolder = entry
+            bmadOutputPath = candidatePath
+            break
+          }
+        }
+      }
+    } catch {
+      // Ignore scan errors
+    }
+  }
+
+  // Check if output directory exists - if not, it's a new project for the wizard
+  if (!existsSync(bmadOutputPath)) {
+    return { path: projectPath, projectType: 'bmm' as ProjectType, isNewProject: true, outputFolder }
   }
 
   // Check for required files
   const sprintStatusPath = join(bmadOutputPath, 'implementation-artifacts', 'sprint-status.yaml')
-  const bmgdEpicsPath = join(bmadOutputPath, 'epics.md')
   const bmmEpicsPath = join(bmadOutputPath, 'planning-artifacts', 'epics.md')
+  const planningArtifactsPath = join(bmadOutputPath, 'planning-artifacts')
 
   const hasSprintStatus = existsSync(sprintStatusPath)
-  const hasBmgdEpics = existsSync(bmgdEpicsPath)
-  const hasBmmEpics = existsSync(bmmEpicsPath)
+  let hasBmmEpics = existsSync(bmmEpicsPath)
 
-  // Detect project type: BMGD if epics.md at root, otherwise BMM (default)
-  let projectType: ProjectType = hasBmgdEpics ? 'bmgd' : 'bmm'
+  // Also check for sharded epic files (epic-1.md, epic-2.md, etc.)
+  if (!hasBmmEpics && existsSync(planningArtifactsPath)) {
+    try {
+      const planningFiles = readdirSync(planningArtifactsPath)
+      hasBmmEpics = planningFiles.some(f => /^epic-\d+\.md$/.test(f))
+    } catch { /* ignore */ }
+  }
+
+  // Detect project type: GDS if gds module directory exists, otherwise BMM (default)
+  const bmadPath = join(projectPath, '_bmad')
+  const hasGdsModule = existsSync(join(bmadPath, 'gds'))
+  let projectType: ProjectType = hasGdsModule ? 'gds' : 'bmm'
 
   // Check if this is a new/empty project
-  const isNewProject = !hasSprintStatus || (!hasBmgdEpics && !hasBmmEpics)
+  const isNewProject = !hasSprintStatus || !hasBmmEpics
 
-  return { path: projectPath, projectType, isNewProject }
+  return { path: projectPath, projectType, isNewProject, outputFolder }
 })
 
 ipcMain.handle('read-file', async (_, filePath: string) => {
@@ -513,16 +657,19 @@ ipcMain.handle('list-directory', async (_, dirPath: string) => {
   try {
     const entries = await readdir(dirPath)
     const files: string[] = []
+    const dirs: string[] = []
 
     for (const entry of entries) {
       const fullPath = join(dirPath, entry)
       const stats = await stat(fullPath)
       if (stats.isFile()) {
         files.push(entry)
+      } else if (stats.isDirectory()) {
+        dirs.push(entry)
       }
     }
 
-    return { files }
+    return { files, dirs }
   } catch (error) {
     return { error: `Failed to list directory: ${dirPath}` }
   }
@@ -540,17 +687,17 @@ ipcMain.handle('save-settings', async (_, settings: Partial<AppSettings>) => {
 // File watching for auto-refresh
 let fileWatchers: FSWatcher[] = []
 
-function startWatching(projectPath: string, projectType: ProjectType) {
+function startWatching(projectPath: string, projectType: ProjectType, outputFolder: string = '_bmad-output') {
   // Stop any existing watchers
   stopWatching()
 
   const watchPaths: string[] = [
-    join(projectPath, '_bmad-output', 'implementation-artifacts')
+    join(projectPath, outputFolder, 'implementation-artifacts')
   ]
 
   // For BMM projects, also watch planning-artifacts (where epics.md lives)
   if (projectType === 'bmm') {
-    watchPaths.push(join(projectPath, '_bmad-output', 'planning-artifacts'))
+    watchPaths.push(join(projectPath, outputFolder, 'planning-artifacts'))
   }
 
   for (const watchPath of watchPaths) {
@@ -602,8 +749,8 @@ function stopWatching() {
   fileWatchers = []
 }
 
-ipcMain.handle('start-watching', async (_, projectPath: string, projectType: ProjectType) => {
-  startWatching(projectPath, projectType)
+ipcMain.handle('start-watching', async (_, projectPath: string, projectType: ProjectType, outputFolder?: string) => {
+  startWatching(projectPath, projectType, outputFolder || '_bmad-output')
   return true
 })
 
@@ -667,13 +814,14 @@ ipcMain.handle('scan-bmad', async (_, projectPath: string) => {
   }
 })
 
-// Detect project type (bmm vs bmgd structure)
-ipcMain.handle('detect-project-type', async (_, projectPath: string) => {
-  // Check for BMGD structure (epics.md at root of _bmad-output)
-  const bmgdEpicsPath = join(projectPath, '_bmad-output', 'epics.md')
+// Detect project type (bmm vs gds)
+ipcMain.handle('detect-project-type', async (_, projectPath: string, outputFolder?: string) => {
+  const folder = outputFolder || '_bmad-output'
+  // Check for GDS module directory
+  const gdsModulePath = join(projectPath, folder, '_bmad', 'gds')
 
-  if (existsSync(bmgdEpicsPath)) {
-    return 'bmgd'
+  if (existsSync(gdsModulePath)) {
+    return 'gds'
   }
 
   // Default to BMM (standard BMAD Method)
@@ -682,8 +830,9 @@ ipcMain.handle('detect-project-type', async (_, projectPath: string) => {
 
 // Check if bmad folders are in .gitignore
 // When bmad is gitignored, the data persists across branch switches since it's not tracked
-ipcMain.handle('check-bmad-in-gitignore', async (_, projectPath: string) => {
+ipcMain.handle('check-bmad-in-gitignore', async (_, projectPath: string, outputFolder?: string) => {
   try {
+    const folder = outputFolder || '_bmad-output'
     const gitignorePath = join(projectPath, '.gitignore')
     if (!existsSync(gitignorePath)) {
       return { inGitignore: false }
@@ -693,12 +842,11 @@ ipcMain.handle('check-bmad-in-gitignore', async (_, projectPath: string) => {
     const lines = content.split('\n').map(line => line.trim())
 
     // Check for patterns that would ignore bmad folders
-    // Common patterns: bmad, _bmad-output, _bmad-output/, docs/planning-artifacts, etc.
     const bmadPatterns = [
       'bmad',
-      '_bmad-output',
-      '_bmad-output/',
-      '_bmad-output/*',
+      folder,
+      folder + '/',
+      folder + '/*',
       'docs/planning-artifacts',
       'docs/implementation-artifacts'
     ]
@@ -906,8 +1054,16 @@ ipcMain.handle('git-create-branch', async (_, projectPath: string, branchName: s
   }
 
   // If fromBranch is specified, create from that branch; otherwise create from current branch
-  const args = fromBranch ? ['checkout', '-b', branchName, fromBranch] : ['checkout', '-b', branchName]
-  const result = runGitCommand(args, projectPath)
+  let args = fromBranch ? ['checkout', '-b', branchName, fromBranch] : ['checkout', '-b', branchName]
+  let result = runGitCommand(args, projectPath)
+  if (result.error) {
+    // If fromBranch was specified but is not a valid commit (e.g. empty repo with no commits),
+    // retry without specifying the source branch
+    if (fromBranch && (result.error.includes('not a commit') || result.error.includes('not a valid'))) {
+      args = ['checkout', '-b', branchName]
+      result = runGitCommand(args, projectPath)
+    }
+  }
   if (result.error) {
     // Parse common git checkout -b errors for better messages
     if (result.error.includes('already exists')) {
@@ -1362,7 +1518,7 @@ ipcMain.handle('git-merge-branch', async (_, projectPath: string, branchToMerge:
 ipcMain.handle('update-story-status', async (_, filePath: string, newStatus: string) => {
   try {
     // Extract story key from file path (filename without .md)
-    // Story path: {projectPath}/_bmad-output/implementation-artifacts/{story-key}.md
+    // Story path: {projectPath}/{outputFolder}/implementation-artifacts/{story-key}.md
     const storyKey = basename(filePath, '.md')
 
     // Derive sprint-status.yaml path from story file path
@@ -1398,6 +1554,71 @@ ipcMain.handle('update-story-status', async (_, filePath: string, newStatus: str
   }
 })
 
+// Toggle a task checkbox in a story markdown file
+ipcMain.handle('toggle-story-task', async (_, filePath: string, taskIndex: number, subtaskIndex: number) => {
+  try {
+    const content = await readFile(filePath, 'utf-8')
+    const lines = content.split('\n')
+
+    let inTasksSection = false
+    let currentTaskIdx = -1
+    let currentSubtaskIdx = -1
+    let targetLine = -1
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+
+      if (line.startsWith('## Tasks')) {
+        inTasksSection = true
+        continue
+      }
+      if (inTasksSection && (line.startsWith('## ') || line.startsWith('# '))) {
+        break
+      }
+
+      if (!inTasksSection) continue
+
+      // Match main task: - [x] or - [ ]
+      if (/^- \[[ xX]\]\s+/.test(line)) {
+        currentTaskIdx++
+        currentSubtaskIdx = -1
+
+        if (currentTaskIdx === taskIndex && subtaskIndex === -1) {
+          targetLine = i
+          break
+        }
+      }
+
+      // Match subtask: indented - [x] or - [ ]
+      if (/^\s+- \[[ xX]\]\s+/.test(line) && currentTaskIdx === taskIndex) {
+        currentSubtaskIdx++
+        if (currentSubtaskIdx === subtaskIndex) {
+          targetLine = i
+          break
+        }
+      }
+    }
+
+    if (targetLine === -1) {
+      return { success: false, error: 'Task not found' }
+    }
+
+    // Toggle the checkbox
+    const line = lines[targetLine]
+    if (/\[x\]/i.test(line)) {
+      lines[targetLine] = line.replace(/\[[xX]\]/, '[ ]')
+    } else {
+      lines[targetLine] = line.replace(/\[ \]/, '[x]')
+    }
+
+    await writeFile(filePath, lines.join('\n'), 'utf-8')
+    return { success: true }
+  } catch (error) {
+    console.error('Failed to toggle story task:', error)
+    return { success: false, error: String(error) }
+  }
+})
+
 // Show native notification
 ipcMain.handle('show-notification', async (_, title: string, body: string) => {
   if (Notification.isSupported()) {
@@ -1405,22 +1626,28 @@ ipcMain.handle('show-notification', async (_, title: string, body: string) => {
   }
 })
 
-// Chat thread storage
-const getChatThreadsDir = () => join(app.getPath('userData'), 'chat-threads')
-const getChatThreadPath = (agentId: string) => join(getChatThreadsDir(), `${agentId}.json`)
+// Chat thread storage (project-scoped via path hash)
+import { createHash } from 'crypto'
 
-// Ensure chat threads directory exists
-async function ensureChatThreadsDir() {
-  const dir = getChatThreadsDir()
+function hashProjectPath(projectPath: string): string {
+  return createHash('md5').update(projectPath).digest('hex').slice(0, 12)
+}
+const getChatThreadsDir = (projectPath: string) =>
+  join(app.getPath('userData'), 'chat-threads', hashProjectPath(projectPath))
+const getChatThreadPath = (projectPath: string, agentId: string) =>
+  join(getChatThreadsDir(projectPath), `${agentId}.json`)
+
+async function ensureChatThreadsDir(projectPath: string) {
+  const dir = getChatThreadsDir(projectPath)
   if (!existsSync(dir)) {
     await mkdir(dir, { recursive: true })
   }
 }
 
 // Chat thread IPC handlers
-ipcMain.handle('load-chat-thread', async (_, agentId: string) => {
+ipcMain.handle('load-chat-thread', async (_, projectPath: string, agentId: string) => {
   try {
-    const filePath = getChatThreadPath(agentId)
+    const filePath = getChatThreadPath(projectPath, agentId)
     if (!existsSync(filePath)) {
       return null
     }
@@ -1432,10 +1659,10 @@ ipcMain.handle('load-chat-thread', async (_, agentId: string) => {
   }
 })
 
-ipcMain.handle('save-chat-thread', async (_, agentId: string, thread: unknown) => {
+ipcMain.handle('save-chat-thread', async (_, projectPath: string, agentId: string, thread: unknown) => {
   try {
-    await ensureChatThreadsDir()
-    const filePath = getChatThreadPath(agentId)
+    await ensureChatThreadsDir(projectPath)
+    const filePath = getChatThreadPath(projectPath, agentId)
     await writeFile(filePath, JSON.stringify(thread, null, 2))
     return true
   } catch (error) {
@@ -1444,9 +1671,9 @@ ipcMain.handle('save-chat-thread', async (_, agentId: string, thread: unknown) =
   }
 })
 
-ipcMain.handle('clear-chat-thread', async (_, agentId: string) => {
+ipcMain.handle('clear-chat-thread', async (_, projectPath: string, agentId: string) => {
   try {
-    const filePath = getChatThreadPath(agentId)
+    const filePath = getChatThreadPath(projectPath, agentId)
     if (existsSync(filePath)) {
       const { unlink } = await import('fs/promises')
       await unlink(filePath)
@@ -1458,9 +1685,9 @@ ipcMain.handle('clear-chat-thread', async (_, agentId: string) => {
   }
 })
 
-ipcMain.handle('list-chat-threads', async () => {
+ipcMain.handle('list-chat-threads', async (_, projectPath: string) => {
   try {
-    const dir = getChatThreadsDir()
+    const dir = getChatThreadsDir(projectPath)
     if (!existsSync(dir)) {
       return []
     }
@@ -1484,14 +1711,14 @@ interface StoryChatHistory {
   lastUpdated: number
 }
 
-const getProjectStoryChatDir = (projectPath: string) => join(projectPath, '_bmad-output', 'chat-history')
-const getProjectStoryChatPath = (projectPath: string, storyId: string) => join(getProjectStoryChatDir(projectPath), `${storyId}.json`)
+const getProjectStoryChatDir = (projectPath: string, outputFolder: string = '_bmad-output') => join(projectPath, outputFolder, 'chat-history')
+const getProjectStoryChatPath = (projectPath: string, storyId: string, outputFolder: string = '_bmad-output') => join(getProjectStoryChatDir(projectPath, outputFolder), `${storyId}.json`)
 const getUserStoryChatDir = () => join(homedir(), '.config', 'bmadboard', 'story-chats')
 const getUserStoryChatPath = (storyId: string) => join(getUserStoryChatDir(), `${storyId}.json`)
 
 // Ensure story chat directories exist
-async function ensureStoryChatDirs(projectPath: string) {
-  const projectDir = getProjectStoryChatDir(projectPath)
+async function ensureStoryChatDirs(projectPath: string, outputFolder: string = '_bmad-output') {
+  const projectDir = getProjectStoryChatDir(projectPath, outputFolder)
   const userDir = getUserStoryChatDir()
   if (!existsSync(projectDir)) {
     await mkdir(projectDir, { recursive: true })
@@ -1502,10 +1729,11 @@ async function ensureStoryChatDirs(projectPath: string) {
 }
 
 // Save story chat history to both project and user data locations
-ipcMain.handle('save-story-chat-history', async (_, projectPath: string, storyId: string, history: StoryChatHistory) => {
+ipcMain.handle('save-story-chat-history', async (_, projectPath: string, storyId: string, history: StoryChatHistory, outputFolder?: string) => {
   try {
-    await ensureStoryChatDirs(projectPath)
-    const projectFilePath = getProjectStoryChatPath(projectPath, storyId)
+    const folder = outputFolder || '_bmad-output'
+    await ensureStoryChatDirs(projectPath, folder)
+    const projectFilePath = getProjectStoryChatPath(projectPath, storyId, folder)
     const userFilePath = getUserStoryChatPath(storyId)
     const content = JSON.stringify(history, null, 2)
 
@@ -1523,9 +1751,10 @@ ipcMain.handle('save-story-chat-history', async (_, projectPath: string, storyId
 
 // Load story chat history - user dir first (primary), fallback to project dir (backup)
 // If found in project dir but not user dir, sync to user dir
-ipcMain.handle('load-story-chat-history', async (_, projectPath: string, storyId: string) => {
+ipcMain.handle('load-story-chat-history', async (_, projectPath: string, storyId: string, outputFolder?: string) => {
   try {
-    const projectFilePath = getProjectStoryChatPath(projectPath, storyId)
+    const folder = outputFolder || '_bmad-output'
+    const projectFilePath = getProjectStoryChatPath(projectPath, storyId, folder)
     const userFilePath = getUserStoryChatPath(storyId)
 
     // Try user directory first (primary)
@@ -1562,12 +1791,13 @@ ipcMain.handle('load-story-chat-history', async (_, projectPath: string, storyId
 })
 
 // List all story IDs that have chat history
-ipcMain.handle('list-story-chat-histories', async (_, projectPath: string) => {
+ipcMain.handle('list-story-chat-histories', async (_, projectPath: string, outputFolder?: string) => {
   try {
+    const folder = outputFolder || '_bmad-output'
     const storyIds = new Set<string>()
 
     // Check project directory
-    const projectDir = getProjectStoryChatDir(projectPath)
+    const projectDir = getProjectStoryChatDir(projectPath, folder)
     if (existsSync(projectDir)) {
       const files = await readdir(projectDir)
       files.filter(f => f.endsWith('.json')).forEach(f => storyIds.add(f.replace('.json', '')))
@@ -1587,6 +1817,54 @@ ipcMain.handle('list-story-chat-histories', async (_, projectPath: string) => {
   }
 })
 
+// Project cost tracking - append-only ledger per project
+const getProjectCostPath = (projectPath: string, outputFolder: string = '_bmad-output') => join(projectPath, outputFolder, 'project-costs.json')
+
+ipcMain.handle('append-project-cost', async (_, projectPath: string, entry: unknown, outputFolder?: string) => {
+  try {
+    const folder = outputFolder || '_bmad-output'
+    const costPath = getProjectCostPath(projectPath, folder)
+    const dir = join(projectPath, folder)
+    if (!existsSync(dir)) {
+      await mkdir(dir, { recursive: true })
+    }
+
+    let entries: unknown[] = []
+    if (existsSync(costPath)) {
+      try {
+        const content = await readFile(costPath, 'utf-8')
+        const parsed = JSON.parse(content)
+        if (Array.isArray(parsed)) entries = parsed
+      } catch {
+        // Corrupted file, start fresh
+      }
+    }
+
+    entries.push(entry)
+    await writeFile(costPath, JSON.stringify(entries, null, 2))
+    return true
+  } catch (error) {
+    console.error('Failed to append project cost:', error)
+    return false
+  }
+})
+
+ipcMain.handle('load-project-costs', async (_, projectPath: string, outputFolder?: string) => {
+  try {
+    const folder = outputFolder || '_bmad-output'
+    const costPath = getProjectCostPath(projectPath, folder)
+    if (!existsSync(costPath)) {
+      return []
+    }
+    const content = await readFile(costPath, 'utf-8')
+    const parsed = JSON.parse(content)
+    return Array.isArray(parsed) ? parsed : []
+  } catch (error) {
+    console.error('Failed to load project costs:', error)
+    return []
+  }
+})
+
 // Chat agent - simple spawn per message
 import { chatAgentManager } from './agentManager'
 
@@ -1598,7 +1876,7 @@ app.whenReady().then(() => {
 ipcMain.handle('chat-load-agent', async (_, options: {
   agentId: string
   projectPath: string
-  projectType: 'bmm' | 'bmgd'
+  projectType: 'bmm' | 'gds'
   tool?: AITool
   model?: ClaudeModel
   customEndpoint?: { name: string; baseUrl: string; apiKey: string; modelName: string } | null
@@ -1658,25 +1936,152 @@ ipcMain.handle('cli-clear-cache', async () => {
   clearDetectionCache()
 })
 
+// Environment check handler - verifies dev environment prerequisites
+ipcMain.handle('check-environment', async () => {
+  interface EnvCheckItem {
+    id: string
+    label: string
+    status: 'checking' | 'ok' | 'warning' | 'error'
+    version?: string | null
+    detail?: string
+  }
+
+  const items: EnvCheckItem[] = []
+
+  // 1. Claude CLI
+  const claudeResult = await detectTool('claude-code')
+  const claudeAvailable = claudeResult.available
+  items.push({
+    id: 'claude',
+    label: 'Claude CLI',
+    status: claudeAvailable ? 'ok' : 'error',
+    version: claudeResult.version,
+    detail: claudeAvailable ? undefined : 'Not found in PATH'
+  })
+
+  // 2. Git
+  const gitPath = findBinary('git')
+  let gitVersion: string | null = null
+  if (gitPath) {
+    try {
+      const execFileAsync = promisify(execFile)
+      const gitResult = await execFileAsync('git', ['--version'], { encoding: 'utf-8', timeout: 5000 })
+      if (gitResult.stdout) {
+        const match = gitResult.stdout.match(/(\d+\.\d+\.\d+)/)
+        if (match) gitVersion = match[1]
+      }
+    } catch { /* git --version failed */ }
+  }
+  items.push({
+    id: 'git',
+    label: 'Git',
+    status: gitPath ? 'ok' : 'error',
+    version: gitVersion,
+    detail: gitPath ? undefined : 'Not found in PATH'
+  })
+
+  // 3-6. Plugins and MCP servers - read Claude settings file
+  let enabledPlugins: Record<string, boolean> = {}
+  try {
+    const claudeSettingsPath = join(homedir(), '.claude', 'settings.json')
+    if (existsSync(claudeSettingsPath)) {
+      const content = await readFile(claudeSettingsPath, 'utf-8')
+      const settings = JSON.parse(content)
+      enabledPlugins = settings.enabledPlugins || {}
+    }
+  } catch {
+    // Settings file may not exist or be unreadable
+  }
+
+  // 3. Context7 Plugin
+  const context7Enabled = enabledPlugins['context7@claude-plugins-official'] === true
+  items.push({
+    id: 'context7',
+    label: 'Context7 Plugin',
+    status: context7Enabled ? 'ok' : 'warning',
+    detail: context7Enabled ? 'Enabled' : 'Not enabled in Claude settings'
+  })
+
+  // 4. Web Search (built-in to Claude Code)
+  items.push({
+    id: 'web-search',
+    label: 'Web Search (built-in)',
+    status: claudeAvailable ? 'ok' : 'warning',
+    detail: claudeAvailable ? 'Available' : 'Requires Claude CLI'
+  })
+
+  // 5. Web Reader MCP
+  let webReaderStatus: 'ok' | 'warning' | 'error' = 'warning'
+  let webReaderDetail = 'Not configured'
+  if (!claudeAvailable) {
+    webReaderDetail = 'Requires Claude CLI'
+  } else {
+    try {
+      // Strip CLAUDECODE env var to avoid "nested session" error
+      const mcpEnv = { ...getAugmentedEnv() }
+      delete mcpEnv.CLAUDECODE
+      // Also remove any CLAUDE_ session env vars that might cause nested session detection
+      for (const key of Object.keys(mcpEnv)) {
+        if (key.startsWith('CLAUDE_') && key !== 'CLAUDE_CONFIG_DIR') {
+          delete mcpEnv[key]
+        }
+      }
+
+      const execFileAsync = promisify(execFile)
+      const mcpResult = await execFileAsync('claude', ['mcp', 'list'], {
+        encoding: 'utf-8',
+        timeout: 8000,
+        env: mcpEnv
+      })
+
+      if (mcpResult.stdout?.toLowerCase().includes('web-reader')) {
+        webReaderStatus = 'ok'
+        webReaderDetail = 'Configured'
+      }
+    } catch {
+      webReaderDetail = 'Could not verify'
+    }
+  }
+  items.push({
+    id: 'web-reader',
+    label: 'Web Reader MCP',
+    status: webReaderStatus,
+    detail: webReaderDetail
+  })
+
+  // 6. TypeScript LSP Plugin
+  const tsLspEnabled = enabledPlugins['typescript-lsp@claude-plugins-official'] === true
+  items.push({
+    id: 'ts-lsp',
+    label: 'TypeScript LSP',
+    status: tsLspEnabled ? 'ok' : 'warning',
+    detail: tsLspEnabled ? 'Enabled' : 'Not enabled in Claude settings'
+  })
+
+  return { items }
+})
+
 // BMAD Install handler - runs npx bmad-method install
 let bmadInstallProcess: ReturnType<typeof spawnChild> | null = null
 
-ipcMain.handle('bmad-install', async (_, projectPath: string, useAlpha?: boolean) => {
+ipcMain.handle('bmad-install', async (_, projectPath: string, useAlpha?: boolean, outputFolder?: string, modules?: string[]) => {
   if (bmadInstallProcess) {
     return { success: false, error: 'Installation already in progress' }
   }
 
   try {
+    const folder = outputFolder || '_bmad-output'
     const packageName = useAlpha ? 'bmad-method@alpha' : 'bmad-method'
+    const moduleList = (modules?.length) ? modules.join(',') : 'bmm'
     // Stable v6 supports non-interactive flags; alpha does not
     const args = useAlpha
       ? [packageName, 'install']
       : [
           packageName, 'install',
           '--directory', projectPath,
-          '--modules', 'bmm',
+          '--modules', moduleList,
           '--tools', 'claude-code',
-          '--output-folder', '_bmad-output',
+          '--output-folder', folder,
           '--yes'
         ]
 
@@ -1740,27 +2145,30 @@ ipcMain.handle('bmad-install', async (_, projectPath: string, useAlpha?: boolean
 let wizardWatcher: FSWatcher | null = null
 let wizardWatchDebounce: NodeJS.Timeout | null = null
 
-ipcMain.handle('wizard-start-watching', async (_, projectPath: string) => {
+ipcMain.handle('wizard-start-watching', async (_, projectPath: string, outputFolder?: string) => {
+  const folder = outputFolder || '_bmad-output'
   // Stop existing wizard watcher
   if (wizardWatcher) {
     wizardWatcher.close()
     wizardWatcher = null
   }
 
-  const planningDir = join(projectPath, '_bmad-output', 'planning-artifacts')
+  const outputDir = join(projectPath, folder)
 
   // Create the directory if it doesn't exist yet (install may not have completed)
-  if (!existsSync(planningDir)) {
+  if (!existsSync(outputDir)) {
     try {
-      await mkdir(planningDir, { recursive: true })
+      await mkdir(outputDir, { recursive: true })
     } catch {
       return false
     }
   }
 
   try {
-    wizardWatcher = watch(planningDir, { recursive: true }, (_eventType, filename) => {
-      if (!filename || !filename.endsWith('.md')) return
+    wizardWatcher = watch(outputDir, { recursive: true }, (_eventType, filename) => {
+      if (!filename) return
+      // Watch .md and .yaml files (covers both planning artifacts and sprint-status.yaml)
+      if (!filename.endsWith('.md') && !filename.endsWith('.yaml')) return
 
       if (wizardWatchDebounce) clearTimeout(wizardWatchDebounce)
       wizardWatchDebounce = setTimeout(() => {
@@ -1794,10 +2202,21 @@ ipcMain.handle('check-file-exists', async (_, filePath: string) => {
   return existsSync(filePath)
 })
 
-// Wizard state persistence
-ipcMain.handle('save-wizard-state', async (_, projectPath: string, state: unknown) => {
+ipcMain.handle('check-dir-has-prefix', async (_, dirPath: string, prefix: string) => {
   try {
-    const wizardDir = join(projectPath, '_bmad-output')
+    if (!existsSync(dirPath)) return false
+    const entries = await readdir(dirPath)
+    return entries.some(entry => entry.startsWith(prefix) && entry.endsWith('.md'))
+  } catch {
+    return false
+  }
+})
+
+// Wizard state persistence
+ipcMain.handle('save-wizard-state', async (_, projectPath: string, state: unknown, outputFolder?: string) => {
+  try {
+    const folder = outputFolder || '_bmad-output'
+    const wizardDir = join(projectPath, folder)
     if (!existsSync(wizardDir)) {
       await mkdir(wizardDir, { recursive: true })
     }
@@ -1810,9 +2229,10 @@ ipcMain.handle('save-wizard-state', async (_, projectPath: string, state: unknow
   }
 })
 
-ipcMain.handle('load-wizard-state', async (_, projectPath: string) => {
+ipcMain.handle('load-wizard-state', async (_, projectPath: string, outputFolder?: string) => {
   try {
-    const wizardPath = join(projectPath, '_bmad-output', '.bmadboard-wizard.json')
+    const folder = outputFolder || '_bmad-output'
+    const wizardPath = join(projectPath, folder, '.bmadboard-wizard.json')
     if (!existsSync(wizardPath)) return null
     const content = await readFile(wizardPath, 'utf-8')
     return JSON.parse(content)
@@ -1821,9 +2241,10 @@ ipcMain.handle('load-wizard-state', async (_, projectPath: string) => {
   }
 })
 
-ipcMain.handle('delete-wizard-state', async (_, projectPath: string) => {
+ipcMain.handle('delete-wizard-state', async (_, projectPath: string, outputFolder?: string) => {
   try {
-    const wizardPath = join(projectPath, '_bmad-output', '.bmadboard-wizard.json')
+    const folder = outputFolder || '_bmad-output'
+    const wizardPath = join(projectPath, folder, '.bmadboard-wizard.json')
     if (existsSync(wizardPath)) {
       const { unlink } = await import('fs/promises')
       await unlink(wizardPath)
@@ -1831,6 +2252,69 @@ ipcMain.handle('delete-wizard-state', async (_, projectPath: string) => {
     return true
   } catch {
     return false
+  }
+})
+
+// Write project files (for human developer mode - replaces workflow files after install)
+ipcMain.handle('write-project-files', async (_, projectPath: string, files: { relativePath: string; content: string }[]) => {
+  try {
+    if (!existsSync(projectPath)) {
+      return { success: false, written: 0, error: 'Project path does not exist' }
+    }
+
+    let written = 0
+    for (const file of files) {
+      const fullPath = join(projectPath, file.relativePath)
+      const dir = dirname(fullPath)
+      if (!existsSync(dir)) {
+        await mkdir(dir, { recursive: true })
+      }
+      await writeFile(fullPath, file.content, 'utf-8')
+      written++
+    }
+
+    return { success: true, written }
+  } catch (error) {
+    return { success: false, written: 0, error: error instanceof Error ? error.message : 'Failed to write files' }
+  }
+})
+
+// Append YAML fields to module config files after installation
+ipcMain.handle('append-config-fields', async (_, projectPath: string, fields: Record<string, string>) => {
+  try {
+    const bmadPath = join(projectPath, '_bmad')
+    if (!existsSync(bmadPath)) {
+      return { success: false, error: '_bmad directory not found' }
+    }
+
+    // Build YAML lines to append
+    const yamlLines = Object.entries(fields)
+      .filter(([, v]) => v) // skip empty values
+      .map(([k, v]) => `${k}: "${v}"`)
+    if (yamlLines.length === 0) return { success: true, updated: 0 }
+
+    const yamlBlock = '\n# User Profile\n' + yamlLines.join('\n') + '\n'
+
+    // Find all module config.yaml files (e.g., _bmad/bmm/config.yaml, _bmad/gds/config.yaml)
+    let updated = 0
+    const entries = readdirSync(bmadPath, { withFileTypes: true })
+    for (const entry of entries) {
+      if (entry.isDirectory() && !entry.name.startsWith('_')) {
+        const configPath = join(bmadPath, entry.name, 'config.yaml')
+        if (existsSync(configPath)) {
+          const existing = readFileSync(configPath, 'utf-8')
+          // Only append if not already present
+          if (!existing.includes('user_name:')) {
+            appendFileSync(configPath, yamlBlock)
+            updated++
+          }
+        }
+      }
+    }
+
+    return { success: true, updated }
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Failed to append config fields' }
   }
 })
 
@@ -1856,6 +2340,12 @@ ipcMain.handle('create-project-directory', async (_, parentPath: string, project
       return { success: false, error: 'A folder with that name already exists' }
     }
     await mkdir(projectPath, { recursive: true })
+    const gitInit = spawnSync('git', ['init'], { cwd: projectPath })
+    if (gitInit.status !== 0) {
+      return { success: false, error: 'Created folder but git init failed: ' + (gitInit.stderr?.toString() || 'unknown error') }
+    }
+    // Create an initial empty commit so the default branch is a valid ref for branching
+    spawnSync('git', ['commit', '--allow-empty', '-m', 'Initial commit'], { cwd: projectPath })
     return { success: true, path: projectPath }
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Failed to create directory' }

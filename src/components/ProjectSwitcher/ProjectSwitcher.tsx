@@ -75,8 +75,8 @@ export default function ProjectSwitcher() {
     setAnchorEl(null)
   }
 
-  const handleProjectClick = (path: string, projectType: 'bmm' | 'bmgd') => {
-    switchToProject(path, projectType)
+  const handleProjectClick = (project: import('../../store').RecentProject) => {
+    switchToProject(project)
     handleClose()
   }
 
@@ -186,7 +186,7 @@ export default function ProjectSwitcher() {
                 if (e.key === 'Enter' && filteredProjects.length > 0) {
                   const selectedProject = filteredProjects[preSelectedIndex]
                   if (selectedProject) {
-                    handleProjectClick(selectedProject.path, selectedProject.projectType)
+                    handleProjectClick(selectedProject)
                   }
                 } else if (e.key === 'ArrowDown') {
                   e.preventDefault()
@@ -224,7 +224,7 @@ export default function ProjectSwitcher() {
             {filteredProjects.map((project, index) => (
               <MenuItem
                 key={project.path}
-                onClick={() => handleProjectClick(project.path, project.projectType)}
+                onClick={() => handleProjectClick(project)}
                 selected={project.path === projectPath}
                 onMouseEnter={() => {
                   setHoveredItem(project.path)

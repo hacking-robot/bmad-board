@@ -1,8 +1,9 @@
-import { useMemo } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { Box, Typography, Tooltip, IconButton, Chip, CircularProgress } from '@mui/material'
 import CircleIcon from '@mui/icons-material/Circle'
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
 import RocketLaunchIcon from '@mui/icons-material/RocketLaunch'
+import AttachMoneyIcon from '@mui/icons-material/AttachMoney'
 import { useStore } from '../../store'
 import { STATUS_COLUMNS, StoryStatus } from '../../types'
 import BranchSwitcher from '../BranchSwitcher'
@@ -39,6 +40,12 @@ function formatRelativeTime(date: Date | null): string {
 }
 
 export default function StatusBar() {
+  const [appVersion, setAppVersion] = useState<string>('')
+
+  useEffect(() => {
+    window.updaterAPI.getAppVersion().then(setAppVersion)
+  }, [])
+
   const stories = useStore((state) => state.stories)
   const epics = useStore((state) => state.epics)
   const selectedEpicId = useStore((state) => state.selectedEpicId)
@@ -48,6 +55,8 @@ export default function StatusBar() {
   const fullCycle = useStore((state) => state.fullCycle)
   const setFullCycleDialogOpen = useStore((state) => state.setFullCycleDialogOpen)
   const setFullCycleMinimized = useStore((state) => state.setFullCycleMinimized)
+  const projectCostTotal = useStore((state) => state.projectCostTotal)
+  const developerMode = useStore((state) => state.developerMode)
 
   // Count stories by status
   const statusCounts = useMemo(() => {
@@ -127,6 +136,13 @@ export default function StatusBar() {
           <UncommittedChanges />
         </Box>
 
+        {/* Developer mode indicator */}
+        <Tooltip title={developerMode === 'human' ? 'Manual Development mode' : 'AI Driven Development mode'}>
+          <Typography variant="caption" color="text.secondary" sx={{ cursor: 'help' }}>
+            {developerMode === 'human' ? 'Manual Dev' : 'AI Driven'}
+          </Typography>
+        </Tooltip>
+
         {/* Full Cycle Progress Indicator (when minimized) */}
         {fullCycle.isRunning && fullCycle.minimized && (
           <Tooltip title={`Full Cycle: ${fullCycle.stepName} (${fullCycle.currentStep + 1}/${fullCycle.totalSteps})`}>
@@ -191,6 +207,22 @@ export default function StatusBar() {
 
       {/* Right section - Last refreshed & keyboard hint */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+        {/* Project LLM cost total */}
+        {projectCostTotal > 0 && (
+          <Tooltip title={`Total LLM cost for this project: $${projectCostTotal.toFixed(4)}`}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, cursor: 'help' }}>
+              <AttachMoneyIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+              <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
+                {projectCostTotal < 0.01
+                  ? projectCostTotal.toFixed(4)
+                  : projectCostTotal < 1
+                    ? projectCostTotal.toFixed(3)
+                    : projectCostTotal.toFixed(2)}
+              </Typography>
+            </Box>
+          </Tooltip>
+        )}
+
         {/* Last refreshed */}
         <Tooltip title="Last data refresh">
           <Typography variant="caption" color="text.secondary">
@@ -226,6 +258,17 @@ export default function StatusBar() {
             <HelpOutlineIcon sx={{ fontSize: 16 }} />
           </IconButton>
         </Tooltip>
+
+        {/* App version */}
+        {appVersion && (
+          <Typography
+            variant="caption"
+            color="text.disabled"
+            sx={{ fontFamily: 'monospace', fontSize: '0.65rem' }}
+          >
+            v{appVersion}
+          </Typography>
+        )}
       </Box>
     </Box>
   )

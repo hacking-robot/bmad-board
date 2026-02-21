@@ -1,18 +1,18 @@
 import { useMemo } from 'react'
 import flowBmm from '../data/flow-bmm-stable.json'
-import flowBmgd from '../data/flow-bmgd.json'
+import flowGds from '../data/flow-gds.json'
 import { useStore } from '../store'
 import type { StoryStatus, ProjectType } from '../types'
 import type { WorkflowConfig, StatusDefinition, AgentDefinition, NextStepAction, ProjectWorkflowPhase } from '../types/flow'
 
 // Cast the imported JSON to our typed configs
 const workflowBmm = flowBmm as unknown as WorkflowConfig
-const workflowBmgd = flowBmgd as unknown as WorkflowConfig
+const workflowGds = flowGds as unknown as WorkflowConfig
 
 // Get workflow config for a specific project type
 function getWorkflowForType(projectType: ProjectType | null): WorkflowConfig {
-  if (projectType === 'bmgd') {
-    return workflowBmgd
+  if (projectType === 'gds') {
+    return workflowGds
   }
   return workflowBmm
 }
@@ -98,4 +98,4 @@ export function getWorkflow(projectType: ProjectType | null): WorkflowConfig {
 }
 
 // Export workflow configs for components that need direct access
-export { workflowBmm, workflowBmgd }
+export { workflowBmm, workflowGds }
