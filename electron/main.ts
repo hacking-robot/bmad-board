@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog, Menu, screen, Notification, nativeImage } from 'electron'
 import { join, dirname, basename, resolve } from 'path'
 import { readFile, readdir, stat, writeFile, mkdir } from 'fs/promises'
-import { existsSync, watch, FSWatcher } from 'fs'
+import { existsSync, watch, FSWatcher, readdirSync, readFileSync, appendFileSync } from 'fs'
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 import { spawn as spawnChild, spawnSync, execFile } from 'child_process'
 import { promisify } from 'util'
@@ -92,6 +92,7 @@ interface AppSettings {
   recentProjects: RecentProject[]
   windowBounds?: WindowBounds
   storyOrder: Record<string, Record<string, string[]>> // { [epicId]: { [status]: [storyIds...] } }
+  verboseMode: boolean
   // Git settings
   baseBranch: 'main' | 'master' | 'develop'
   allowDirectEpicMerge: boolean // Allow merging epic branches to base without PR
@@ -125,6 +126,7 @@ const defaultSettings: AppSettings = {
   agentHistory: [],
   recentProjects: [],
   storyOrder: {},
+  verboseMode: false,
   // Git defaults
   baseBranch: 'main',
   allowDirectEpicMerge: false,
@@ -618,12 +620,21 @@ ipcMain.handle('select-directory', async () => {
   // Check for required files
   const sprintStatusPath = join(bmadOutputPath, 'implementation-artifacts', 'sprint-status.yaml')
   const bmmEpicsPath = join(bmadOutputPath, 'planning-artifacts', 'epics.md')
+  const planningArtifactsPath = join(bmadOutputPath, 'planning-artifacts')
 
   const hasSprintStatus = existsSync(sprintStatusPath)
-  const hasBmmEpics = existsSync(bmmEpicsPath)
+  let hasBmmEpics = existsSync(bmmEpicsPath)
+
+  // Also check for sharded epic files (epic-1.md, epic-2.md, etc.)
+  if (!hasBmmEpics && existsSync(planningArtifactsPath)) {
+    try {
+      const planningFiles = readdirSync(planningArtifactsPath)
+      hasBmmEpics = planningFiles.some(f => /^epic-\d+\.md$/.test(f))
+    } catch { /* ignore */ }
+  }
 
   // Detect project type: GDS if gds module directory exists, otherwise BMM (default)
-  const bmadPath = join(bmadOutputPath, '_bmad')
+  const bmadPath = join(projectPath, '_bmad')
   const hasGdsModule = existsSync(join(bmadPath, 'gds'))
   let projectType: ProjectType = hasGdsModule ? 'gds' : 'bmm'
 
@@ -2142,20 +2153,22 @@ ipcMain.handle('wizard-start-watching', async (_, projectPath: string, outputFol
     wizardWatcher = null
   }
 
-  const planningDir = join(projectPath, folder, 'planning-artifacts')
+  const outputDir = join(projectPath, folder)
 
   // Create the directory if it doesn't exist yet (install may not have completed)
-  if (!existsSync(planningDir)) {
+  if (!existsSync(outputDir)) {
     try {
-      await mkdir(planningDir, { recursive: true })
+      await mkdir(outputDir, { recursive: true })
     } catch {
       return false
     }
   }
 
   try {
-    wizardWatcher = watch(planningDir, { recursive: true }, (_eventType, filename) => {
-      if (!filename || !filename.endsWith('.md')) return
+    wizardWatcher = watch(outputDir, { recursive: true }, (_eventType, filename) => {
+      if (!filename) return
+      // Watch .md and .yaml files (covers both planning artifacts and sprint-status.yaml)
+      if (!filename.endsWith('.md') && !filename.endsWith('.yaml')) return
 
       if (wizardWatchDebounce) clearTimeout(wizardWatchDebounce)
       wizardWatchDebounce = setTimeout(() => {
@@ -2263,6 +2276,45 @@ ipcMain.handle('write-project-files', async (_, projectPath: string, files: { re
     return { success: true, written }
   } catch (error) {
     return { success: false, written: 0, error: error instanceof Error ? error.message : 'Failed to write files' }
+  }
+})
+
+// Append YAML fields to module config files after installation
+ipcMain.handle('append-config-fields', async (_, projectPath: string, fields: Record<string, string>) => {
+  try {
+    const bmadPath = join(projectPath, '_bmad')
+    if (!existsSync(bmadPath)) {
+      return { success: false, error: '_bmad directory not found' }
+    }
+
+    // Build YAML lines to append
+    const yamlLines = Object.entries(fields)
+      .filter(([, v]) => v) // skip empty values
+      .map(([k, v]) => `${k}: "${v}"`)
+    if (yamlLines.length === 0) return { success: true, updated: 0 }
+
+    const yamlBlock = '\n# User Profile\n' + yamlLines.join('\n') + '\n'
+
+    // Find all module config.yaml files (e.g., _bmad/bmm/config.yaml, _bmad/gds/config.yaml)
+    let updated = 0
+    const entries = readdirSync(bmadPath, { withFileTypes: true })
+    for (const entry of entries) {
+      if (entry.isDirectory() && !entry.name.startsWith('_')) {
+        const configPath = join(bmadPath, entry.name, 'config.yaml')
+        if (existsSync(configPath)) {
+          const existing = readFileSync(configPath, 'utf-8')
+          // Only append if not already present
+          if (!existing.includes('user_name:')) {
+            appendFileSync(configPath, yamlBlock)
+            updated++
+          }
+        }
+      }
+    }
+
+    return { success: true, updated }
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Failed to append config fields' }
   }
 })
 

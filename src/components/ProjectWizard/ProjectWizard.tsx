@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useMemo, useState } from 'react'
-import { Box, Typography, Button, Stack, Divider, IconButton, Tooltip, Alert, Chip, Popover, Badge } from '@mui/material'
+import { Box, Typography, Button, Stack, Divider, IconButton, Tooltip, Alert, Popover, Badge, LinearProgress } from '@mui/material'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import CheckIcon from '@mui/icons-material/Check'
 import CloseIcon from '@mui/icons-material/Close'
@@ -15,23 +15,45 @@ import { HUMAN_DEV_FILES_GDS } from '../../data/humanDevFilesGds'
 import { resolveCommand, mergeWorkflowConfig } from '../../utils/workflowMerge'
 import { useWorkflow } from '../../hooks/useWorkflow'
 import { transformCommand } from '../../utils/commandTransform'
-import { CLAUDE_MODELS } from '../../types'
 import type { BmadScanResult } from '../../types/bmadScan'
 import type { WizardStep } from '../../types/projectWizard'
+import SettingsMenu from '../SettingsMenu/SettingsMenu'
 import WizardStepper from './WizardStepper'
 import InstallStep from './InstallStep'
 import ArtifactViewer from '../HelpPanel/ArtifactViewer'
 import { usePlanningArtifacts, getArtifactTypeLabel, getArtifactTypeColor, PlanningArtifact } from '../../hooks/usePlanningArtifacts'
+import { registerCompletionCallback, unregisterCompletionCallback } from '../../hooks/useChatMessageHandler'
 
 // Simple path join for renderer (no Node path module available)
 function joinPath(...parts: string[]): string {
   return parts.join('/').replace(/\/+/g, '/')
 }
 
+// Detect if a markdown file is an unfilled BMAD template
+// Returns a warning message if template markers are found, null if content looks real
+function detectTemplateContent(content: string): string | null {
+  // Check for {{variable}} template placeholders
+  const templateVars = content.match(/\{\{[^}]+\}\}/g)
+  if (templateVars && templateVars.length >= 2) {
+    return `File contains template placeholders (${templateVars.slice(0, 3).join(', ')}${templateVars.length > 3 ? '...' : ''})`
+  }
+  // Check for [Add ...] / [Insert ...] / [TODO] instruction markers
+  const instructionMarkers = content.match(/\[(Add |Insert |TODO|PLACEHOLDER)[^\]]*\]/g)
+  if (instructionMarkers && instructionMarkers.length >= 2) {
+    return 'File contains unfilled placeholder instructions'
+  }
+  // Very small files (< 500 bytes with at least one heading) are likely empty templates
+  if (content.length < 500 && content.includes('#')) {
+    return 'File appears to be an empty template (very little content)'
+  }
+  return null
+}
+
 // Check if a wizard step's output exists (file or dir+prefix)
 // BMAD places some outputs in planning-artifacts/ and others (brainstorming/, research/)
 // directly under the output folder, so check both locations.
-async function checkStepOutput(step: WizardStep, projectPath: string, outputFolder: string): Promise<boolean> {
+// Returns { exists, templateWarning } — exists means file is there, templateWarning means it looks unfilled
+async function checkStepOutput(step: WizardStep, projectPath: string, outputFolder: string): Promise<{ exists: boolean; templateWarning: string | null }> {
   const outputBase = joinPath(projectPath, outputFolder)
   const searchDirs = [
     joinPath(outputBase, 'planning-artifacts'),
@@ -40,17 +62,38 @@ async function checkStepOutput(step: WizardStep, projectPath: string, outputFold
   ]
   if (step.outputFile) {
     for (const dir of searchDirs) {
-      if (await window.wizardAPI.checkFileExists(joinPath(dir, step.outputFile))) return true
+      const filePath = joinPath(dir, step.outputFile)
+      if (await window.wizardAPI.checkFileExists(filePath)) {
+        // Check content for template markers
+        try {
+          const result = await window.fileAPI.readFile(filePath)
+          if (result.content) {
+            const warning = detectTemplateContent(result.content)
+            return { exists: true, templateWarning: warning }
+          }
+        } catch { /* ignore read errors */ }
+        return { exists: true, templateWarning: null }
+      }
     }
-    return false
+    return { exists: false, templateWarning: null }
+  }
+  if (step.outputFilePrefix) {
+    for (const dir of searchDirs) {
+      if (await window.wizardAPI.checkDirHasPrefix(dir, step.outputFilePrefix)) {
+        return { exists: true, templateWarning: null }
+      }
+    }
+    return { exists: false, templateWarning: null }
   }
   if (step.outputDir && step.outputDirPrefix) {
     for (const dir of searchDirs) {
-      if (await window.wizardAPI.checkDirHasPrefix(joinPath(dir, step.outputDir), step.outputDirPrefix)) return true
+      if (await window.wizardAPI.checkDirHasPrefix(joinPath(dir, step.outputDir), step.outputDirPrefix)) {
+        return { exists: true, templateWarning: null }
+      }
     }
-    return false
+    return { exists: false, templateWarning: null }
   }
-  return false
+  return { exists: false, templateWarning: null }
 }
 
 export default function ProjectWizard() {
@@ -75,9 +118,8 @@ export default function ProjectWizard() {
     setBmadScanResult,
     setScannedWorkflowConfig,
     aiTool,
-    claudeModel,
-    setClaudeModel,
-    outputFolder
+    outputFolder,
+    setWizardActiveSubStep
   } = useStore()
 
   const { getAgentName } = useWorkflow()
@@ -86,6 +128,7 @@ export default function ProjectWizard() {
   const primaryModule = modules.includes('gds') ? 'gds' : 'bmm'
   const ACTIVE_STEPS = useMemo(() => getWizardSteps(primaryModule as 'bmm' | 'gds'), [primaryModule])
   const persistRef = useRef(false)
+  const finishingRef = useRef(false) // Guards against save effect re-creating file during finish
   const [docsAnchor, setDocsAnchor] = useState<null | HTMLElement>(null)
   const [selectedArtifact, setSelectedArtifact] = useState<PlanningArtifact | null>(null)
   const { artifacts, refresh: refreshArtifacts } = usePlanningArtifacts()
@@ -118,8 +161,14 @@ export default function ProjectWizard() {
       const result = scanResult as BmadScanResult | null
       setBmadScanResult(result)
       if (result) {
-        const { projectType: currentProjectType } = useStore.getState()
-        const merged = mergeWorkflowConfig(result, currentProjectType)
+        // Auto-correct project type from scan data (fixes stale recent project entries)
+        const scanDetectedType = result.modules.includes('gds') ? 'gds' as const : 'bmm' as const
+        const { projectType: currentProjectType, setProjectType: setType } = useStore.getState()
+        if (currentProjectType !== scanDetectedType) {
+          console.log(`[ProjectWizard] Correcting project type: ${currentProjectType} → ${scanDetectedType}`)
+          setType(scanDetectedType)
+        }
+        const merged = mergeWorkflowConfig(result, scanDetectedType)
         setScannedWorkflowConfig(merged)
       }
     }).catch(() => {})
@@ -141,8 +190,8 @@ export default function ProjectWizard() {
         const status = wiz.stepStatuses[i]
         if (status !== 'pending' && status !== 'active') continue
         const step = ACTIVE_STEPS[i]
-        if (!step.outputFile && !step.outputDir) continue
-        const exists = await checkStepOutput(step, projectPath, outputFolder)
+        if (!step.outputFile && !step.outputFilePrefix && !step.outputDir) continue
+        const { exists } = await checkStepOutput(step, projectPath, outputFolder)
         if (exists) {
           const { updateWizardStep, advanceWizardStep, projectWizard: freshWiz } = useStore.getState()
           updateWizardStep(i, 'completed')
@@ -163,6 +212,8 @@ export default function ProjectWizard() {
       persistRef.current = true
       return
     }
+    // Don't save if we're in the process of finishing (prevents re-creating deleted file)
+    if (finishingRef.current) return
     window.wizardAPI.saveState(projectPath, projectWizard, outputFolder)
   }, [isActive, projectPath, outputFolder, currentStep, stepStatuses, projectWizard])
 
@@ -181,22 +232,30 @@ export default function ProjectWizard() {
       // Refresh planning documents list
       refreshArtifacts()
 
-      // Check each pending (not yet started) step for output file existence.
-      // Active steps are excluded — the agent may still be building the file,
-      // so the user should decide when it's done via "Mark Complete".
+      // Check pending and active steps for output file existence.
+      // Pending steps that aren't the current step get auto-completed (pre-existing output).
+      // Active steps get auto-completed only if content passes template check.
       const { projectWizard: wiz } = useStore.getState()
       for (let i = 0; i < ACTIVE_STEPS.length; i++) {
         const step = ACTIVE_STEPS[i]
         const status = wiz.stepStatuses[i]
-        if (status !== 'pending') continue
-        // Skip the current step — the user may have navigated back to re-run it,
-        // so don't auto-complete based on a pre-existing output file.
-        if (i === wiz.currentStep) continue
-        if (!step.outputFile && !step.outputDir) continue
+        if (status !== 'pending' && status !== 'active') continue
+        // Skip pending current step — the user may have navigated back to re-run it
+        if (status === 'pending' && i === wiz.currentStep) continue
+        if (!step.outputFile && !step.outputFilePrefix && !step.outputDir) continue
 
-        const exists = await checkStepOutput(step, projectPath, outputFolder)
+        const { exists, templateWarning } = await checkStepOutput(step, projectPath, outputFolder)
         if (exists) {
+          // For active steps, block if template content detected
+          if (status === 'active' && templateWarning) {
+            const { setWizardError } = useStore.getState()
+            setWizardError(`⚠ ${step.name}: ${templateWarning}. Re-run this step or mark it complete manually.`)
+            continue
+          }
           updateWizardStep(i, 'completed')
+          if (i === wiz.currentStep) {
+            advanceWizardStep()
+          }
         }
       }
     })
@@ -217,6 +276,56 @@ export default function ProjectWizard() {
       }
     })
   }, [ACTIVE_STEPS, bmadScanResult, getAgentName])
+
+  // Build maps from scan data: commandRef -> stepCount, maxStepNumber, stepNames
+  const { stepCounts, maxStepNumbers, stepNamesByCommand } = useMemo(() => {
+    const counts: Record<string, number> = {}
+    const maxSteps: Record<string, number> = {}
+    const names: Record<string, string[]> = {}
+    if (!bmadScanResult) return { stepCounts: counts, maxStepNumbers: maxSteps, stepNamesByCommand: names }
+    for (const wf of bmadScanResult.workflows) {
+      counts[wf.name] = wf.stepCount
+      maxSteps[wf.name] = wf.maxStepNumber
+      if (wf.stepNames?.length) names[wf.name] = wf.stepNames
+    }
+    const nonZero = Object.entries(counts).filter(([, v]) => v > 0)
+    if (nonZero.length > 0) {
+      console.log('[WizardProgress] stepCounts:', Object.fromEntries(nonZero))
+    }
+    return { stepCounts: counts, maxStepNumbers: maxSteps, stepNamesByCommand: names }
+  }, [bmadScanResult])
+
+  // Compute weighted progress
+  // Only required steps + actively engaged optional steps count toward the total.
+  // Skipped and pending-optional steps are excluded so the bar reaches 100%
+  // once all required work is done without being deflated by untouched optional steps.
+  const { wizardActiveSubStep } = projectWizard
+  const progressPercent = useMemo(() => {
+    let completedWeight = 0
+    let totalWeight = 0
+
+    for (let i = 0; i < ACTIVE_STEPS.length; i++) {
+      const status = stepStatuses[i]
+      if (status === 'skipped') continue
+
+      const step = ACTIVE_STEPS[i]
+
+      // Exclude pending optional steps — they haven't been engaged with
+      if (!step.required && status === 'pending') continue
+
+      const count = step.commandRef ? (stepCounts[step.commandRef] || 0) : 0
+      const weight = Math.max(count, 1)
+      totalWeight += weight
+
+      if (status === 'completed') {
+        completedWeight += weight
+      } else if (status === 'active' && count > 0 && wizardActiveSubStep > 0) {
+        completedWeight += (wizardActiveSubStep / count) * weight
+      }
+    }
+
+    return totalWeight > 0 ? Math.min((completedWeight / totalWeight) * 100, 100) : 0
+  }, [ACTIVE_STEPS, stepStatuses, stepCounts, wizardActiveSubStep])
 
   const { appendWizardInstallLog, setWizardError } = useStore()
 
@@ -254,6 +363,17 @@ export default function ProjectWizard() {
       appendWizardInstallLog(`Human development mode applied (${result.written} files updated)`)
     }
 
+    // Write user profile fields to module config.yaml files
+    if (projectPath) {
+      const { bmadUserName, bmadLanguage } = useStore.getState()
+      if (bmadUserName || bmadLanguage) {
+        const fields: Record<string, string> = {}
+        if (bmadUserName) fields.user_name = bmadUserName
+        if (bmadLanguage) fields.communication_language = bmadLanguage
+        await window.wizardAPI.appendConfigFields(projectPath, fields)
+      }
+    }
+
     advanceWizardStep()
     // Trigger BMAD scan after install so subsequent steps can resolve dynamically
     if (projectPath) {
@@ -263,9 +383,14 @@ export default function ProjectWizard() {
         console.log('[Wizard] Scan result:', result ? `${result.agents.length} agents` : 'null')
         setBmadScanResult(result)
         if (result) {
-          const { projectType: currentProjectType } = useStore.getState()
-          console.log('[Wizard] Merging with projectType:', currentProjectType)
-          const merged = mergeWorkflowConfig(result, currentProjectType)
+          const scanDetectedType = result.modules.includes('gds') ? 'gds' as const : 'bmm' as const
+          const { projectType: currentProjectType, setProjectType: setType } = useStore.getState()
+          if (currentProjectType !== scanDetectedType) {
+            console.log(`[Wizard] Correcting project type: ${currentProjectType} → ${scanDetectedType}`)
+            setType(scanDetectedType)
+          }
+          console.log('[Wizard] Merging with projectType:', scanDetectedType)
+          const merged = mergeWorkflowConfig(result, scanDetectedType)
           console.log('[Wizard] Merged config agents:', merged.agents.length)
           setScannedWorkflowConfig(merged)
         }
@@ -295,6 +420,49 @@ export default function ProjectWizard() {
 
     if (!agentId) return
 
+    // Reset sub-step tracking for the new step
+    setWizardActiveSubStep(0)
+
+    // Register completion callback — auto-complete the step when agent exits successfully
+    // and the output file exists. For workflows with step files (e.g., PRD which is built
+    // progressively), also require the agent to have reached the last step number.
+    const maxStep = step.commandRef ? (maxStepNumbers[step.commandRef] || 0) : 0
+    registerCompletionCallback(agentId, async (success) => {
+      if (!success) return
+      const { projectWizard: wiz, updateWizardStep: update, advanceWizardStep: advance, setWizardActiveSubStep: resetSub } = useStore.getState()
+      if (!wiz.isActive || wiz.stepStatuses[stepIndex] !== 'active') return
+      const currentProjectPath = wiz.projectPath
+      const currentOutputFolder = wiz.outputFolder || '_bmad-output'
+      if (!currentProjectPath) return
+
+      // For workflows with step files, require the agent to have reached the last step.
+      // This prevents auto-completing when the agent exits mid-workflow (e.g., to ask a question)
+      // while the output file already exists but is only partially built.
+      if (maxStep > 0 && wiz.wizardActiveSubStep < maxStep) {
+        console.log(`[WizardProgress] Skipping auto-complete for step ${stepIndex} (${step.name}) — agent at sub-step ${wiz.wizardActiveSubStep}/${maxStep}`)
+        return
+      }
+
+      // Check if the step's output artifact exists and has real content
+      const { exists, templateWarning } = await checkStepOutput(step, currentProjectPath, currentOutputFolder)
+      if (exists) {
+        if (templateWarning) {
+          // Output file exists but looks like an unfilled template — warn instead of auto-completing
+          console.log(`[WizardProgress] Template warning for step ${stepIndex} (${step.name}): ${templateWarning}`)
+          const { setWizardError } = useStore.getState()
+          setWizardError(`⚠ ${step.name}: ${templateWarning}. Re-run this step or mark it complete manually if the content is correct.`)
+          return
+        }
+        console.log(`[WizardProgress] Auto-completing step ${stepIndex} (${step.name}) — agent exited + output exists`)
+        resetSub(0)
+        update(stepIndex, 'completed')
+        if (stepIndex === wiz.currentStep) {
+          advance()
+        }
+        unregisterCompletionCallback(agentId!)
+      }
+    })
+
     // If command couldn't be resolved from scan, open agent chat without a pre-filled command
     updateWizardStep(stepIndex, 'active')
     // Cancel any running process for this agent before clearing
@@ -308,24 +476,62 @@ export default function ProjectWizard() {
         message: command
       })
     }
-  }, [updateWizardStep, clearChatThread, setSelectedChatAgent, setViewMode, setPendingChatMessage, bmadScanResult, aiTool])
+  }, [ACTIVE_STEPS, updateWizardStep, clearChatThread, setSelectedChatAgent, setViewMode, setPendingChatMessage, bmadScanResult, aiTool, setWizardActiveSubStep, maxStepNumbers])
 
   const handleMarkStepComplete = useCallback((stepIndex: number) => {
+    setWizardActiveSubStep(0)
     updateWizardStep(stepIndex, 'completed')
     // If this was the current step, advance
     if (stepIndex === currentStep) {
       advanceWizardStep()
     }
-  }, [currentStep, updateWizardStep, advanceWizardStep])
+  }, [currentStep, updateWizardStep, advanceWizardStep, setWizardActiveSubStep])
 
   const handleSkipStep = useCallback((stepIndex: number) => {
+    setWizardActiveSubStep(0)
     skipWizardStep(stepIndex)
-  }, [skipWizardStep])
+  }, [skipWizardStep, setWizardActiveSubStep])
 
   const setBaseBranch = useStore((state) => state.setBaseBranch)
 
   const handleFinishSetup = useCallback(async () => {
     if (!projectPath) return
+
+    // Validate that essential project artifacts exist before finishing
+    const finalProjectType = modules.includes('gds') ? 'gds' : 'bmm'
+    const planningPath = joinPath(projectPath, outputFolder, 'planning-artifacts')
+    const implPath = joinPath(projectPath, outputFolder, 'implementation-artifacts')
+
+    const missing: string[] = []
+    const outputBase = joinPath(projectPath, outputFolder)
+
+    // Check epics.md or sharded epic-*.md files — check all possible locations
+    const epicsLocations = [planningPath, outputBase]
+    let epicsFound = false
+    for (const loc of epicsLocations) {
+      if (await window.wizardAPI.checkFileExists(joinPath(loc, 'epics.md'))) { epicsFound = true; break }
+      if (await window.wizardAPI.checkDirHasPrefix(loc, 'epic-')) { epicsFound = true; break }
+    }
+    if (!epicsFound) missing.push('epics.md (run the ' + (finalProjectType === 'gds' ? 'GDD' : 'Epics & Stories') + ' step)')
+
+    // Check sprint-status.yaml — check both implementation-artifacts and output root
+    const statusLocations = [implPath, outputBase]
+    let statusFound = false
+    for (const loc of statusLocations) {
+      if (await window.wizardAPI.checkFileExists(joinPath(loc, 'sprint-status.yaml'))) { statusFound = true; break }
+    }
+    if (!statusFound) missing.push('sprint-status.yaml (run Sprint Planning)')
+
+    if (missing.length > 0) {
+      setWizardError('Missing required artifacts:\n' + missing.map(m => '• ' + m).join('\n'))
+      return
+    }
+
+    // Clear any previous validation error
+    setWizardError(null)
+
+    // Prevent save effect from re-creating the file during finish
+    finishingRef.current = true
 
     // Delete wizard state file
     await window.wizardAPI.deleteState(projectPath, outputFolder)
@@ -342,7 +548,6 @@ export default function ProjectWizard() {
 
     // Set the project as loaded
     const projectName = projectPath.split('/').pop() || 'Unknown'
-    const finalProjectType = modules.includes('gds') ? 'gds' : 'bmm'
     setProjectPath(projectPath)
     setProjectType(finalProjectType)
     setBaseBranch(detectedBaseBranch)
@@ -360,7 +565,7 @@ export default function ProjectWizard() {
     setSelectedEpicId(null)
 
     completeWizard()
-  }, [projectPath, outputFolder, modules, setProjectPath, setProjectType, setBaseBranch, addRecentProject, setViewMode, setSelectedEpicId, completeWizard])
+  }, [projectPath, outputFolder, modules, setProjectPath, setProjectType, setBaseBranch, addRecentProject, setViewMode, setSelectedEpicId, completeWizard, setWizardError])
 
   const handleCancel = useCallback(async () => {
     if (projectPath) {
@@ -411,6 +616,7 @@ export default function ProjectWizard() {
                 </IconButton>
               </Tooltip>
             )}
+            <SettingsMenu compact />
             <Tooltip title="Cancel wizard">
               <IconButton size="small" onClick={handleCancel}>
                 <CloseIcon fontSize="small" />
@@ -421,23 +627,31 @@ export default function ProjectWizard() {
         <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
           {projectPath?.split('/').pop() || 'Unknown'}
         </Typography>
-        {aiTool === 'claude-code' && (
-          <Box sx={{ display: 'flex', gap: 0.5, mt: 1 }}>
-            {CLAUDE_MODELS.map((model) => (
-              <Tooltip key={model.id} title={model.description} placement="bottom" arrow>
-                <Chip
-                  label={model.name}
-                  size="small"
-                  onClick={() => setClaudeModel(model.id)}
-                  color={claudeModel === model.id ? 'primary' : 'default'}
-                  variant={claudeModel === model.id ? 'filled' : 'outlined'}
-                  sx={{ cursor: 'pointer', fontSize: '0.7rem', height: 22 }}
-                />
-              </Tooltip>
-            ))}
-          </Box>
-        )}
       </Box>
+
+      {/* Progress Bar */}
+      {stepStatuses.some(s => s === 'completed' || s === 'active') && (
+        <Box sx={{ px: 2, py: 1, borderBottom: 1, borderColor: 'divider' }}>
+          <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.5 }}>
+            <Typography variant="caption" color="text.secondary">
+              Overall Progress
+            </Typography>
+            <Typography variant="caption" color="text.secondary" fontWeight={600}>
+              {Math.round(progressPercent)}%
+            </Typography>
+          </Stack>
+          <LinearProgress
+            variant="determinate"
+            value={progressPercent}
+            sx={{
+              height: 6,
+              borderRadius: 3,
+              bgcolor: 'action.hover',
+              '& .MuiLinearProgress-bar': { borderRadius: 3 }
+            }}
+          />
+        </Box>
+      )}
 
       {/* Stepper */}
       <Box sx={{ flex: 1, overflow: 'auto' }}>
@@ -445,7 +659,12 @@ export default function ProjectWizard() {
           steps={resolvedSteps}
           currentStep={currentStep}
           stepStatuses={stepStatuses}
-          onSkipStep={handleSkipStep}
+          stepCounts={stepCounts}
+          stepNames={stepNamesByCommand}
+          activeSubStep={wizardActiveSubStep > 0 && currentStepData?.commandRef ? {
+            commandRef: currentStepData.commandRef,
+            current: wizardActiveSubStep
+          } : undefined}
           onStartStep={handleStartAgentStep}
           onGoToStep={goToWizardStep}
         />
@@ -470,7 +689,7 @@ export default function ProjectWizard() {
                     onClick={() => handleStartAgentStep(currentStep)}
                     sx={{ flex: 1 }}
                   >
-                    Start with {currentStepData.agentName}
+                    Start
                   </Button>
                   {!currentStepData.required && (
                     <Button
@@ -596,7 +815,7 @@ export default function ProjectWizard() {
 
           {/* Error display */}
           {error && (
-            <Alert severity="error" sx={{ mt: 2 }}>
+            <Alert severity="error" sx={{ mt: 2, whiteSpace: 'pre-line' }}>
               {error}
             </Alert>
           )}

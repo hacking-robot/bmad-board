@@ -250,6 +250,13 @@ export interface ProjectCostEntry {
   durationMs?: number
 }
 
+// Tool call tracking for verbose chat mode
+export interface ToolCall {
+  name: string                      // "Read", "Edit", "Bash", etc.
+  summary: string                   // From getToolActivity(): "Reading store.ts"
+  input?: Record<string, unknown>   // Raw input for expanded detail
+}
+
 // Chat interface types
 export interface ChatMessage {
   id: string
@@ -258,6 +265,7 @@ export interface ChatMessage {
   timestamp: number
   status: 'pending' | 'streaming' | 'complete' | 'error'
   stats?: LLMStats // LLM usage stats for assistant messages
+  toolCalls?: ToolCall[] // Tool calls made during this message (always captured, displayed in verbose mode)
 }
 
 export interface AgentThread {

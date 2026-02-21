@@ -149,21 +149,64 @@ export function useProjectData() {
       const statusResult = await window.fileAPI.readFile(sprintStatusPath)
 
       if (statusResult.error || !statusResult.content) {
-        throw new Error(statusResult.error || 'Failed to read sprint-status.yaml')
+        throw new Error('Failed to read sprint-status.yaml')
       }
 
       const sprintStatus = parseSprintStatus(statusResult.content)
 
-      // Load epics.md from correct location based on project type
+      // Load epics from correct location based on project type
+      // Supports both single epics.md and sharded epic-N.md files
       const epicsPath = getEpicsFullPath(projectPath, projectType, currentOutputFolder)
+      let epicsContent: string
       const epicsResult = await window.fileAPI.readFile(epicsPath)
 
       if (epicsResult.error || !epicsResult.content) {
-        throw new Error(epicsResult.error || 'Failed to read epics.md')
+        // Try output root (GDS puts epics.md directly in _bmad-output/)
+        const outputRootEpics = await window.fileAPI.readFile(`${projectPath}/${currentOutputFolder}/epics.md`)
+        if (outputRootEpics.content) {
+          epicsContent = outputRootEpics.content
+        } else {
+          // Try sharded epic files (epic-1.md, epic-2.md, etc.) in both locations
+          const searchDirs = [
+            `${projectPath}/${currentOutputFolder}/planning-artifacts`,
+            `${projectPath}/${currentOutputFolder}`
+          ]
+          let epicFiles: string[] = []
+          let epicDir = ''
+          for (const dir of searchDirs) {
+            const dirFiles = await window.fileAPI.listDirectory(dir)
+            const found = (dirFiles.files || [])
+              .filter((f: string) => /^epic-\d+\.md$/.test(f))
+              .sort((a: string, b: string) => {
+                const numA = parseInt(a.match(/\d+/)?.[0] || '0')
+                const numB = parseInt(b.match(/\d+/)?.[0] || '0')
+                return numA - numB
+              })
+            if (found.length > 0) {
+              epicFiles = found
+              epicDir = dir
+              break
+            }
+          }
+
+          if (epicFiles.length === 0) {
+            throw new Error('Failed to read epics.md or epic-*.md files')
+          }
+
+          // Concatenate sharded files
+          const parts: string[] = []
+          for (const file of epicFiles) {
+            const result = await window.fileAPI.readFile(`${epicDir}/${file}`)
+            if (result.content) parts.push(result.content)
+          }
+          epicsContent = parts.join('\n\n')
+        }
+      } else {
+        epicsContent = epicsResult.content
       }
 
       // Use unified parser with project type
-      const epics = parseEpicsUnified(epicsResult.content, sprintStatus, projectType)
+      const epics = parseEpicsUnified(epicsContent, sprintStatus, projectType)
       const stories = getAllStories(epics)
 
       // Update file paths for stories that have files
@@ -196,6 +239,12 @@ export function useProjectData() {
       setEpics(epics)
       setStories(stories)
       setLastRefreshed(new Date())
+
+      // Auto-select first epic on initial load to avoid rendering all stories at once
+      const { selectedEpicId } = useStore.getState()
+      if (selectedEpicId === null && epics.length > 0) {
+        useStore.getState().setSelectedEpicId(epics[0].id)
+      }
 
       // Get human review settings and status change recording
       const { enableHumanReviewColumn, humanReviewStories, addToHumanReview, isInHumanReview, recordStatusChange } = useStore.getState()
@@ -241,7 +290,28 @@ export function useProjectData() {
         }
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load project data')
+      const msg = err instanceof Error ? err.message : 'Failed to load project data'
+      // If essential artifacts are missing, redirect to wizard instead of showing error
+      const isMissingArtifacts = msg.includes('Failed to read sprint-status') || msg.includes('Failed to read epics')
+      if (isMissingArtifacts) {
+        console.log('[useProjectData] Missing project artifacts — redirecting to wizard')
+        const { outputFolder: currentOutput, developerMode: currentDevMode } = useStore.getState()
+        // Scan _bmad/ to detect the correct module type (don't trust store — it may be stale)
+        try {
+          const scanResult = await window.fileAPI.scanBmad(projectPath!) as BmadScanResult | null
+          const detectedType = scanResult?.modules.includes('gds') ? 'gds' : 'bmm'
+          const modules = [detectedType]
+          console.log(`[useProjectData] Detected modules from scan: [${detectedType}]`)
+          useStore.getState().startProjectWizard(projectPath!, currentOutput, currentDevMode as 'ai' | 'human', modules)
+        } catch {
+          // Fallback to store value if scan fails
+          const { projectType: currentType } = useStore.getState()
+          const modules = currentType === 'gds' ? ['gds'] : ['bmm']
+          useStore.getState().startProjectWizard(projectPath!, currentOutput, currentDevMode as 'ai' | 'human', modules)
+        }
+        return
+      }
+      setError(msg)
     } finally {
       setLoading(false)
       // Delay resetting user dragging flag to allow file watcher events to be ignored
@@ -296,10 +366,43 @@ export function useProjectData() {
 
       // Check if this is an incomplete project with a saved wizard state
       // This happens when the app restarts mid-wizard (projectPath persisted but wizard state isn't)
-      window.wizardAPI.loadState(projectPath, outputFolder).then((savedState) => {
+      window.wizardAPI.loadState(projectPath, outputFolder).then(async (savedState) => {
         if (savedState && typeof savedState === 'object' && 'isActive' in (savedState as Record<string, unknown>)) {
           const ws = savedState as import('../types/projectWizard').ProjectWizardState
           if (ws.isActive) {
+            // Before resuming, check if the project is actually ready (wizard may have completed
+            // but the state file wasn't cleaned up due to a race condition)
+            const wsOutputFolder = ws.outputFolder || outputFolder
+            const sprintPath = `${projectPath}/${wsOutputFolder}/implementation-artifacts/sprint-status.yaml`
+            const epicsPlanningPath = `${projectPath}/${wsOutputFolder}/planning-artifacts/epics.md`
+            const epicsRootPath = `${projectPath}/${wsOutputFolder}/epics.md`
+            try {
+              const [sprintExists, epicsPlanningExists, epicsRootExists] = await Promise.all([
+                window.wizardAPI.checkFileExists(sprintPath),
+                window.wizardAPI.checkFileExists(epicsPlanningPath),
+                window.wizardAPI.checkFileExists(epicsRootPath)
+              ])
+              if (sprintExists && (epicsPlanningExists || epicsRootExists)) {
+                // Project has all required artifacts — wizard is done, clean up stale state
+                console.log('[useProjectData] Wizard state file is stale — artifacts exist, loading project normally')
+                window.wizardAPI.deleteState(projectPath, wsOutputFolder)
+                loadProjectData()
+                return
+              }
+            } catch { /* check failed, resume wizard as fallback */ }
+
+            // Auto-correct selectedModules from scan (fixes stale wizard state with wrong module)
+            try {
+              const scanResult = await window.fileAPI.scanBmad(projectPath) as BmadScanResult | null
+              if (scanResult) {
+                const detectedModule = scanResult.modules.includes('gds') ? 'gds' : 'bmm'
+                const currentModule = ws.selectedModules?.includes('gds') ? 'gds' : 'bmm'
+                if (detectedModule !== currentModule) {
+                  console.log(`[useProjectData] Correcting wizard modules: [${currentModule}] → [${detectedModule}]`)
+                  ws.selectedModules = [detectedModule]
+                }
+              }
+            } catch { /* scan failed, resume with existing modules */ }
             // Resume the wizard with its stored output folder (prefer wizard state over store)
             const { resumeWizard } = useStore.getState()
             resumeWizard(ws)
@@ -347,8 +450,14 @@ export function useProjectData() {
             return
           }
           setBmadVersionError(null)
+          // Auto-correct project type from scan data (fixes stale recent project entries)
+          const scanDetectedType = result.modules.includes('gds') ? 'gds' as const : 'bmm' as const
           const { projectType: currentProjectType } = useStore.getState()
-          const merged = mergeWorkflowConfig(result, currentProjectType)
+          if (currentProjectType !== scanDetectedType) {
+            console.log(`[useProjectData] Correcting project type: ${currentProjectType} → ${scanDetectedType}`)
+            setProjectType(scanDetectedType)
+          }
+          const merged = mergeWorkflowConfig(result, scanDetectedType)
           console.log('[useProjectData] Merged config agents:', merged.agents.length)
           setScannedWorkflowConfig(merged)
         } else {

@@ -24,6 +24,9 @@ export interface ScannedWorkflow {
   name: string            // "dev-story"
   description: string     // from manifest or frontmatter
   module: string          // "bmm", "gds", "core"
+  stepCount: number       // Number of step files in the workflow (0 for YAML-only workflows)
+  maxStepNumber: number   // Highest main step number (e.g., step-08 → 8, ignoring variants like step-01b)
+  stepNames: string[]     // Human-readable step names sorted by number: ["Init", "Discovery", "Users"]
 }
 
 export interface BmadScanResult {

@@ -82,6 +82,7 @@ export interface AppSettings {
   recentProjects: RecentProject[]
   windowBounds?: WindowBounds
   notificationsEnabled: boolean
+  verboseMode: boolean
   storyOrder: Record<string, Record<string, string[]>> // { [epicId]: { [status]: [storyIds...] } }
   // Git settings
   baseBranch: 'main' | 'master' | 'develop'
@@ -537,6 +538,7 @@ export interface WizardAPI {
   selectDirectoryAny: () => Promise<{ path: string } | null>
   createProjectDirectory: (parentPath: string, projectName: string) => Promise<{ success: boolean; path?: string; error?: string }>
   writeProjectFiles: (projectPath: string, files: { relativePath: string; content: string }[]) => Promise<{ success: boolean; written: number; error?: string }>
+  appendConfigFields: (projectPath: string, fields: Record<string, string>) => Promise<{ success: boolean; updated?: number; error?: string }>
 }
 
 const wizardAPI: WizardAPI = {
@@ -565,7 +567,8 @@ const wizardAPI: WizardAPI = {
   deleteState: (projectPath, outputFolder) => ipcRenderer.invoke('delete-wizard-state', projectPath, outputFolder),
   selectDirectoryAny: () => ipcRenderer.invoke('select-directory-any'),
   createProjectDirectory: (parentPath, projectName) => ipcRenderer.invoke('create-project-directory', parentPath, projectName),
-  writeProjectFiles: (projectPath, files) => ipcRenderer.invoke('write-project-files', projectPath, files)
+  writeProjectFiles: (projectPath, files) => ipcRenderer.invoke('write-project-files', projectPath, files),
+  appendConfigFields: (projectPath, fields) => ipcRenderer.invoke('append-config-fields', projectPath, fields)
 }
 
 contextBridge.exposeInMainWorld('wizardAPI', wizardAPI)

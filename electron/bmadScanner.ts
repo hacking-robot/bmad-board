@@ -30,6 +30,9 @@ export interface ScannedWorkflow {
   name: string
   description: string
   module: string
+  stepCount: number
+  maxStepNumber: number  // Highest main step number (e.g., step-08 → 8, ignoring variants like step-01b)
+  stepNames: string[]    // Human-readable step names sorted by number
 }
 
 export interface BmadScanResult {
@@ -256,6 +259,138 @@ async function scanModuleAgents(bmadPath: string, module: string): Promise<Scann
 }
 
 /**
+ * Parse workflow-manifest.csv and return a map of workflow name -> { description, module, path }.
+ */
+async function parseWorkflowManifest(bmadPath: string): Promise<Map<string, { description: string; module: string; path: string }>> {
+  const manifestPath = join(bmadPath, '_config', 'workflow-manifest.csv')
+  const map = new Map<string, { description: string; module: string; path: string }>()
+  if (!existsSync(manifestPath)) return map
+
+  try {
+    const content = await readFile(manifestPath, 'utf-8')
+    const lines = content.split('\n').filter(Boolean)
+    // Skip header row
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i]
+      // Parse CSV handling quoted fields
+      const fields: string[] = []
+      let current = ''
+      let inQuotes = false
+      for (let j = 0; j < line.length; j++) {
+        const ch = line[j]
+        if (ch === '"') {
+          inQuotes = !inQuotes
+        } else if (ch === ',' && !inQuotes) {
+          fields.push(current.trim())
+          current = ''
+        } else {
+          current += ch
+        }
+      }
+      fields.push(current.trim())
+
+      if (fields.length >= 4) {
+        const [name, description, module, path] = fields
+        map.set(name, { description, module, path })
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  return map
+}
+
+/**
+ * Find the step directory for a workflow by:
+ * 1. Reading the workflow file and looking for step-01 references
+ * 2. Falling back to scanning sibling directories for step files (covers YAML workflows)
+ */
+async function findStepDirectory(projectPath: string, workflowFilePath: string): Promise<string | null> {
+  const fullPath = join(projectPath, workflowFilePath)
+  if (!existsSync(fullPath)) return null
+
+  const workflowDir = fullPath.substring(0, fullPath.lastIndexOf('/'))
+
+  // Strategy 1: Parse workflow file content for step-01 references
+  try {
+    const content = await readFile(fullPath, 'utf-8')
+    // Patterns: ./steps/step-01-init.md, ./steps-c/step-01-init.md, steps/step-01-foo.md
+    const stepMatch = content.match(/['"`]?\.?\/?([^'"`\s]*\/step-01[^'"`\s]*\.md)['"`]?/)
+    if (stepMatch) {
+      const stepRef = stepMatch[1]
+      const lastSlash = stepRef.lastIndexOf('/')
+      if (lastSlash > 0) {
+        const stepDirName = stepRef.substring(0, lastSlash)
+        return join(workflowDir, stepDirName)
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  // Strategy 2: Look for sibling directories containing step-01*.md files
+  // This handles YAML workflows that don't reference step files in their content
+  try {
+    const entries = await readdir(workflowDir)
+    for (const entry of entries) {
+      const entryPath = join(workflowDir, entry)
+      const stats = await stat(entryPath)
+      if (!stats.isDirectory()) continue
+      // Check if this directory has step files
+      const files = await readdir(entryPath)
+      if (files.some(f => /^step-01.*\.md$/.test(f))) {
+        return entryPath
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  return null
+}
+
+/**
+ * Count step files in a directory matching /^step-\d+.*\.md$/.
+ * Returns count, highest main step number, and human-readable step names sorted by number.
+ * e.g., step-01-init.md → "Init", step-02-user-research.md → "User Research"
+ */
+async function countStepFiles(stepDirPath: string): Promise<{ count: number; maxStep: number; names: string[] }> {
+  if (!existsSync(stepDirPath)) return { count: 0, maxStep: 0, names: [] }
+  try {
+    const files = await readdir(stepDirPath)
+    const stepFiles = files.filter(f => /^step-\d+.*\.md$/.test(f))
+    let maxStep = 0
+    // Parse each step file into { num, label } for sorting
+    const parsed: { num: number; label: string }[] = []
+    for (const f of stepFiles) {
+      const match = f.match(/^step-(\d+[a-z]?)[-.](.*)\.md$/)
+      if (match) {
+        const numStr = match[1]
+        const num = parseInt(numStr, 10)
+        if (num > maxStep) maxStep = num
+        // Convert "user-research" → "User Research"
+        const rawName = match[2].replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+        parsed.push({ num, label: rawName })
+      } else {
+        // Fallback: just extract the number
+        const numMatch = f.match(/^step-(\d+)/)
+        if (numMatch) {
+          const num = parseInt(numMatch[1], 10)
+          if (num > maxStep) maxStep = num
+          parsed.push({ num, label: `Step ${num}` })
+        }
+      }
+    }
+    // Sort by step number, then alphabetically for variants (01a, 01b)
+    parsed.sort((a, b) => a.num - b.num || a.label.localeCompare(b.label))
+    return { count: stepFiles.length, maxStep, names: parsed.map(p => p.label) }
+  } catch {
+    return { count: 0, maxStep: 0, names: [] }
+  }
+}
+
+/**
  * Scan workflows from command files or manifests.
  */
 async function scanWorkflows(projectPath: string, modules: string[]): Promise<ScannedWorkflow[]> {
@@ -299,10 +434,52 @@ async function scanWorkflows(projectPath: string, modules: string[]): Promise<Sc
         const key = `${module}:${name}`
         if (!seen.has(key)) {
           seen.add(key)
-          workflows.push({ name, description: '', module })
+          workflows.push({ name, description: '', module, stepCount: 0, maxStepNumber: 0, stepNames: [] })
         }
       }
     } catch { /* ignore */ }
+  }
+
+  // Parse workflow manifest for descriptions and step counts
+  const bmadPath = join(projectPath, '_bmad')
+  const manifest = await parseWorkflowManifest(bmadPath)
+
+  // Enrich existing workflows with manifest data and count steps
+  for (const wf of workflows) {
+    const manifestEntry = manifest.get(wf.name)
+    if (manifestEntry) {
+      if (manifestEntry.description) wf.description = manifestEntry.description
+      // Count step files for this workflow
+      const stepDir = await findStepDirectory(projectPath, manifestEntry.path)
+      if (stepDir) {
+        const stepInfo = await countStepFiles(stepDir)
+        wf.stepCount = stepInfo.count
+        wf.maxStepNumber = stepInfo.maxStep
+        wf.stepNames = stepInfo.names
+        if (wf.stepCount > 0) {
+          console.log(`[Scanner] Workflow ${wf.name}: ${wf.stepCount} steps (max step ${wf.maxStepNumber}) in ${stepDir}`)
+        }
+      }
+    }
+  }
+
+  // Also add any manifest workflows not found via .claude/commands/ scan
+  for (const [name, entry] of manifest) {
+    const key = `${entry.module}:${name}`
+    if (!seen.has(key)) {
+      seen.add(key)
+      let stepCount = 0
+      let maxStepNumber = 0
+      let stepNames: string[] = []
+      const stepDir = await findStepDirectory(projectPath, entry.path)
+      if (stepDir) {
+        const stepInfo = await countStepFiles(stepDir)
+        stepCount = stepInfo.count
+        maxStepNumber = stepInfo.maxStep
+        stepNames = stepInfo.names
+      }
+      workflows.push({ name, description: entry.description, module: entry.module, stepCount, maxStepNumber, stepNames })
+    }
   }
 
   return workflows

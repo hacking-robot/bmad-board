@@ -19,9 +19,11 @@ export interface WizardStep {
   agentId?: string
   agentName?: string
   outputFile?: string  // File to check for completion (relative to _bmad-output/planning-artifacts/)
+  outputFilePrefix?: string  // File prefix to match in search dirs (e.g., 'product-brief' matches 'product-brief-*.md')
   outputDir?: string   // Directory to check for completion
   outputDirPrefix?: string  // File prefix to match in outputDir (e.g., 'market-' matches 'market-*.md')
   tooltip?: string     // Rich tooltip explaining what this step does and why
+  subSteps?: string[]  // Summary of what the workflow does internally (shown in tooltip)
 }
 
 export type WizardStepStatus = 'pending' | 'active' | 'completed' | 'skipped' | 'error'
@@ -36,6 +38,7 @@ export interface ProjectWizardState {
   stepStatuses: WizardStepStatus[]
   installProgress: string[]  // Log lines from npx install
   error: string | null
+  wizardActiveSubStep: number // Current sub-step number for the active wizard step (0 = not started)
 }
 
 export const initialWizardState: ProjectWizardState = {
@@ -44,5 +47,6 @@ export const initialWizardState: ProjectWizardState = {
   currentStep: 0,
   stepStatuses: [],
   installProgress: [],
-  error: null
+  error: null,
+  wizardActiveSubStep: 0
 }

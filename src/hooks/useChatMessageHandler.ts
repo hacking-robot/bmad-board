@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback } from 'react'
 import { useStore } from '../store'
 import { useWorkflow } from './useWorkflow'
 import { getToolActivity, showChatNotification, debouncedSaveThread, debouncedSaveStoryChatHistory } from '../utils/chatUtils'
-import type { LLMStats, ProjectCostEntry } from '../types'
+import type { LLMStats, ProjectCostEntry, ToolCall } from '../types'
 
 // Per-agent message state tracking
 interface AgentMessageState {
@@ -12,6 +12,7 @@ interface AgentMessageState {
   isLoadingAgent: boolean
   messageCompleted: boolean
   toolUsed: boolean
+  pendingToolCalls: ToolCall[]
 }
 
 // Completion callback type
@@ -57,7 +58,8 @@ export function useChatMessageHandler() {
         pendingMessage: null,
         isLoadingAgent: false,
         messageCompleted: false,
-        toolUsed: false
+        toolUsed: false,
+        pendingToolCalls: []
       }
       agentStatesRef.current.set(agentId, state)
     }
@@ -83,6 +85,37 @@ export function useChatMessageHandler() {
 
     return newMsgId
   }, [addChatMessage, getAgentState])
+
+  // Helper to attach a tool call to a message (or buffer it)
+  const attachToolCall = useCallback((agentId: string, toolCall: ToolCall) => {
+    const state = getAgentState(agentId)
+    if (state.currentMessageId) {
+      // Attach to current message
+      const thread = useStore.getState().chatThreads[agentId]
+      const msg = thread?.messages.find(m => m.id === state.currentMessageId)
+      const existing = msg?.toolCalls || []
+      updateChatMessage(agentId, state.currentMessageId, {
+        toolCalls: [...existing, toolCall]
+      })
+    } else {
+      // Buffer until a text message appears
+      state.pendingToolCalls.push(toolCall)
+    }
+  }, [getAgentState, updateChatMessage])
+
+  // Helper to flush pending tool calls onto the current message
+  const flushPendingToolCalls = useCallback((agentId: string) => {
+    const state = getAgentState(agentId)
+    if (state.pendingToolCalls.length > 0 && state.currentMessageId) {
+      const thread = useStore.getState().chatThreads[agentId]
+      const msg = thread?.messages.find(m => m.id === state.currentMessageId)
+      const existing = msg?.toolCalls || []
+      updateChatMessage(agentId, state.currentMessageId, {
+        toolCalls: [...existing, ...state.pendingToolCalls]
+      })
+      state.pendingToolCalls = []
+    }
+  }, [getAgentState, updateChatMessage])
 
   // Save thread to disk and story history
   const saveThreadForAgent = useCallback((agentId: string) => {
@@ -138,6 +171,23 @@ export function useChatMessageHandler() {
         try {
           const parsed = JSON.parse(line)
 
+          // Handle content_block_delta with input_json_delta - accumulate tool input
+          if (parsed.type === 'content_block_delta' && parsed.delta?.type === 'input_json_delta') {
+            const partial = parsed.delta.partial_json as string | undefined
+            if (partial) {
+              // Check for step file patterns in the streaming tool input
+              const stepMatch = partial.match(/step-(\d+)/)
+              if (stepMatch) {
+                const { projectWizard, setWizardActiveSubStep } = useStore.getState()
+                if (projectWizard.isActive) {
+                  const stepNum = parseInt(stepMatch[1], 10)
+                  console.log(`[WizardProgress] input_json_delta: step-${stepMatch[1]} detected`)
+                  setWizardActiveSubStep(stepNum)
+                }
+              }
+            }
+          }
+
           // Handle content_block_delta - streaming text
           if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
             const newText = parsed.delta.text
@@ -145,6 +195,7 @@ export function useChatMessageHandler() {
             // If previous message was completed, tool was used, or no current message, create a new one
             if (!state.currentMessageId || state.messageCompleted || state.toolUsed) {
               createNewAssistantMessage(agentId)
+              flushPendingToolCalls(agentId)
               state.toolUsed = false
             }
 
@@ -167,11 +218,45 @@ export function useChatMessageHandler() {
           if (parsed.type === 'content_block_start' && parsed.content_block?.type === 'text') {
             if (!state.currentMessageId || state.messageCompleted || state.toolUsed) {
               createNewAssistantMessage(agentId)
+              flushPendingToolCalls(agentId)
               state.toolUsed = false
             } else if (state.currentMessageId) {
               updateChatMessage(agentId, state.currentMessageId, {
                 status: 'streaming'
               })
+            }
+          }
+
+          // Handle content_block_start for tool_use blocks (streaming path)
+          // Note: input is typically empty {} at this point; full input comes in assistant batch message
+          if (parsed.type === 'content_block_start' && parsed.content_block?.type === 'tool_use') {
+            const toolName = parsed.content_block.name
+            const toolInput = parsed.content_block.input as Record<string, unknown> | undefined
+            if (toolName) {
+              const activity = getToolActivity(toolName, toolInput)
+              setChatActivity(agentId, activity)
+
+              // Detect step file reads from streaming tool_use (input may have file_path in some formats)
+              if ((toolName === 'Read' || toolName === 'read_file') && toolInput) {
+                const filePath = (toolInput.file_path || toolInput.path || '') as string
+                if (filePath) {
+                  const stepMatch = filePath.match(/step-(\d+)/)
+                  if (stepMatch) {
+                    const { projectWizard, setWizardActiveSubStep } = useStore.getState()
+                    if (projectWizard.isActive) {
+                      const stepNum = parseInt(stepMatch[1], 10)
+                      console.log(`[WizardProgress] content_block_start: step-${stepMatch[1]} (${filePath})`)
+                      setWizardActiveSubStep(stepNum)
+                    }
+                  }
+                }
+              }
+
+              // Only mark complete if message has actual content
+              if (state.currentMessageId && state.streamBuffer) {
+                updateChatMessage(agentId, state.currentMessageId, { status: 'complete' })
+                state.toolUsed = true
+              }
             }
           }
 
@@ -185,6 +270,7 @@ export function useChatMessageHandler() {
 
                 if (!state.currentMessageId || state.messageCompleted || state.toolUsed) {
                   createNewAssistantMessage(agentId)
+                  flushPendingToolCalls(agentId)
                   state.toolUsed = false
                 }
 
@@ -206,8 +292,30 @@ export function useChatMessageHandler() {
             // Second pass: handle tool_use blocks
             for (const block of parsed.message.content) {
               if (block.type === 'tool_use' && block.name) {
-                const activity = getToolActivity(block.name, block.input as Record<string, unknown>)
+                const input = block.input as Record<string, unknown> | undefined
+                const activity = getToolActivity(block.name, input)
                 setChatActivity(agentId, activity)
+
+                // Capture tool call
+                attachToolCall(agentId, {
+                  name: block.name,
+                  summary: activity,
+                  input
+                })
+
+                // Detect step file reads for wizard sub-step tracking (assistant batch path)
+                if ((block.name === 'Read' || block.name === 'read_file') && input) {
+                  const filePath = (input.file_path || input.path || '') as string
+                  const stepMatch = filePath.match(/step-(\d+)/)
+                  if (stepMatch) {
+                    const { projectWizard, setWizardActiveSubStep } = useStore.getState()
+                    if (projectWizard.isActive) {
+                      const stepNum = parseInt(stepMatch[1], 10)
+                      console.log(`[WizardProgress] assistant handler: step-${stepMatch[1]} detected (${filePath})`)
+                      setWizardActiveSubStep(stepNum)
+                    }
+                  }
+                }
 
                 // Only mark complete if message has actual content
                 if (state.currentMessageId && state.streamBuffer) {
@@ -422,6 +530,7 @@ export function useChatMessageHandler() {
       state.streamBuffer = ''
       state.messageCompleted = false
       state.toolUsed = false
+      state.pendingToolCalls = []
 
       // Save after exit
       saveThreadForAgent(agentId)
@@ -443,6 +552,8 @@ export function useChatMessageHandler() {
     agents,
     getAgentState,
     createNewAssistantMessage,
+    attachToolCall,
+    flushPendingToolCalls,
     updateChatMessage,
     setChatTyping,
     setChatActivity,
@@ -473,6 +584,7 @@ export function useChatMessageHandler() {
       state.isLoadingAgent = false
       state.messageCompleted = false
       state.toolUsed = false
+      state.pendingToolCalls = []
     },
     getAgentState
   }
