@@ -11,8 +11,12 @@
 
 ## Features
 
+### Development Modes
+- **AI-Driven Development**: Automate story implementation end-to-end using Claude Code — from branching to code generation, review, and merge
+- **Human-Driven Development**: Manage your sprint workflow manually with the sprint board, using BMAD agents as assistants rather than full automation
+
 ### Sprint Board
-- **Kanban Board**: Drag-and-drop stories across columns (Backlog, Ready for Dev, In Progress, Review, Done, Optional)
+- **Sprint Board**: Drag-and-drop stories across columns (Backlog, Ready for Dev, In Progress, Review, Done, Optional)
 - **Epic Organization**: Stories grouped by epic with color-coded badges
 - **Custom Story Order**: Drag-and-drop ordering within columns, persisted per epic/status
 - **Story Details**: View acceptance criteria, tasks, subtasks, and file changes with task toggling
@@ -27,8 +31,8 @@
 - **Agent Chat**: Sliding sidebar panel with persistent threads, message streaming, typing indicators, and session resume
 - **Agent Terminal**: Raw agent output view with ANSI color support and tool call filtering
 - **Project Workflows**: Browse and launch available BMAD workflows directly from the UI
-- **AI Tool Support**: Claude Code, Cursor, Aider, Windsurf, Roo Code, or custom Anthropic-compatible endpoints
-- **Model Selection**: Choose between Opus and Sonnet when using Claude Code
+- **AI Tool Support**: Claude Code
+- **Model Selection**: Choose between Opus and Sonnet
 - **Smart Auto-Response**: Orchestrator detects agent prompts and provides intelligent context during automation
 - **Cost Tracking**: Per-project LLM API cost ledger displayed in the status bar
 - **Verbose Mode**: Toggle detailed tool call information in the chat view
@@ -38,7 +42,7 @@
 - **Project Switcher**: Quickly switch between recent projects (up to 10)
 - **BMAD Scanner**: Auto-discovers agents, workflows, and version info from `_bmad/` directory
 - **Version Gate**: Blocks usage with pre-BMAD 6 projects and prompts for upgrade
-- **Environment Check**: Verifies required tools (Claude CLI, Git, Node.js, npm) on project open
+- **Environment Check**: Verifies required tools (Claude Code CLI, Git) on project open
 - **Planning Artifacts**: View epics, goals, and planning documents within the app
 
 ### Git Integration
@@ -61,11 +65,11 @@
 
 | Requirement | Supported |
 |-------------|-----------|
-| BMAD Version | **BMAD 6** (alpha & stable) |
+| BMAD Version | **BMAD 6** |
 | Project Types | BMM (BMAD Method), GDS (BMAD Game Dev) |
-| AI Tools | Claude Code, Cursor, Aider, Windsurf, Roo Code, Custom Endpoints |
+| AI Tool | Claude Code |
 
-> **Note**: BMad Board has only been tested on **BMAD 6** projects. Earlier versions of BMAD are blocked at startup. Both **alpha** (colon-separated commands) and **stable** (hyphen-separated commands) formats are supported.
+> **Note**: BMad Board requires **BMAD 6**. Earlier versions are blocked at startup. Builds are available for macOS, Windows, and Linux, but only **macOS** has been tested.
 
 ## Download
 
@@ -98,7 +102,7 @@ npm run build
 
 1. Launch BMad Board
 2. Select your BMAD project folder (or create a new project with the wizard)
-3. View your stories organized by status on the Kanban board
+3. View your stories organized by status on the sprint board
 4. Click a story card to view full details, chat history, and file changes
 5. Use `Cmd/Ctrl+K` to open the command palette for quick actions
 6. Open the agent chat sidebar to communicate with BMAD agents
