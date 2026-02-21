@@ -401,11 +401,10 @@ export default function ProjectWizard() {
           {projectPath?.split('/').pop() || 'Unknown'}
         </Typography>
         {aiTool === 'claude-code' && (
-          <Tooltip title="Applied on the next new conversation" placement="bottom" arrow>
-            <Box sx={{ display: 'flex', gap: 0.5, mt: 1 }}>
-              {CLAUDE_MODELS.map((model) => (
+          <Box sx={{ display: 'flex', gap: 0.5, mt: 1 }}>
+            {CLAUDE_MODELS.map((model) => (
+              <Tooltip key={model.id} title={model.description} placement="bottom" arrow>
                 <Chip
-                  key={model.id}
                   label={model.name}
                   size="small"
                   onClick={() => setClaudeModel(model.id)}
@@ -413,9 +412,9 @@ export default function ProjectWizard() {
                   variant={claudeModel === model.id ? 'filled' : 'outlined'}
                   sx={{ cursor: 'pointer', fontSize: '0.7rem', height: 22 }}
                 />
-              ))}
-            </Box>
-          </Tooltip>
+              </Tooltip>
+            ))}
+          </Box>
         )}
       </Box>
 

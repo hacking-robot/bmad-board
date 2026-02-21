@@ -66,7 +66,7 @@ export default function Header() {
   const backlogCount = selectedEpicId !== null
     ? stories.filter((s) => s.epicId === selectedEpicId && s.status === 'backlog').length
     : 0
-  const showRunEpic = selectedEpicId !== null && toolSupportsHeadless && backlogCount > 0 && viewMode === 'board' && developerMode !== 'human'
+  const showRunEpic = selectedEpicId !== null && toolSupportsHeadless && viewMode === 'board' && developerMode !== 'human'
 
   const isGameProject = projectType === 'bmgd'
   const logoSrc = themeMode === 'dark' ? logoDark : logoLight
@@ -188,7 +188,7 @@ export default function Header() {
             <SearchBar />
             <EpicFilter />
             {showRunEpic && (
-              <Tooltip title={epicCycle.isRunning ? 'Epic cycle running...' : `Run Epic (${backlogCount} backlog)`}>
+              <Tooltip title={epicCycle.isRunning ? 'Epic cycle running...' : backlogCount > 0 ? `Run Epic (${backlogCount} backlog)` : 'Epic Cycle'}>
                 <IconButton
                   onClick={() => setEpicCycleDialogOpen(true)}
                   size="small"

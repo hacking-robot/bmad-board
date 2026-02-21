@@ -129,8 +129,8 @@ export interface CustomEndpointConfig {
 }
 
 export const CLAUDE_MODELS: { id: ClaudeModel; name: string; description: string }[] = [
-  { id: 'sonnet', name: 'Sonnet', description: 'Fast and capable (default)' },
   { id: 'opus', name: 'Opus', description: 'Most intelligent, best for complex tasks' },
+  { id: 'sonnet', name: 'Sonnet', description: 'Fast and capable' },
   { id: 'haiku', name: 'Haiku', description: 'Fastest, best for simple tasks' }
 ]
 
@@ -232,6 +232,22 @@ export interface LLMStats {
   totalCostUsd?: number
   durationMs?: number
   apiDurationMs?: number
+}
+
+// Per-project LLM cost tracking
+export interface ProjectCostEntry {
+  id: string
+  timestamp: number
+  agentId: string
+  storyId?: string
+  messageId: string
+  model: string
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens?: number
+  cacheWriteTokens?: number
+  totalCostUsd: number
+  durationMs?: number
 }
 
 // Chat interface types

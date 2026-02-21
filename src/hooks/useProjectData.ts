@@ -334,6 +334,16 @@ export function useProjectData() {
         setScannedWorkflowConfig(null)
       })
 
+      // Load project cost total from ledger
+      window.costAPI.loadCosts(projectPath, outputFolder).then((entries) => {
+        const total = entries.reduce((sum: number, e: { totalCostUsd?: number }) => sum + (e.totalCostUsd || 0), 0)
+        const { setProjectCostTotal } = useStore.getState()
+        setProjectCostTotal(total)
+      }).catch(() => {
+        const { setProjectCostTotal } = useStore.getState()
+        setProjectCostTotal(0)
+      })
+
       // Check if bmad folders are in .gitignore (affects branch restrictions)
       // Defer this check so it doesn't compete with initial project load
       setTimeout(() => {

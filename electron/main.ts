@@ -1792,6 +1792,54 @@ ipcMain.handle('list-story-chat-histories', async (_, projectPath: string, outpu
   }
 })
 
+// Project cost tracking - append-only ledger per project
+const getProjectCostPath = (projectPath: string, outputFolder: string = '_bmad-output') => join(projectPath, outputFolder, 'project-costs.json')
+
+ipcMain.handle('append-project-cost', async (_, projectPath: string, entry: unknown, outputFolder?: string) => {
+  try {
+    const folder = outputFolder || '_bmad-output'
+    const costPath = getProjectCostPath(projectPath, folder)
+    const dir = join(projectPath, folder)
+    if (!existsSync(dir)) {
+      await mkdir(dir, { recursive: true })
+    }
+
+    let entries: unknown[] = []
+    if (existsSync(costPath)) {
+      try {
+        const content = await readFile(costPath, 'utf-8')
+        const parsed = JSON.parse(content)
+        if (Array.isArray(parsed)) entries = parsed
+      } catch {
+        // Corrupted file, start fresh
+      }
+    }
+
+    entries.push(entry)
+    await writeFile(costPath, JSON.stringify(entries, null, 2))
+    return true
+  } catch (error) {
+    console.error('Failed to append project cost:', error)
+    return false
+  }
+})
+
+ipcMain.handle('load-project-costs', async (_, projectPath: string, outputFolder?: string) => {
+  try {
+    const folder = outputFolder || '_bmad-output'
+    const costPath = getProjectCostPath(projectPath, folder)
+    if (!existsSync(costPath)) {
+      return []
+    }
+    const content = await readFile(costPath, 'utf-8')
+    const parsed = JSON.parse(content)
+    return Array.isArray(parsed) ? parsed : []
+  } catch (error) {
+    console.error('Failed to load project costs:', error)
+    return []
+  }
+})
+
 // Chat agent - simple spawn per message
 import { chatAgentManager } from './agentManager'
 

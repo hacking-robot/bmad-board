@@ -346,6 +346,11 @@ interface AppState {
   markStatusHistoryViewed: () => void
   getUnreadStatusHistoryCount: () => number
 
+  // Project Cost Tracking (NOT persisted — recomputed from ledger on project open)
+  projectCostTotal: number
+  setProjectCostTotal: (total: number) => void
+  addToProjectCostTotal: (amount: number) => void
+
   // Full Cycle Automation
   fullCycle: FullCycleState
   startFullCycle: (storyId: string, totalSteps: number) => void
@@ -974,6 +979,11 @@ export const useStore = create<AppState>()(
         const { globalStatusHistory, lastViewedStatusHistoryAt } = get()
         return globalStatusHistory.filter(entry => entry.timestamp > lastViewedStatusHistoryAt).length
       },
+
+      // Project Cost Tracking (NOT persisted)
+      projectCostTotal: 0,
+      setProjectCostTotal: (total) => set({ projectCostTotal: total }),
+      addToProjectCostTotal: (amount) => set((state) => ({ projectCostTotal: state.projectCostTotal + amount })),
 
       // Full Cycle Automation
       fullCycle: initialFullCycleState,

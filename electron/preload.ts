@@ -600,6 +600,34 @@ const updaterAPI: UpdaterAPI = {
 
 contextBridge.exposeInMainWorld('updaterAPI', updaterAPI)
 
+// Cost tracking API
+export interface ProjectCostEntry {
+  id: string
+  timestamp: number
+  agentId: string
+  storyId?: string
+  messageId: string
+  model: string
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens?: number
+  cacheWriteTokens?: number
+  totalCostUsd: number
+  durationMs?: number
+}
+
+export interface CostAPI {
+  appendCost: (projectPath: string, entry: ProjectCostEntry, outputFolder?: string) => Promise<boolean>
+  loadCosts: (projectPath: string, outputFolder?: string) => Promise<ProjectCostEntry[]>
+}
+
+const costAPI: CostAPI = {
+  appendCost: (projectPath, entry, outputFolder) => ipcRenderer.invoke('append-project-cost', projectPath, entry, outputFolder),
+  loadCosts: (projectPath, outputFolder) => ipcRenderer.invoke('load-project-costs', projectPath, outputFolder)
+}
+
+contextBridge.exposeInMainWorld('costAPI', costAPI)
+
 declare global {
   interface Window {
     fileAPI: FileAPI
@@ -609,5 +637,6 @@ declare global {
     cliAPI: CLIAPI
     wizardAPI: WizardAPI
     updaterAPI: UpdaterAPI
+    costAPI: CostAPI
   }
 }

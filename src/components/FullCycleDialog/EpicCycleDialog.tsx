@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   Dialog, DialogTitle, DialogContent, DialogActions, Button, Box, Typography,
   IconButton, LinearProgress, Chip, Slider, List, ListItem, ListItemIcon,
@@ -15,6 +15,8 @@ import ErrorIcon from '@mui/icons-material/Error'
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked'
 import CircularProgress from '@mui/material/CircularProgress'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
+import WarningAmberIcon from '@mui/icons-material/WarningAmber'
+import { Alert } from '@mui/material'
 import { useStore } from '../../store'
 import { useFullCycle } from '../../hooks/useFullCycle'
 import FullCycleStepper from './FullCycleStepper'
@@ -50,20 +52,42 @@ export default function EpicCycleDialog() {
   const setSelectedChatAgent = useStore((state) => state.setSelectedChatAgent)
   const setViewMode = useStore((state) => state.setViewMode)
 
-  const { steps, cancel: cancelSingleCycle, retry: retrySingleCycle, backlogStories } = useFullCycle()
+  const { steps, cancel: cancelSingleCycle, retry: retrySingleCycle } = useFullCycle()
 
   const [storyCount, setStoryCount] = useState(0)
 
   // Current epic info
-  const epic = epics.find((e) => e.id === selectedEpicId)
   const isSetupMode = !epicCycle.isRunning && !epicCycle.error && epicCycle.storyQueue.length === 0
+
+  // Detect stale results from a different epic
+  const isDifferentEpic = epicCycle.epicId !== null && epicCycle.epicId !== selectedEpicId
+  const isStale = isDifferentEpic && !epicCycle.isRunning
+  const isRunningOnDifferentEpic = isDifferentEpic && epicCycle.isRunning
+
+  // Auto-reset when dialog opens with stale (different, non-running) epic results
+  useEffect(() => {
+    if (epicCycleDialogOpen && isStale) {
+      resetEpicCycle()
+    }
+  }, [epicCycleDialogOpen, isStale, resetEpicCycle])
+
+  // Show the run's epic when viewing results, otherwise show selected epic
+  const displayEpicId = !isSetupMode && epicCycle.epicId !== null ? epicCycle.epicId : selectedEpicId
+  const epic = epics.find((e) => e.id === displayEpicId)
+  const runningEpic = isRunningOnDifferentEpic ? epics.find((e) => e.id === epicCycle.epicId) : null
+
+  // Eligible stories: all non-done stories for the selected epic
+  const eligibleStories = useMemo(() => {
+    if (selectedEpicId === null) return []
+    return stories.filter((s) => s.epicId === selectedEpicId && s.status !== 'done')
+  }, [selectedEpicId, stories])
   const isRunning = epicCycle.isRunning
   const isComplete = !epicCycle.isRunning && epicCycle.storyQueue.length > 0 &&
     epicCycle.currentStoryIndex >= epicCycle.storyQueue.length && !epicCycle.error
   const hasError = !!epicCycle.error
 
-  // Reset story count when dialog opens with new backlog
-  const maxStories = backlogStories.length
+  // Reset story count when dialog opens
+  const maxStories = eligibleStories.length
   const effectiveCount = Math.min(storyCount || maxStories, maxStories)
 
   // Stories in the queue (running mode)
@@ -98,7 +122,7 @@ export default function EpicCycleDialog() {
 
   const handleStart = () => {
     if (!selectedEpicId) return
-    const selectedStories = backlogStories.slice(0, effectiveCount)
+    const selectedStories = eligibleStories.slice(0, effectiveCount)
     const storyIds = selectedStories.map((s) => s.id)
     startEpicCycle(selectedEpicId, storyIds)
   }
@@ -198,10 +222,28 @@ export default function EpicCycleDialog() {
         {isSetupMode ? (
           /* ===== SETUP MODE ===== */
           <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {isRunningOnDifferentEpic && runningEpic && (
+              <Alert
+                severity="warning"
+                icon={<WarningAmberIcon />}
+                action={
+                  <Button
+                    color="warning"
+                    size="small"
+                    startIcon={<StopIcon />}
+                    onClick={handleCancel}
+                  >
+                    Stop
+                  </Button>
+                }
+              >
+                Epic cycle is running on Epic {runningEpic.id}: {runningEpic.name}
+              </Alert>
+            )}
             {maxStories === 0 ? (
               <Box sx={{ textAlign: 'center', py: 4 }}>
                 <Typography color="text.secondary">
-                  No backlog stories found for this epic.
+                  All stories in this epic are done.
                 </Typography>
               </Box>
             ) : (
@@ -223,7 +265,7 @@ export default function EpicCycleDialog() {
                 </Box>
                 <Box sx={{ flex: 1, overflow: 'auto', border: 1, borderColor: 'divider', borderRadius: 1 }}>
                   <List dense disablePadding>
-                    {backlogStories.map((story, index) => {
+                    {eligibleStories.map((story, index) => {
                       const isIncluded = index < effectiveCount
                       return (
                         <ListItem
@@ -246,6 +288,7 @@ export default function EpicCycleDialog() {
                             primaryTypographyProps={{ variant: 'body2', fontWeight: isIncluded ? 500 : 400 }}
                             secondaryTypographyProps={{ variant: 'caption' }}
                           />
+                          <Chip label={story.status} size="small" variant="outlined" sx={{ height: 22, fontSize: '0.7rem', mr: 0.5 }} />
                           {isIncluded && (
                             <Chip label="Included" size="small" color="primary" variant="outlined" sx={{ height: 22, fontSize: '0.7rem' }} />
                           )}
@@ -371,6 +414,7 @@ export default function EpicCycleDialog() {
               startIcon={<PlayArrowIcon />}
               variant="contained"
               color="primary"
+              disabled={isRunningOnDifferentEpic}
             >
               Start ({effectiveCount} {effectiveCount === 1 ? 'story' : 'stories'})
             </Button>
@@ -394,6 +438,17 @@ export default function EpicCycleDialog() {
                 New Run
               </Button>
             </>
+          )}
+
+          {isComplete && (
+            <Button
+              onClick={handleNewRun}
+              startIcon={<RestartAltIcon />}
+              variant="outlined"
+              color="secondary"
+            >
+              New Run
+            </Button>
           )}
 
           {isRunning && (

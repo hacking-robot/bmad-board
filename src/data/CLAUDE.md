@@ -15,4 +15,10 @@
 | #2647 | 2:51 PM | 🔴 | Corrected Story Creation Agent Assignment in BMGD Workflow | ~403 |
 | #2646 | " | 🔵 | BMM Workflow Configuration and Agent-Status Mapping System | ~573 |
 | #2642 | " | 🔵 | BMGD workflow configuration assigns Game Designer to create-story workflow | ~462 |
+
+### Feb 20, 2026
+
+| ID | Time | T | Title | Read |
+|----|------|---|-------|------|
+| #17467 | 6:22 PM | 🔵 | Human Developer Mode files exist as alternative to AI-focused BMAD workflows | ~354 |
 </claude-mem-context>

@@ -156,30 +156,37 @@ export default function FullCycleOrchestrator() {
       const stripAnsi = (text: string): string =>
         text.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').replace(/\x1b\][\s\S]*?\x07/g, '')
 
-      // Detect if output contains a prompt expecting user input
-      // Strategy: if numbered/lettered options exist AND any question/prompt
-      // signal appears anywhere in the tail, it's a prompt. Intentionally
-      // permissive — a false positive (sending "1" to a summary) is far
-      // less costly than a false negative (cycle dies).
+      // Detect BMAD agent menus — these are interactive menus the agent
+      // displays (e.g. "[MH] Redisplay Menu", "[DS] Dev Story") that should
+      // always be treated as step completion, never auto-responded to.
+      const isBmadMenu = (text: string): boolean => {
+        const clean = stripAnsi(text.slice(-2000))
+        // BMAD menus use [XX] two-letter code format for options
+        return /\[[A-Z]{2}\]\s+\S/m.test(clean)
+      }
+
+      // Detect if output contains a prompt about an issue/error that needs
+      // a fix selection. Only auto-respond to prompts where the agent has
+      // encountered a problem and is offering resolution options — NOT to
+      // conversational "what should I do next?" or BMAD agent menu prompts.
       const isPromptForInput = (text: string): boolean => {
         const clean = stripAnsi(text.slice(-2000))
+
+        // Never auto-respond to BMAD agent menus
+        if (isBmadMenu(clean)) return false
+
         // Has numbered options: "1." "2." or "[1]" "[2]" style
         const hasNumberedOptions = /(?:^|\n)\s*(?:\d+\.|[\[(]\d+[\])])\s*\S/m.test(clean)
-        // Has lettered options: "[a]" "[c]" style
+        // Has lettered options: "[a]" "[c]" style (but NOT [XX] BMAD codes)
         const hasLetteredOptions = /[\[(][a-z][\])]\s*\S/i.test(clean)
         if (!hasNumberedOptions && !hasLetteredOptions) return false
 
-        // With numbered options, look for ANY prompt signal anywhere in the tail
-        // (not just at the very end — prompt wording varies)
-        if (/\?/.test(clean)) return true
-        if (/(?:choose|select|pick|specify|enter|which)\b/i.test(clean)) return true
-        if (/\[\d+\]/.test(clean)) return true
-        if (/your (?:choice|selection|input|response|preference)/i.test(clean)) return true
-        if (/:\s*\n\s*(?:\d+\.|[\[(])/m.test(clean)) return true
+        // Only match prompts that indicate an issue/error/conflict needing resolution
+        if (/(?:fix|resolve|repair|correct|error|issue|conflict|problem|fail|broken|invalid|mismatch|bug|violation)/i.test(clean)) return true
+        if (/(?:how (?:should|do you want) (?:me to|I)|which (?:approach|fix|solution|option))/i.test(clean)) return true
+        if (/(?:linting|type|build|test|compilation) (?:error|issue|failure)/i.test(clean)) return true
 
-        // Numbered options alone (without explicit prompt signal) — still
-        // likely a prompt since the process exited after showing options
-        return true
+        return false
       }
 
       // Detect if output asks about committing
@@ -376,25 +383,45 @@ export default function FullCycleOrchestrator() {
           return
         }
 
-        // Check for "what's next?" type prompts - agent has completed, just mark done
-        const cleanTail = cleanOutput.slice(-1500)
-        const isWhatNextPrompt = /What.?s next\?/i.test(cleanTail) ||
-          /Would you like me to:/i.test(cleanTail)
+        // Check for BMAD agent menus — always treat as step completion
+        if (isBmadMenu(cleanOutput)) {
+          resolved = true
+          cleanup()
+          appendFullCycleLog(`${agentId} completed (BMAD menu detected, step done)`)
+          resolve('success')
+          return
+        }
 
-        if (isWhatNextPrompt && !isPromptForInput(cleanOutput)) {
+        // Check for "what's next?" type prompts - agent has completed, just mark done.
+        // These take priority over isPromptForInput because the agent is offering
+        // follow-up suggestions (often with numbered story options) rather than
+        // asking a question that requires input to proceed.
+        const cleanTail = cleanOutput.slice(-1500)
+        const isWhatNextPrompt = /What.?s next\??/i.test(cleanTail) ||
+          /Would you like (?:me to|to)\b/i.test(cleanTail) ||
+          /Next Steps:/i.test(cleanTail) ||
+          /Which (?:story|stories|task|epic)/i.test(cleanTail) ||
+          /Shall I (?:continue|proceed|move on|start)/i.test(cleanTail) ||
+          /Ready (?:for|to) (?:\w+ )*next/i.test(cleanTail) ||
+          /Where (?:should|shall|do) (?:we|I) go/i.test(cleanTail)
+
+        // Check for issue/error prompts FIRST — if the agent found problems
+        // and is offering to fix them, auto-respond before treating as "what's next"
+        if (isPromptForInput(cleanOutput) && currentSessionId) {
+          const label = hasFixAsFirstOption(cleanOutput) ? 'fix option' : 'option 1'
+          const sent = await sendAutoResponse('1', `Detected issue prompt, auto-selecting ${label}`)
+          if (sent) return // Wait for next exit event
+          return // Error already handled
+        }
+
+        // No issues to fix — check for "what's next?" follow-up prompts and
+        // treat them as completion (don't respond to story/task suggestions)
+        if (isWhatNextPrompt) {
           resolved = true
           cleanup()
           appendFullCycleLog(`${agentId} completed (step work done, skipping follow-up prompt)`)
           resolve('success')
           return
-        }
-
-        // Check if agent is asking for input (numbered/lettered options + prompt)
-        if (isPromptForInput(cleanOutput) && currentSessionId) {
-          const label = hasFixAsFirstOption(cleanOutput) ? 'fix option' : 'option 1'
-          const sent = await sendAutoResponse('1', `Detected prompt, auto-selecting ${label}`)
-          if (sent) return // Wait for next exit event
-          return // Error already handled
         }
 
         // Check if output ends with a completion message (not a question/prompt)

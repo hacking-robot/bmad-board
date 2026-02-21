@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback } from 'react'
 import { useStore } from '../store'
 import { useWorkflow } from './useWorkflow'
 import { getToolActivity, showChatNotification, debouncedSaveThread, debouncedSaveStoryChatHistory } from '../utils/chatUtils'
-import type { LLMStats } from '../types'
+import type { LLMStats, ProjectCostEntry } from '../types'
 
 // Per-agent message state tracking
 interface AgentMessageState {
@@ -265,6 +265,34 @@ export function useChatMessageHandler() {
 
             // Save after result
             saveThreadForAgent(agentId)
+
+            // Append cost entry to project ledger
+            const resultCost = parsed.total_cost_usd
+            if (resultCost && resultCost > 0) {
+              const { projectPath: costProjectPath, outputFolder: costOutputFolder, addToProjectCostTotal } = useStore.getState()
+              if (costProjectPath) {
+                const thread = useStore.getState().chatThreads[agentId]
+                const usage = parsed.usage || {}
+                const costEntry: ProjectCostEntry = {
+                  id: `cost-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                  timestamp: Date.now(),
+                  agentId,
+                  storyId: thread?.storyId,
+                  messageId: state.currentMessageId || '',
+                  model: parsed.modelUsage
+                    ? Object.entries(parsed.modelUsage).sort((a, b) => ((b[1] as Record<string, number>).costUSD || 0) - ((a[1] as Record<string, number>).costUSD || 0))[0]?.[0] || 'unknown'
+                    : 'unknown',
+                  inputTokens: usage.input_tokens || 0,
+                  outputTokens: usage.output_tokens || 0,
+                  cacheReadTokens: usage.cache_read_input_tokens,
+                  cacheWriteTokens: usage.cache_creation_input_tokens,
+                  totalCostUsd: resultCost,
+                  durationMs: parsed.duration_ms
+                }
+                window.costAPI.appendCost(costProjectPath, costEntry, costOutputFolder)
+                addToProjectCostTotal(resultCost)
+              }
+            }
           }
         } catch {
           // Not JSON, ignore
