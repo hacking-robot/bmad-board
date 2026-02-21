@@ -74,16 +74,6 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
     syncAgentStatus()
   }, [agentId, setChatTyping, setChatActivity, updateChatMessage, clearAgentState])
 
-  // Auto-scroll to bottom
-  useEffect(() => {
-    if (virtuosoRef.current && messages.length > 0) {
-      virtuosoRef.current.scrollToIndex({
-        index: messages.length - 1,
-        behavior: 'smooth',
-        align: 'end'
-      })
-    }
-  }, [messages.length, isTyping])
 
   const handleSendMessage = useCallback(async (content: string) => {
     if (!projectPath || !content.trim()) return
@@ -283,7 +273,8 @@ export default function ChatThread({ agentId }: ChatThreadProps) {
           <Virtuoso
             ref={virtuosoRef}
             data={messages}
-            followOutput="smooth"
+            followOutput={(isAtBottom) => isAtBottom ? 'smooth' : false}
+            atBottomThreshold={50}
             itemContent={(_index, message) => (
               <ChatMessage
                 message={message}
