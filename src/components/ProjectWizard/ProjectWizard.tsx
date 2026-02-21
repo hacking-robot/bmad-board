@@ -132,7 +132,6 @@ export default function ProjectWizard() {
   const [docsAnchor, setDocsAnchor] = useState<null | HTMLElement>(null)
   const [selectedArtifact, setSelectedArtifact] = useState<PlanningArtifact | null>(null)
   const { artifacts, refresh: refreshArtifacts } = usePlanningArtifacts()
-
   const resumeChecked = useRef(false)
 
   // On mount, check for saved wizard state and resume if found
@@ -190,7 +189,7 @@ export default function ProjectWizard() {
         const status = wiz.stepStatuses[i]
         if (status !== 'pending' && status !== 'active') continue
         const step = ACTIVE_STEPS[i]
-        if (!step.outputFile && !step.outputFilePrefix && !step.outputDir) continue
+        if (!step.outputFile && !step.outputFilePrefix && !(step.outputDir && step.outputDirPrefix)) continue
         const { exists } = await checkStepOutput(step, projectPath, outputFolder)
         if (exists) {
           const { updateWizardStep, advanceWizardStep, projectWizard: freshWiz } = useStore.getState()
@@ -242,11 +241,11 @@ export default function ProjectWizard() {
         if (status !== 'pending' && status !== 'active') continue
         // Skip pending current step — the user may have navigated back to re-run it
         if (status === 'pending' && i === wiz.currentStep) continue
-        if (!step.outputFile && !step.outputFilePrefix && !step.outputDir) continue
+        if (!step.outputFile && !step.outputFilePrefix && !(step.outputDir && step.outputDirPrefix)) continue
 
         const { exists, templateWarning } = await checkStepOutput(step, projectPath, outputFolder)
         if (exists) {
-          // For active steps, block if template content detected
+          // For active steps with template content, warn instead of auto-completing
           if (status === 'active' && templateWarning) {
             const { setWizardError } = useStore.getState()
             setWizardError(`⚠ ${step.name}: ${templateWarning}. Re-run this step or mark it complete manually.`)
@@ -262,6 +261,36 @@ export default function ProjectWizard() {
 
     return cleanup
   }, [isActive, projectPath, outputFolder, updateWizardStep, advanceWizardStep])
+
+  // On step navigation, check completed/active steps for missing or template output
+  useEffect(() => {
+    if (!isActive || !projectPath) return
+    const folder = outputFolder || '_bmad-output'
+    const warnings: string[] = []
+
+    ;(async () => {
+      for (let i = 0; i < ACTIVE_STEPS.length && i < currentStep; i++) {
+        const step = ACTIVE_STEPS[i]
+        const status = stepStatuses[i]
+        // Only check steps that should have output (active or completed, with an output file)
+        if (status !== 'active' && status !== 'completed') continue
+        if (!step.outputFile && !step.outputFilePrefix && !(step.outputDir && step.outputDirPrefix)) continue
+
+        const { exists, templateWarning } = await checkStepOutput(step, projectPath, folder)
+        if (!exists) {
+          warnings.push(`⚠ ${step.name}: Output file not found.`)
+        } else if (templateWarning) {
+          warnings.push(`⚠ ${step.name}: ${templateWarning}. Re-run this step or mark it complete manually.`)
+        }
+      }
+      const { setWizardError } = useStore.getState()
+      if (warnings.length > 0) {
+        setWizardError(warnings.join('\n'))
+      } else {
+        setWizardError(null)
+      }
+    })()
+  }, [isActive, projectPath, outputFolder, currentStep, stepStatuses, ACTIVE_STEPS])
 
   // Enrich wizard steps with dynamically resolved agent names from scan data
   const resolvedSteps = useMemo(() => {
@@ -447,7 +476,7 @@ export default function ProjectWizard() {
       const { exists, templateWarning } = await checkStepOutput(step, currentProjectPath, currentOutputFolder)
       if (exists) {
         if (templateWarning) {
-          // Output file exists but looks like an unfilled template — warn instead of auto-completing
+          // Output file exists but looks like an unfilled template — warn user
           console.log(`[WizardProgress] Template warning for step ${stepIndex} (${step.name}): ${templateWarning}`)
           const { setWizardError } = useStore.getState()
           setWizardError(`⚠ ${step.name}: ${templateWarning}. Re-run this step or mark it complete manually if the content is correct.`)
