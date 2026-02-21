@@ -12,43 +12,60 @@
 ## Features
 
 ### Sprint Board
-- **Kanban Board**: Visualize stories across columns (Backlog, Ready for Dev, In Progress, Review, Done)
+- **Kanban Board**: Drag-and-drop stories across columns (Backlog, Ready for Dev, In Progress, Review, Done, Optional)
 - **Epic Organization**: Stories grouped by epic with color-coded badges
-- **Story Details**: View acceptance criteria, tasks, subtasks, and file changes
+- **Custom Story Order**: Drag-and-drop ordering within columns, persisted per epic/status
+- **Story Details**: View acceptance criteria, tasks, subtasks, and file changes with task toggling
 - **Search & Filter**: Find stories by text or filter by epic
-- **Collapsible Columns**: Minimize columns to focus on active work
-- **Status History**: Timeline of story status changes with source tracking (manual vs agent)
+- **Collapsible Columns**: Minimize columns with per-epic state persistence
+- **Human Review**: Optional review column with configurable checklist items
+- **Status History**: Timeline of story status changes with source tracking (user vs agent)
 
 ### AI Agent Automation
-- **Full Cycle**: One-click end-to-end story processing — creates story file, branches, implements, reviews, commits, and merges
-- **Epic Cycle**: Batch-run the full cycle across all backlog stories in an epic with configurable review rounds
-- **Agent Chat**: Sliding sidebar panel to communicate with AI agents (`Cmd+Shift+A`)
+- **Full Cycle**: One-click end-to-end story processing — creates story file, branches, implements, reviews, commits, and merges with a visual stepper and real-time log
+- **Epic Cycle**: Batch-run the full cycle across all backlog stories in an epic with per-story progress tracking
+- **Agent Chat**: Sliding sidebar panel with persistent threads, message streaming, typing indicators, and session resume
+- **Agent Terminal**: Raw agent output view with ANSI color support and tool call filtering
 - **Project Workflows**: Browse and launch available BMAD workflows directly from the UI
-- **AI Tool Support**: Works with Claude Code, Anthropic API, or custom API endpoints
-- **Smart Auto-Response**: Orchestrator detects agent prompts and provides intelligent responses during automation
+- **AI Tool Support**: Claude Code, Cursor, Aider, Windsurf, Roo Code, or custom Anthropic-compatible endpoints
+- **Model Selection**: Choose between Opus and Sonnet when using Claude Code
+- **Smart Auto-Response**: Orchestrator detects agent prompts and provides intelligent context during automation
+- **Cost Tracking**: Per-project LLM API cost ledger displayed in the status bar
+- **Verbose Mode**: Toggle detailed tool call information in the chat view
 
 ### Project Management
-- **Project Wizard**: Guided new project setup with BMAD installation and configuration
-- **Project Switcher**: Quickly switch between multiple BMAD projects
-- **BMAD Scanner**: Auto-discovers agents, workflows, and version info from project files
-- **Planning Artifacts**: View epics and planning documents within the app
+- **Project Wizard**: Guided new project setup with BMAD installation, artifact detection, and template validation
+- **Project Switcher**: Quickly switch between recent projects (up to 10)
+- **BMAD Scanner**: Auto-discovers agents, workflows, and version info from `_bmad/` directory
+- **Version Gate**: Blocks usage with pre-BMAD 6 projects and prompts for upgrade
+- **Environment Check**: Verifies required tools (Claude CLI, Git, Node.js, npm) on project open
+- **Planning Artifacts**: View epics, goals, and planning documents within the app
+
+### Git Integration
+- **Branch Management**: Create, switch, and view branches with last-commit activity timestamps
+- **Diff Viewer**: Side-by-side git diff with resizable panel and changed files list
+- **Uncommitted Changes**: View modified files in the working directory
+- **Merge Support**: Merge story branches to base with merge status checks
+- **Configurable Settings**: Base branch (main/master/develop), epic branches, gitignore handling — per-project
 
 ### Developer Experience
-- **Dark/Light Mode**: Toggle between themes
-- **Command Palette**: Quick access to actions with keyboard shortcuts
-- **Git Integration**: Branch creation/switching, commits, diffs, and uncommitted changes view
-- **Auto-Refresh**: File watching detects changes to story files
-- **Keyboard Shortcuts**: Comprehensive shortcuts for efficient navigation
+- **Dark/Light Mode**: Gruvbox-themed toggle
+- **Command Palette**: Quick actions via `Cmd/Ctrl+K`
+- **Keyboard Shortcuts**: Comprehensive shortcuts with `Cmd/Ctrl+/` reference dialog
+- **Auto-Refresh**: File watching detects story file changes in real time
+- **Auto-Update**: Checks for updates on launch, downloads in background, installs on quit
+- **System Notifications**: Native OS notifications for agent messages when app is unfocused
+- **Window Persistence**: Remembers window position and size across restarts
 
 ## Compatibility
 
 | Requirement | Supported |
 |-------------|-----------|
 | BMAD Version | **BMAD 6** (alpha & stable) |
-| Project Types | BMM (BMAD Method), BMGD (BMAD Game Dev) |
-| AI Tools | Claude Code, Anthropic API, Custom Endpoints |
+| Project Types | BMM (BMAD Method), GDS (BMAD Game Dev) |
+| AI Tools | Claude Code, Cursor, Aider, Windsurf, Roo Code, Custom Endpoints |
 
-> **Note**: BMad Board has only been tested on **BMAD 6** projects. Earlier versions of BMAD may not work. Both **alpha** (colon-separated commands) and **stable** (hyphen-separated commands) formats are supported.
+> **Note**: BMad Board has only been tested on **BMAD 6** projects. Earlier versions of BMAD are blocked at startup. Both **alpha** (colon-separated commands) and **stable** (hyphen-separated commands) formats are supported.
 
 ## Download
 
@@ -64,8 +81,8 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/bmadboard.git
-cd bmadboard
+git clone https://github.com/hacking-robot/bmad-board.git
+cd bmad-board
 
 # Install dependencies
 npm install
@@ -80,10 +97,12 @@ npm run build
 ## Usage
 
 1. Launch BMad Board
-2. Select your BMAD or BMAD game project folder
-3. View your stories organized by status
-4. Click a story card to view full details
-5. Use `Cmd+P` to open the command palette for quick actions
+2. Select your BMAD project folder (or create a new project with the wizard)
+3. View your stories organized by status on the Kanban board
+4. Click a story card to view full details, chat history, and file changes
+5. Use `Cmd/Ctrl+K` to open the command palette for quick actions
+6. Open the agent chat sidebar to communicate with BMAD agents
+7. Run Full Cycle or Epic Cycle to automate story processing end-to-end
 
 ### Supported Project Structures
 
@@ -101,7 +120,7 @@ your-project/
 │       └── sprint-status.yaml  # Story status tracking
 ```
 
-**BMGD (BMAD Game Dev)** projects:
+**GDS (BMAD Game Dev)** projects:
 ```
 your-project/
 ├── _bmad/                    # BMAD agent & workflow definitions
@@ -143,7 +162,7 @@ npm run typecheck        # Type checking
 - MUI (Material UI) 6
 - Zustand for state management
 - Vite + electron-builder
-- Emotion (CSS-in-JS)
+- Emotion (CSS-in-JS) with Gruvbox theme
 
 ## License
 

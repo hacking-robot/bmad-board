@@ -90,7 +90,10 @@ export default function Header() {
         bgcolor: 'background.paper',
         borderBottom: 1,
         borderColor: 'divider',
-        WebkitAppRegion: 'drag'
+        WebkitAppRegion: 'drag',
+        '& button, & input, & select, & [role="button"], & [role="combobox"], & .MuiSelect-select, & .MuiAutocomplete-root, & .MuiInputBase-root, & .MuiChip-root, & .MuiIconButton-root': {
+          WebkitAppRegion: 'no-drag'
+        }
       }}
     >
       {/* Top bar - Identity & Navigation */}
@@ -101,9 +104,6 @@ export default function Header() {
           gap: 2,
           position: 'relative',
           pl: { xs: 2, sm: 10 },
-          '& button, & input, & [role="button"]': {
-            WebkitAppRegion: 'no-drag'
-          }
         }}
       >
         <Box
@@ -178,9 +178,6 @@ export default function Header() {
             pl: { xs: 2, sm: 2 },
             borderTop: 1,
             borderColor: 'divider',
-            '& button, & input, & [role="button"]': {
-              WebkitAppRegion: 'no-drag'
-            }
           }}
         >
           {/* Filters: Search + Epic */}

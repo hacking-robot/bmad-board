@@ -45,6 +45,20 @@ export default function App() {
   const setEnvCheckResults = useStore((state) => state.setEnvCheckResults)
   const setEnvCheckLoading = useStore((state) => state.setEnvCheckLoading)
   const disableEnvCheck = useStore((state) => state.disableEnvCheck)
+  const setUpdateStatus = useStore((state) => state.setUpdateStatus)
+  const setUpdateVersion = useStore((state) => state.setUpdateVersion)
+  const setUpdateDownloadPercent = useStore((state) => state.setUpdateDownloadPercent)
+
+  // Listen for auto-updater status (must be at app level so events aren't missed)
+  useEffect(() => {
+    const cleanup = window.updaterAPI.onUpdateStatus((event) => {
+      const status = event.status === 'dev-mode' ? 'idle' : event.status as 'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'error' | 'up-to-date'
+      setUpdateStatus(status)
+      if (event.version) setUpdateVersion(event.version as string)
+      if (event.percent !== undefined) setUpdateDownloadPercent(event.percent)
+    })
+    return cleanup
+  }, [setUpdateStatus, setUpdateVersion, setUpdateDownloadPercent])
 
   // Agent features available for tools with headless CLI support
   const selectedToolInfo = AI_TOOLS.find(t => t.id === aiTool)
@@ -104,9 +118,11 @@ export default function App() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            bgcolor: 'background.default'
+            bgcolor: 'background.default',
+            position: 'relative'
           }}
         >
+          <Box sx={{ position: 'absolute', top: 0, left: 0, right: 0, height: 40, WebkitAppRegion: 'drag' }} />
           <CircularProgress />
         </Box>
       </ThemeProvider>

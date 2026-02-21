@@ -566,6 +566,14 @@ export default function ProjectWizard() {
     }
   }, [goToWizardStep, ACTIVE_STEPS, setSelectedChatAgent])
 
+  const handleAdvanceStep = useCallback(() => {
+    advanceWizardStep()
+    const nextStep = ACTIVE_STEPS[currentStep + 1]
+    if (nextStep?.agentId) {
+      setSelectedChatAgent(nextStep.agentId)
+    }
+  }, [advanceWizardStep, currentStep, ACTIVE_STEPS, setSelectedChatAgent])
+
   const setBaseBranch = useStore((state) => state.setBaseBranch)
 
   const handleFinishSetup = useCallback(async () => {
@@ -672,7 +680,9 @@ export default function ProjectWizard() {
       }}
     >
       {/* Header */}
-      <Box sx={{ pt: 5, px: 2, pb: 2, borderBottom: 1, borderColor: 'divider' }}>
+      <Box sx={{ pt: 5, px: 2, pb: 2, borderBottom: 1, borderColor: 'divider', position: 'relative' }}>
+        {/* Drag region in the top padding area for window movement */}
+        <Box sx={{ position: 'absolute', top: 0, left: 0, right: 0, height: 40, WebkitAppRegion: 'drag' }} />
         <Stack direction="row" alignItems="center" justifyContent="space-between">
           <Stack direction="row" alignItems="center" spacing={1}>
             <FolderOpenIcon color="primary" />
@@ -680,7 +690,7 @@ export default function ProjectWizard() {
               New Project Setup
             </Typography>
           </Stack>
-          <Stack direction="row" spacing={0.5} alignItems="center">
+          <Stack direction="row" spacing={0.5} alignItems="center" sx={{ position: 'relative', zIndex: 2, WebkitAppRegion: 'no-drag' }}>
             {artifacts.length > 0 && (
               <Tooltip title="Planning Documents">
                 <IconButton size="small" onClick={(e) => setDocsAnchor(e.currentTarget)}>
@@ -820,7 +830,7 @@ export default function ProjectWizard() {
                   <Button
                     variant="contained"
                     endIcon={<NavigateNextIcon />}
-                    onClick={() => advanceWizardStep()}
+                    onClick={handleAdvanceStep}
                     sx={{ flex: 1 }}
                   >
                     Next Step
@@ -853,7 +863,7 @@ export default function ProjectWizard() {
                     variant="contained"
                     size="small"
                     endIcon={<NavigateNextIcon />}
-                    onClick={() => advanceWizardStep()}
+                    onClick={handleAdvanceStep}
                   >
                     Next Step
                   </Button>
