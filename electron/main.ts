@@ -42,7 +42,7 @@ interface RecentProject {
 }
 
 type AITool = 'claude-code' | 'cursor' | 'windsurf' | 'roo-code' | 'aider'
-type ClaudeModel = 'sonnet' | 'opus' | 'haiku'
+type ClaudeModel = 'sonnet' | 'opus'
 
 interface WindowBounds {
   x: number

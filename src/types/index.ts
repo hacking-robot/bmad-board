@@ -118,7 +118,7 @@ export type BmadVersion = 'stable'
 export type AITool = 'claude-code' | 'custom-endpoint' | 'cursor' | 'windsurf' | 'roo-code' | 'aider'
 
 // Claude model aliases for --model flag
-export type ClaudeModel = 'sonnet' | 'opus' | 'haiku'
+export type ClaudeModel = 'sonnet' | 'opus'
 
 // Custom Anthropic-compatible endpoint configuration (e.g., GLM, Kimi)
 export interface CustomEndpointConfig {
@@ -130,8 +130,7 @@ export interface CustomEndpointConfig {
 
 export const CLAUDE_MODELS: { id: ClaudeModel; name: string; description: string }[] = [
   { id: 'opus', name: 'Opus', description: 'Most intelligent, best for complex tasks' },
-  { id: 'sonnet', name: 'Sonnet', description: 'Fast and capable' },
-  { id: 'haiku', name: 'Haiku', description: 'Fastest, best for simple tasks' }
+  { id: 'sonnet', name: 'Sonnet', description: 'Fast and capable' }
 ]
 
 // CLI Tool capabilities

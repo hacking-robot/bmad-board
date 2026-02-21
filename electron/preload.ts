@@ -23,7 +23,7 @@ export interface RecentProject {
 }
 
 export type AITool = 'claude-code' | 'custom-endpoint' | 'cursor' | 'windsurf' | 'roo-code' | 'aider'
-export type ClaudeModel = 'sonnet' | 'opus' | 'haiku'
+export type ClaudeModel = 'sonnet' | 'opus'
 
 // Custom Anthropic-compatible endpoint configuration
 export interface CustomEndpointConfig {
